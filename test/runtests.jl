@@ -1,6 +1,6 @@
-using HEATMAPS
+using Wildfires
 using Test
 
-@testset "HEATMAPS.jl" begin
+@testset "Wildfires.jl" begin
     # Write your tests here.
 end
