@@ -1,0 +1,38 @@
+# Types of Data
+
+- Point data (e.g. crowd-sourced locations of fire presence)
+- Rasters:
+
+# Active Fire DAta
+
+- NASA FIRMS
+  - https://firms.modaps.eosdis.nasa.gov/api/kml_fire_footprints/
+
+# Historical Data
+
+| Dataset / Source                         | Time Coverage              | Spatial Resolution        | Data Type(s)                            | Best For                                                   | Access Link |
+|------------------------------------------|----------------------------|---------------------------|------------------------------------------|-------------------------------------------------------------|-------------|
+| **TS-SatFire**                           | 2017–2021 (daily)          | Satellite pixels (multi-spectral) | Burned area, active fire masks, aux. layers | Modeling daily wildfire progression with rich context       | [arxiv](https://arxiv.org/html/2412.11555v1) |
+| **WildfireSpreadTS / WSTS+**             | 2016–2023 (daily)          | Satellite patches (~km scale) | Time-series fire spread images, multimodal | Training predictive fire-spread models (ML/DL)              | [arxiv](https://arxiv.org/html/2502.12003v2) |
+| **USDA Forest Service Fire Perimeters**  | Event-based, updated daily | Fire perimeter polygons    | Daily and final fire perimeters           | Mapping perimeter expansion of specific wildfires           | [data.fs.usda.gov](https://data.fs.usda.gov/geodata/edw/datasets.php?xmlKeyword=fire+perimeter) |
+| **USGS Combined Wildland Fire Dataset**  | Historical to present      | Polygon (varies by source) | Wildfire perimeters (merged 40 sources)   | Long-term or comparative historical fire analysis           | [data.usgs.gov](https://data.usgs.gov/datacatalog/data/USGS%3A61aa537dd34eb622f699df81) |
+| **SeasFire Data Cube**                   | 2001–2021 (8-day timestep) | 0.25° global grid          | 59 variables (climate, vegetation, human) | Studying drivers and predictors of wildfire activity        | [nature.com](https://www.nature.com/articles/s41597-025-04546-3) |
+| **NASA FIRMS (MODIS/VIIRS)**             | Near real-time (daily)     | ~375m (VIIRS), 1km (MODIS) | Hotspot detections (thermal anomalies)    | Operational tracking of active fires, near-real-time alerts | [FIRMS](https://earthdata.nasa.gov/firms) |
+
+# Data Sources for the Marshall Fire
+
+| Source / Dataset                                      | Data Type & Coverage                            | Time Component                      | Best For                                      | Access Info / Notes                                                                 |
+|-------------------------------------------------------|--------------------------------------------------|-------------------------------------|-----------------------------------------------|--------------------------------------------------------------------------------------|
+| **NIFC WFIGS Interagency Fire Perimeters**            | Multi-agency fire perimeter polygons, national coverage | Includes 2021 certified perimeters  | Time-series perimeter tracking (if multiple dates available) | [NIFC Fire Perimeters](https://www.arcgis.com/home/item.html?id=376b3d52a6ad451ea96266aafd081b97) |
+| **ArcGIS — Marshall Fire Final Perimeter**            | Final burn polygon for the Marshall Fire         | Snapshot as of Jan 5, 2022          | Visualizing the fire’s final extent            | [Marshall Fire Final Perimeter](https://www.arcgis.com/home/item.html?id=5a3a4eb4a85942a5a964a3c3813bb7f6) |
+| **ArcGIS — Boulder County bcpos Marshall Fire Layer** | GIS layer of the perimeter in Boulder County     | Single-event footprint              | Local GIS visualization and integration        | [Boulder County GIS Layer](https://www.arcgis.com/home/item.html?id=849cf050cafa4a88b23cb7c50e20380c) |
+| **Boulder County Recovery & Damage Maps**             | Damage assessment overlay & rebuilding data      | Mostly static post-fire (early Jan 2022) | Overlaying damage with fire extent              | [Boulder County Recovery](https://bouldercounty.gov/disasters/wildfires/marshall/) |
+| **Natural Hazards Center – Quick Response Report**    | Academic report integrating imagery and assessments | Post-event study                    | Insights into impacts and burn area loss        | [Quick Response Report](https://hazards.colorado.edu/quick-response-report/the-2021-marshall-fire) |
+
+
+## People
+
+- https://github.com/lazarusA
+  - At Max Planck Instutude for Biogeochemsitry
+  - Involed with the SeasFire cube.
+  - https://github.com/EarthyScience/EasyHybrid.jl
