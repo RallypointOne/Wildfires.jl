@@ -12,12 +12,6 @@ import GeoInterface as GI
 include("Data.jl")
 
 #-----------------------------------------------------------------------------# coordinate transformations
-lonlat2webmercator(x::Tuple{Real, Real}) = MapTiles.project(x, MapTiles.wgs84, MapTiles.web_mercator)
-lonlat2webmercator(x) = map(lonlat2webmercator, collect(x))
-
-webmercator2lonlat(x::Tuple{Real, Real}) = MapTiles.project(x, MapTiles.web_mercator, MapTiles.wgs84)
-webmercator2lonlat(x) = map(webmercator2lonlat, collect(x))
-
 const R = 6378137.0  # WGS84 radius in meters
 
 # Conversion functions
@@ -27,24 +21,33 @@ mercator_to_lat(y) = atan(sinh(y / R)) * 180 / π
 lon_to_mercator(lon) = lon * π / 180 * R
 lat_to_mercator(lat) = log(tan((90 + lat) * π / 360)) * R
 
-function mercator_axislabels!(ax::Axis)
-    ax.xtickformat = xs -> ["$(round(mercator_to_lon(x); digits=2))°" for x in xs]
-    ax.ytickformat = ys -> ["$(round(mercator_to_lat(y); digits=2))°" for y in ys]
-    return ax
+#-----------------------------------------------------------------------------# Mouse
+struct Mouse
+    axis::AbstractAxis
+    coords::Observable{Point2d}
+    left_click::Observable{Point2d}
+    right_click::Observable{Point2d}
+
+    function Mouse(axis::AbstractAxis)
+        coords = Observable(Point2d(0, 0))
+        left_click = Observable(Point2d(0, 0))
+        right_click = Observable(Point2d(0, 0))
+        :mouse_observables in keys(Makie.interactions(axis)) && Makie.deregister_interaction!(axis, :mouse_observables)
+        register_interaction!(axis, :mouse_observables) do event::MouseEvent, axis
+            coords[] = event.data
+            if event.type === MouseEventTypes.leftclick
+                left_click[] = event.data
+                notify(left_click)
+            elseif event.type === MouseEventTypes.rightclick
+                right_click[] = event.data
+                notify(right_click)
+            end
+        end
+        new(axis, coords, left_click, right_click)
+    end
 end
 
-#-----------------------------------------------------------------------------# Makie plot interactions
-# Get observables for mouse coordinates in web mercator and WGS84
-function get_mouse_coords(ax::AbstractAxis)
-    web_mercator = Observable((x=0f0, y=0f0))
-    lon_lat = Observable((x=0f0, y=0f0))
-    register_interaction!(ax, :get_mouse_web_mercator) do event::MouseEvent, axis
-        data = MapTiles.project(event.data, MapTiles.web_mercator, MapTiles.wgs84)
-        web_mercator[] = (x = event.data[1], y = event.data[2])
-        lon_lat[] = (x = data[1], y = data[2])
-    end
-    (; web_mercator, lon_lat)
-end
+coords_string(x::Point2d) = "lon = $(round(mercator_to_lon(x[1]); digits=3))°, lat = $(round(mercator_to_lat(x[2]); digits=3))°"
 
 #-----------------------------------------------------------------------------# add_marshall_perimeter!
 function add_marshall_perimeter!(ax::AbstractAxis, color=:red)
@@ -58,9 +61,10 @@ function add_marshall_perimeter!(ax::AbstractAxis, color=:red)
 end
 
 #-----------------------------------------------------------------------------# Map
-@kwdef struct Map
-    location::Observable{Rect2f} = Observable(get_location("Superior, CO"))
-end
+# @kwdef struct Map
+#     location::Observable{Rect2f} = Observable(get_location("Superior, CO"))
+#     mouse_coords::Observable{Point2f} = Observable(Point2f(0, 0))
+# end
 
 #-----------------------------------------------------------------------------# get_location
 # Get Rect2f from a location string (or GMTdataset)
@@ -76,23 +80,58 @@ end
 
 #-----------------------------------------------------------------------------# init_map
 function init_map(loc = "Superior, CO";
-        provider::Provider = TileProviders.OpenStreetMap(), #TileProviders.Google(:terrain),
+        provider = TileProviders.OpenStreetMap(), #TileProviders.Google(:terrain),
         size = (1200, 1000)
     )
-    fig = Figure(; size)
-    ax = Axis(fig[1, 1], aspect = DataAspect(),
+    figure = Figure(; size)
+    axis = Axis(figure[2, 2], aspect = DataAspect(),
         xtickformat = xs -> ["$(round(mercator_to_lon(x); digits=2))°" for x in xs],
-        ytickformat = ys -> ["$(round(mercator_to_lat(y); digits=2))°" for y in ys]
+        ytickformat = ys -> ["$(round(mercator_to_lat(y); digits=2))°" for y in ys],
+
     )
-    # ax = GeoAxis(fig[1, 1], dest="+proj=webmerc +datum=WGS84", aspect = DataAspect())
-    m = Tyler.Map(get_location(loc); provider, figure = fig, axis = ax)
-    wait(m)
-    display(fig)
+    mouse = Mouse(axis)
 
-    add_marshall_perimeter!(ax)
+    # Title in the top left
+    title = Label(figure[1, 1], "Wildfires.jl", fontsize=18)
 
-    mouse_coords = get_mouse_coords(ax)
-    return (; loc, m, provider, fig, ax, mouse_coords)
+    # Top row above map
+    top = figure[1, 2] = GridLayout()
+    Label(top[1,2], " Placeholder 1")
+    Label(top[1,3], " Placeholder 2")
+
+    # Create the map
+    m = Tyler.Map(get_location(loc); provider, figure, axis)
+    wait(m)  # wait for tiles to load
+
+    # Add lon/lat position in bottom right corner
+    textlabel!(axis, Point2f(1,0), text=@lift(coords_string($(mouse.coords))), shape=Rect2f(0, 0, 1, 1), text_align=(:right, :bottom), text_color=:white, background_color=(:black, 0.5), fontsize=12, space=:relative, cornerradius=0, offset=(-4, 4), strokewidth=0, font="Consolas")
+
+    # left click
+    scatter!(axis, mouse.left_click, color=:red, marker=:cross, markersize=20)
+
+    # left side of map
+    left = figure[2, 1] = GridLayout()
+
+    # base_layer_ui = left[1,1] = GridLayout()
+    # Label(base_layer_ui[1,1], "Base Layer")
+    Menu(left[1,1], options=["Option 1", "Option 2", "Option 3"], default="Option 1")
+
+    # Label(left[1,1], "Placeholder 1")
+    Label(left[2,1], "Placeholder 2")
+    Label(left[3,1], "Placeholder 3")
+
+    # Layout
+    # rowsize!(figure.layout, 1, Fixed(30))
+    rowsize!(figure.layout, 2, Relative(4/5))
+    colsize!(figure.layout, 2, Relative(4/5))
+    # colsize!(figure.layout, 1, Relative(1/5))
+
+    # Add Marshall fire perimeter
+    add_marshall_perimeter!(axis)
+
+    display(figure)
+
+    return (; loc, m, provider, figure, title, top, left, axis, mouse)
 end
 
 end
