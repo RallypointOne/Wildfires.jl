@@ -1,6 +1,6 @@
 module Wildfires
 
-using GLMakie, GeoMakie, Tyler, TileProviders, MapTiles, GeoJSON, DataFrames
+using GLMakie, GeoMakie, Tyler, TileProviders, MapTiles, GeoJSON, DataFrames, Extents
 using Tyler: ElevationProvider
 using Makie: AbstractAxis
 
@@ -9,7 +9,16 @@ import GMT
 import GeometryOps as GO
 import GeoInterface as GI
 
+include(joinpath("data", "WFIGS.jl"))
 include("Data.jl")
+
+#-----------------------------------------------------------------------------# get_extent
+function get_extent(loc::AbstractString, delta=0.2)
+    gmt = GMT.geocoder(loc)
+    x, y = Proj.Transformation(gmt.proj4, "WGS84")(gmt.data...)
+    Extents.Extent(X = (y - delta/2, y + delta/2), Y = (x - delta/2, x + delta/2))
+end
+
 
 #-----------------------------------------------------------------------------# coordinate transformations
 const R = 6378137.0  # WGS84 radius in meters
