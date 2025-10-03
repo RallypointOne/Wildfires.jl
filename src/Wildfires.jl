@@ -9,7 +9,9 @@ import GMT
 import GeometryOps as GO
 import GeoInterface as GI
 
-include(joinpath("data", "WFIGS.jl"))
+export Data
+
+#-----------------------------------------------------------------------------# Data
 include("Data.jl")
 
 #-----------------------------------------------------------------------------# get_extent
@@ -18,6 +20,8 @@ function get_extent(loc::AbstractString, delta=0.2)
     x, y = Proj.Transformation(gmt.proj4, "WGS84")(gmt.data...)
     Extents.Extent(X = (y - delta/2, y + delta/2), Y = (x - delta/2, x + delta/2))
 end
+
+polygon((;X, Y)::Extent) = GI.Polygon([[(X[1], Y[1]), (X[2], Y[1]), (X[2], Y[2]), (X[1], Y[2]), (X[1], Y[1])]])
 
 
 #-----------------------------------------------------------------------------# coordinate transformations
