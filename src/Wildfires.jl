@@ -11,10 +11,29 @@ import GeoInterface as GI
 
 export Data
 
-#-----------------------------------------------------------------------------# Data
+#-----------------------------------------------------------------------------# Ideas
+# A Map has:
+# 1. A base layer (tile provider)
+# 2. Overlay layers (fire perimeters, lakes, rivers, roads, power lines, etc.)
+# 3. A propagation model layer
+#   a. Propagation model can be used for:
+#     i. Forecasting spread from a real fire perimeter/start point.
+#     ii. Simulating spread from a start point (click and watch animation).
+#   b. Model data layer (wind, humidity, temperature, fuel, elevation, etdc.).  MODELS ARE STRICTLY TIED TO DATASETS
+#  4. Smoke layer???
+
+
+
+#-----------------------------------------------------------------------------# includes
+include("Geo.jl")
 include("Data.jl")
 
 #-----------------------------------------------------------------------------# get_extent
+function geocode(x::AbstractString)
+    gmt = GMT.geocoder(x)
+    Proj.Transformation(gmt.proj4, "WGS84")(gmt.data...)
+end
+
 function get_extent(loc::AbstractString, delta=0.2)
     gmt = GMT.geocoder(loc)
     x, y = Proj.Transformation(gmt.proj4, "WGS84")(gmt.data...)
