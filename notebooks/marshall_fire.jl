@@ -1,54 +1,100 @@
 ### A Pluto.jl notebook ###
-# v0.20.13
+# v0.20.19
 
 using Markdown
 using InteractiveUtils
 
-# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
-macro bind(def, element)
-    #! format: off
-    return quote
-        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
-        local el = $(esc(element))
-        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
-        el
-    end
-    #! format: on
-end
-
 # ╔═╡ 11225dea-88f0-11f0-2be4-8733351417a6
 begin 
+	using Revise
 	using Pkg
 	Pkg.activate(joinpath(@__DIR__, ".."))
-	using Wildfires, Plots, PlutoUI, DataFrames
+	using Wildfires, GLMakie, GeoMakie, PlutoUI, DataFrames
+	
+	import GeoInterface as GI 
+	import GeoFormatTypes as GFT 
+	import GeometryOps as GO
+	
 	PlutoUI.TableOfContents()
 end
 
 # ╔═╡ 0728afb9-8c0b-4ad1-8e7c-ab672d751d65
 md"""
-# Load DataFrame
+# Load Final Perimeter GeoJSON
 """
 
-# ╔═╡ baf8fb24-0ddc-47f7-8ea6-a6ae86d212e5
-df = Wildfires.Data.marshall()
+# ╔═╡ 473b4ad2-5719-40df-a325-13bcf08061f0
+marshall = Wildfires.Data.MarshallFireFinalPerimeter().data
 
-# ╔═╡ c26ce79a-15df-40ba-a8ea-e359d685b6a6
-@bind i Slider(1:nrow(df), show_value=true)
+# ╔═╡ dbfd7610-620b-41ce-afa2-28b4bd359706
+linestring1 = GI.LineString(marshall[1][1])
 
-# ╔═╡ aef45998-d69a-4fc6-b3ae-9ddc54257a08
-df.datetime[i]
+# ╔═╡ 60373761-5342-4f89-9507-44d09cc92ffd
+md"""
+# Original Multipolygon
+"""
 
-# ╔═╡ a5cdc3f0-8b6f-4ab0-867f-230d3264d772
-plot(df.geometry[i])
+# ╔═╡ 20b9c27e-3896-468b-9206-176da753b4cd
+poly(marshall)
 
-# ╔═╡ a23409ee-114a-4cda-8c68-a4b217ed5afe
-plot(df.geometry[1:i])
+# ╔═╡ 6435f263-f671-4029-aa64-880ad596d453
+md"# H3 Representation at different resolutions"
+
+# ╔═╡ e88be00f-56ad-4a07-bb85-f2feb2bddb70
+let 
+	fig = Figure()
+	ax = Axis(fig[1,1], title="Marshall Fire Perimeter in H3")
+
+	function f!(i; kw...)
+		c = Wildfires.cells(linestring1, i)
+		poly!(ax, c; kw...)
+		lines!(ax, c; alpha=.3, linewidth=1, color=:black)
+	end
+	# f!(8, color=:yellow)
+	# f!(9, color=:orange)
+	f!(11, color=:red)
+	# lines!(ax, Wildfires.cells(linestring1, 11), linewidth=1, color=:black)
+	poly!(ax, marshall, alpha=.5)
+	fig
+end
+
+# ╔═╡ a1b75d65-fe4a-4cbb-ac17-a5a04d3563e2
+let 
+	fig = Figure()
+	ax = Axis(fig[1,1], title="Marshall Fire Polygon at H3 Resolutions 8-10")
+	geom = GI.Polygon(marshall[1])
+	function f!(i; kw...)
+		c = Wildfires.cells(geom, i)
+		poly!(ax, c; alpha = .3, kw...)
+		lines!(ax, c; alpha=.3, linewidth=1, color=:black)
+	end
+	f!(8, color = :yellow)
+	f!(9, color = :orange)
+	f!(10, color = :red)
+	fig
+end
+
+# ╔═╡ b9a101c8-4aa3-4b37-82a9-e2f12f6924d6
+let 
+	fig = Figure()
+	ax = Axis(fig[1,1], title="Marshall Fire MultiPolygon at H3 Resolution 10")
+
+	c = Wildfires.cells(marshall, 11)
+	poly!(ax, c; color=:transparent, alpha=0.5)
+	lines!(ax, c; linewidth=.5, color=:black)
+	poly!(ax, marshall, alpha=.5)
+	@warn "Some cells are missing...probably need our own implementation"
+	fig
+end
 
 # ╔═╡ Cell order:
 # ╟─11225dea-88f0-11f0-2be4-8733351417a6
 # ╟─0728afb9-8c0b-4ad1-8e7c-ab672d751d65
-# ╠═baf8fb24-0ddc-47f7-8ea6-a6ae86d212e5
-# ╠═c26ce79a-15df-40ba-a8ea-e359d685b6a6
-# ╠═aef45998-d69a-4fc6-b3ae-9ddc54257a08
-# ╠═a5cdc3f0-8b6f-4ab0-867f-230d3264d772
-# ╠═a23409ee-114a-4cda-8c68-a4b217ed5afe
+# ╠═473b4ad2-5719-40df-a325-13bcf08061f0
+# ╠═dbfd7610-620b-41ce-afa2-28b4bd359706
+# ╟─60373761-5342-4f89-9507-44d09cc92ffd
+# ╠═20b9c27e-3896-468b-9206-176da753b4cd
+# ╟─6435f263-f671-4029-aa64-880ad596d453
+# ╠═e88be00f-56ad-4a07-bb85-f2feb2bddb70
+# ╟─a1b75d65-fe4a-4cbb-ac17-a5a04d3563e2
+# ╠═b9a101c8-4aa3-4b37-82a9-e2f12f6924d6

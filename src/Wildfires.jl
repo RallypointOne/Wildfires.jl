@@ -1,15 +1,22 @@
 module Wildfires
 
-using GLMakie, GeoMakie, Tyler, TileProviders, MapTiles, GeoJSON, DataFrames, Extents
-using Tyler: ElevationProvider
+using GLMakie, GeoMakie, Tyler, TileProviders, MapTiles, GeoJSON, DataFrames, Extents, StyledStrings
+
 using Makie: AbstractAxis
+using H3: H3, API
 
 import Proj
 import GMT
-import GeometryOps as GO
-import GeoInterface as GI
 
-export Data
+import GeoInterface as GI
+import GeometryOps as GO
+import GeoFormatTypes as GFT
+
+
+export
+    Data,
+    # h3 stuff:
+    Cell, LatLon, Vertex
 
 #-----------------------------------------------------------------------------# Ideas
 # A Map has:
@@ -25,15 +32,10 @@ export Data
 
 
 #-----------------------------------------------------------------------------# includes
-include("Geo.jl")
+include("geo.jl")
 include("Data.jl")
 
 #-----------------------------------------------------------------------------# get_extent
-function geocode(x::AbstractString)
-    gmt = GMT.geocoder(x)
-    Proj.Transformation(gmt.proj4, "WGS84")(gmt.data...)
-end
-
 function get_extent(loc::AbstractString, delta=0.2)
     gmt = GMT.geocoder(loc)
     x, y = Proj.Transformation(gmt.proj4, "WGS84")(gmt.data...)

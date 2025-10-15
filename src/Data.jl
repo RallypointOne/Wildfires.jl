@@ -5,7 +5,7 @@ import GeometryOps as GO
 import NaturalEarth
 import MapTiles
 import TileProviders
-import ..Wildfires.Geo
+import ..Wildfires
 import ImageMagick
 import CSV
 
