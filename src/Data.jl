@@ -8,6 +8,7 @@ import TileProviders
 import ..Wildfires
 import ImageMagick
 import CSV
+import Rasters
 
 using GeoJSON, JSON3, Dates, DataFrames, HTTP, Extents, ColorTypes, FixedPointNumbers
 
@@ -113,18 +114,17 @@ Rivers(scale = 10) = NaturalEarthData(Symbol("ne_$(scale)m_rivers_lake_centerlin
 # _bathymetry_levels = [10000, 9000, 8000, 7000, 6000, 5000, 4000, 3000, 2000, 1000, 200, 0]
 # Bathymetry(x::Char = 'A') = NaturalEarthData(Symbol("ne_10m_bathymetry_$(x)_$(_bathymetry_levels[findfirst(==(x), 'A':'L')])"))
 
-# #-----------------------------------------------------------------------------# DigitalElevationModel
-# struct DigitalElevationModel <: StaticData
-#     extent::Extent
-# end
-# function Base.get(data::DigitalElevationModel)
-#     # bbox = (data.extent.X[1], data.extent.Y[1], data.extent.X[2], data.extent.Y[2])
-#     # url = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?" *
-#     #     "bbox=$(bbox[1]),$(bbox[2]),$(bbox[3]),$(bbox[4])" *
-#     #     "&prodFormats=GeoTIFF"
-#     res = HTTP.get("""https://tnmaccess.nationalmap.gov/api/v1/products?datasets=Digital%20Elevation%20Model%20(DEM)%201%20meter&bbox=-105.35,39.95,-105.25,40.05&prodFormats=GeoTIFF""")
-#     obj = JSON3.read(res.body)
-# end
+#-----------------------------------------------------------------------------# DigitalElevationModel
+struct DigitalElevationModel <: StaticData
+    extent::Extent
+end
+function Base.get(data::DigitalElevationModel)
+    bbox = (data.extent.X[1], data.extent.Y[1], data.extent.X[2], data.extent.Y[2])
+    res = HTTP.get("""https://tnmaccess.nationalmap.gov/api/v1/products?datasets=Digital%20Elevation%20Model%20(DEM)%201%20meter&bbox=$bbox&prodFormats=GeoTIFF""")
+    file = tempname() * ".tif"
+    write(file, res.body)
+    Rasters.Raster(file)
+end
 
 #-----------------------------------------------------------------------------# TileProviderData
 @kwdef struct TileProviderData <: StaticData

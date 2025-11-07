@@ -38,7 +38,7 @@ export Data
 
 # #-----------------------------------------------------------------------------# includes
 # # include("geo.jl")
-# include("Data.jl")
+include("Data.jl")
 
 # #-----------------------------------------------------------------------------# coordinate transformations
 # const R = 6378137.0  # WGS84 radius in meters
@@ -78,27 +78,19 @@ export Data
 
 # coords_string(x::Point2d) = "lon = $(round(mercator_to_lon(x[1]); digits=3))°, lat = $(round(mercator_to_lat(x[2]); digits=3))°"
 
-# #-----------------------------------------------------------------------------# add_marshall_perimeter!
-# function add_marshall_perimeter!(ax::AbstractAxis, color=:red)
-#     data = Data.marshall()
-#     data2 = GO.reproject(data, "+proj=webmerc +datum=WGS84")
-
-#     # coords = Data.marshall().coordinates
-#     # coords2 = lonlat2webmercator(coords)
-#     # geom = GeoJSON.MultiPolygon(coordinates = coords2)
-#     poly!(ax, data2, color=(color, .2), strokecolor=color, strokewidth=1)
-# end
-
-# #-----------------------------------------------------------------------------# Map
-# # @kwdef struct Map
-# #     location::Observable{Rect2f} = Observable(get_location("Superior, CO"))
-# #     mouse_coords::Observable{Point2f} = Observable(Point2f(0, 0))
-# # end
-
-
+#-----------------------------------------------------------------------------# add_marshall_perimeter!
+function add_marshall_perimeter!(ax::GeoAxis, color=:red)
+    data = Data.MarshallFireFinalPerimeter().data
+    poly!(ax, data, color=(color, .2), strokecolor=color, strokewidth=1)
+end
+function add_marshall_perimeter!(ax::Axis, color=:red)
+    data = Data.MarshallFireFinalPerimeter().data
+    data2 = GO.reproject(data, "+proj=webmerc +datum=WGS84")
+    poly!(ax, data2, color=(color, .2), strokecolor=color, strokewidth=1)
+end
 
 #-----------------------------------------------------------------------------# init_map
-function init_map(ext::Extents.Extent;
+function init_map(ext::Extents.Extent = GI.extent(Data.MarshallFireFinalPerimeter().data);
         title = "Wildfire.jl Map Viewer",
         provider = TileProviders.OpenStreetMap(), #TileProviders.Google(:terrain),
         figure = Figure(size=(1200, 1000))
@@ -108,15 +100,14 @@ function init_map(ext::Extents.Extent;
     Label(figure[1, 1:2][1,2], "(ctrl + click to reset view)", fontsize=12, halign=:right)
 
     sidebar = Box(figure[2, 1], color=:lightgray, width=200)
-    axis = GeoAxis(figure[2, 2], dest="+proj=webmerc +datum=WGS84", aspect = DataAspect(),
-        panbutton=Mouse.left
-    )
-    deregister_interaction!(axis, :rectanglezoom)
+    axis = GeoAxis(figure[2, 2], dest="+proj=webmerc +datum=WGS84", panbutton=Mouse.left)
+    deregister_interaction!(axis, :rectanglezoom)  # Needed to enable panning with left mouse button
     hidedecorations!(axis, label=false, ticklabels=false, ticks=false, grid=true)
 
-    m = Tyler.Map(ext; provider, figure, axis)
+    m = Tyler.Map(ext; figure, axis)
 
-    figure
+    display(figure)
+    (; figure, axis)
 end
 
-end
+end  # module Wildfires
