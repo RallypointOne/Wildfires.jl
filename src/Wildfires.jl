@@ -1,24 +1,12 @@
 module Wildfires
 
-using GLMakie
-using GeoMakie
-using Tyler
-using TileProviders
-using MapTiles
-using GeoJSON
-using DataFrames
-using Extents
-using StyledStrings
-using OSMGeocoder
+using GLMakie, GeoMakie, Tyler, TileProviders, MapTiles, GeoJSON, DataFrames, Extents, StyledStrings,
+    OSMGeocoder, ModelingToolkit, Rasters, ArchGDAL, Proj, MethodOfLines, OrdinaryDiffEq, Interpolations,
+    LinearAlgebra, Statistics
 
-using Makie: AbstractAxis
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
-import Proj
-import GeoInterface as GI
-import GeometryOps as GO
-import GeoFormatTypes as GFT
-import GeometryBasics as GB
-
+import Proj, GeoInterface as GI, GeometryOps as GO, GeoFormatTypes as GFT, GeometryBasics as GB
 
 export Data
 
@@ -39,6 +27,9 @@ export Data
 # #-----------------------------------------------------------------------------# includes
 # # include("geo.jl")
 include("Data.jl")
+
+
+include("levelset.jl")
 
 # #-----------------------------------------------------------------------------# coordinate transformations
 # const R = 6378137.0  # WGS84 radius in meters
