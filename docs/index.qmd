@@ -1,0 +1,40 @@
+---
+title: "Wildfires.jl"
+engine: julia
+---
+
+Welcome to the documentation for **Wildfires.jl**.
+
+## Overview
+
+Wildfires.jl is a Julia package for wildfire modeling and simulation, built around three core modules:
+
+- **[Rothermel](rothermel.qmd)** — The Rothermel (1972) surface fire spread model with the 13 standard NFFL fuel models from Anderson (1982).
+- **[Level Set](levelset.qmd)** — A level set method for simulating 2D fire front propagation driven by spatially varying spread rates.
+- **[Spread Model](spreadmodel.qmd)** — Composable, differentiable components (wind, moisture, terrain) that drive level set simulations via `FireSpreadModel`.
+
+## Installation
+
+```julia
+using Pkg
+Pkg.add("Wildfires")
+```
+
+## Quick Example
+
+```{julia}
+using Wildfires
+using Wildfires.Rothermel
+using Wildfires.LevelSet
+using Wildfires.SpreadModel
+
+# Build a fire spread model from components
+moisture = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(moisture), FlatTerrain())
+
+# Evaluate spread rate at a point
+ros = model(0.0, 100.0, 100.0)
+println("Rate of spread: $(round(ros, digits=1)) m/min")
+```
+
+See [Getting Started](getting-started.qmd) for a full walkthrough.

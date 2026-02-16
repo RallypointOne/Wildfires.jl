@@ -1,0 +1,73 @@
+---
+title: "Getting Started"
+engine: julia
+---
+
+```{julia}
+#| echo: false
+#| output: false
+using Wildfires
+using Wildfires.Rothermel
+using Wildfires.LevelSet
+using Wildfires.SpreadModel
+using CairoMakie
+```
+
+## Compute a Rate of Spread
+
+Use the Rothermel (1972) model with one of the 13 standard NFFL fuel models:
+
+```{julia}
+# Fuel moisture (fraction, 0-1) for each size class
+moisture = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+
+# Rate of spread in m/min
+rate_of_spread(SHORT_GRASS, moisture=moisture, wind=8.0, slope=0.0)
+```
+
+See the [Rothermel](rothermel.qmd) page for details on fuel models and parameters.
+
+## Build a Fire Spread Model
+
+The `SpreadModel` module lets you compose a `FireSpreadModel` from pluggable wind, moisture, and terrain components:
+
+```{julia}
+model = FireSpreadModel(
+    SHORT_GRASS,                     # fuel model
+    UniformWind(speed=8.0),          # 8 km/h wind
+    UniformMoisture(moisture),       # uniform moisture from above
+    FlatTerrain()                    # no slope
+)
+
+# Evaluate at a point: returns spread rate in m/min
+model(0.0, 100.0, 100.0)
+```
+
+## Run a Fire Spread Simulation
+
+Create a level set grid, ignite, and simulate:
+
+```{julia}
+# 200x200 grid, 15m resolution -> 3km x 3km domain
+grid = LevelSetGrid(200, 200, dx=15.0)
+
+# Ignite a 50m-radius circle at the center
+ignite!(grid, 1500.0, 1500.0, 50.0)
+
+# Simulate 200 steps of 0.5 min each (100 min total)
+simulate!(grid, model, steps=200, dt=0.5)
+
+grid
+```
+
+## Visualize
+
+```{julia}
+fig = Figure()
+ax = Axis(fig[1, 1], title="t = $(grid.t) min", aspect=DataAspect(),
+    xlabel="x (m)", ylabel="y (m)")
+fireplot!(ax, grid)
+fig
+```
+
+See the [Level Set](levelset.qmd) page for more plotting options and the [Spread Model](spreadmodel.qmd) page for dynamic moisture, custom components, and more.

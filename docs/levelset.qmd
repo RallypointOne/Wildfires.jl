@@ -1,0 +1,143 @@
+---
+title: "Level Set"
+engine: julia
+---
+
+```{julia}
+#| echo: false
+#| output: false
+using Wildfires
+using Wildfires.LevelSet
+using CairoMakie
+```
+
+The `LevelSet` module implements a fire spread simulator using the **level set method**.  A signed distance function `φ(x, y, t)` implicitly tracks the fire front:
+
+| Region | Condition | Meaning |
+|--------|-----------|---------|
+| Burned | `φ < 0` | Fire has passed |
+| Front | `φ = 0` | Active fire perimeter |
+| Unburned | `φ > 0` | Fuel ahead of fire |
+
+The front evolves according to the Hamilton-Jacobi equation:
+
+$$\frac{\partial \phi}{\partial t} + F |\nabla \phi| = 0$$
+
+where $F(x, y, t) \geq 0$ is the local spread rate (e.g. from the [Rothermel model](rothermel.qmd)).
+
+## `LevelSetGrid`
+
+```{julia}
+grid = LevelSetGrid(100, 100, dx=30.0)
+```
+
+### Coordinates
+
+```{julia}
+xs = xcoords(grid)
+println("x: $(first(xs)) to $(last(xs)) m  ($(length(xs)) cells)")
+
+ys = ycoords(grid)
+println("y: $(first(ys)) to $(last(ys)) m  ($(length(ys)) cells)")
+```
+
+## Ignition
+
+```{julia}
+ignite!(grid, 1500.0, 1500.0, 100.0)
+grid
+```
+
+## Queries
+
+```{julia}
+burn_area(grid)  # m²
+```
+
+```{julia}
+sum(burned(grid))  # number of burned cells
+```
+
+## Advancing the Front
+
+The spread rate field `F` has the same dimensions as the grid.  Each cell specifies the local spread rate in m/min.
+
+```{julia}
+F = fill(10.0, size(grid))  # uniform 10 m/min everywhere
+
+for _ in 1:20
+    advance!(grid, F, 0.5)
+end
+
+grid
+```
+
+## Reinitialization
+
+Over many time steps, `φ` can drift away from a true signed distance function (gradients become too flat or too steep).  Periodic reinitialization restores `|∇φ| ≈ 1`, which keeps the upwind scheme accurate.
+
+```{julia}
+reinitialize!(grid)
+grid
+```
+
+## Plotting
+
+### Standard Makie Plots
+
+The `LevelSetGrid` integrates with Makie's `heatmap`, `contour`, `contourf`, and `surface` via `convert_arguments`:
+
+```{julia}
+fig = Figure(size=(700, 300))
+ax1 = Axis(fig[1, 1], title="heatmap", aspect=DataAspect())
+heatmap!(ax1, grid, colormap=:RdYlGn)
+
+ax2 = Axis(fig[1, 2], title="contourf", aspect=DataAspect())
+contourf!(ax2, grid, colormap=:RdYlGn)
+fig
+```
+
+### `fireplot`
+
+The `fireplot` recipe combines a heatmap of `φ` with a contour line at the fire front:
+
+```{julia}
+fig = Figure()
+ax = Axis(fig[1, 1], title="t = $(grid.t) min", aspect=DataAspect(),
+    xlabel="x (m)", ylabel="y (m)")
+fireplot!(ax, grid)
+fig
+```
+
+## Full Example
+
+Simulate fire spread with a spatially varying spread rate and visualize snapshots:
+
+```{julia}
+# Fresh grid with ignition
+g = LevelSetGrid(200, 200, dx=15.0)
+ignite!(g, 1500.0, 1500.0, 50.0)
+
+# Spread rate: faster on the right side (e.g. wind or fuel gradient)
+F = [5.0 + 10.0 * (j / 200) for i in 1:200, j in 1:200]
+
+fig = Figure(size=(800, 250))
+times = [0, 50, 100]
+for (col, target_t) in enumerate(times)
+    while g.t < target_t
+        advance!(g, F, 0.25)
+    end
+    if col > 1
+        reinitialize!(g)
+    end
+    ax = Axis(fig[1, col], title="t = $(round(g.t, digits=1)) min", aspect=DataAspect())
+    fireplot!(ax, g)
+    hidedecorations!(ax)
+end
+fig
+```
+
+## References
+
+- Osher, S. & Sethian, J.A. (1988). *Fronts propagating with curvature-dependent speed.* J. Computational Physics, 79(1), 12–49.
+- Mallet, V., Keyes, D.E., & Fendell, F.E. (2009). *Modeling wildland fire propagation with level set methods.* Computers & Mathematics with Applications.

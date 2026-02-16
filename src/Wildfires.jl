@@ -1,104 +1,64 @@
 module Wildfires
 
-using GLMakie, GeoMakie, Tyler, TileProviders, MapTiles, GeoJSON, DataFrames, Extents, StyledStrings,
-    OSMGeocoder, ModelingToolkit, Rasters, ArchGDAL, Proj, MethodOfLines, OrdinaryDiffEq, Interpolations,
-    LinearAlgebra, Statistics
+import Random
 
-using ModelingToolkit: t_nounits as t, D_nounits as D
+include("Rothermel.jl")
+include("LevelSet.jl")
+include("SpreadModel.jl")
+include("PINNTypes.jl")
 
-import Proj, GeoInterface as GI, GeometryOps as GO, GeoFormatTypes as GFT, GeometryBasics as GB
+using .PINNTypes: PINNConfig, PINNSolution
+export PINNConfig, PINNSolution, train_pinn, predict_on_grid, predict_on_grid!
 
-export Data
+#-----------------------------------------------------------------------------# PINN API stubs
+"""
+    train_pinn(grid::LevelSet.LevelSetGrid, model, tspan; config=PINNConfig(), observations=nothing)
 
+Train a Physics-Informed Neural Network to solve the fire spread level set PDE.
 
+The PINN learns a function `phi_theta(x, y, t)` satisfying:
 
-#-----------------------------------------------------------------------------# Ideas
-# A Map has:
-# 1. A base layer (tile provider)
-# 2. Overlay layers (fire perimeters, lakes, rivers, roads, power lines, etc.)
-# 3. A propagation model layer
-#   a. Propagation model can be used for:
-#     i. Forecasting spread from a real fire perimeter/start point.
-#     ii. Simulating spread from a start point (click and watch animation).
-#   b. Model data layer (wind, humidity, temperature, fuel, elevation, etdc.).  MODELS ARE STRICTLY TIED TO DATASETS
-#  4. Smoke layer???
+    dphi/dt + F(x,y,t)|nabla phi| = 0
 
+where `F` is the spread rate from the `FireSpreadModel`.
 
-# #-----------------------------------------------------------------------------# includes
-# # include("geo.jl")
-include("Data.jl")
+Requires `Lux` to be loaded (triggers package extension).
 
+# Arguments
+- `grid` - `LevelSetGrid` providing domain geometry and initial condition
+- `model` - Callable `model(t, x, y) -> spread_rate` (e.g. `FireSpreadModel`)
+- `tspan` - Time interval `(t_start, t_end)`
+- `config` - `PINNConfig` with training hyperparameters
+- `observations` - Optional `(t, x, y, phi)` tuple of observation data
 
-include("levelset.jl")
+# Returns
+A `PINNSolution` callable as `sol(t, x, y)`.
 
-# #-----------------------------------------------------------------------------# coordinate transformations
-# const R = 6378137.0  # WGS84 radius in meters
+### Examples
+```julia
+sol = train_pinn(grid, model, (0.0, 50.0))
+sol(25.0, 500.0, 500.0)  # evaluate at any point
+```
+"""
+function train_pinn end
 
-# # Conversion functions
-# mercator_to_lon(x) = x / R * 180 / π
-# mercator_to_lat(y) = atan(sinh(y / R)) * 180 / π
+"""
+    predict_on_grid(sol::PINNSolution, grid::LevelSet.LevelSetGrid, t)
 
-# lon_to_mercator(lon) = lon * π / 180 * R
-# lat_to_mercator(lat) = log(tan((90 + lat) * π / 360)) * R
+Evaluate the trained PINN on every cell center of `grid` at time `t`.
+Returns a matrix of phi values with the same dimensions as `grid`.
 
-# #-----------------------------------------------------------------------------# Mouse
-# struct Mouse
-#     axis::AbstractAxis
-#     coords::Observable{Point2d}
-#     left_click::Observable{Point2d}
-#     right_click::Observable{Point2d}
+Requires `Lux` to be loaded (triggers package extension).
+"""
+function predict_on_grid end
 
-#     function Mouse(axis::AbstractAxis)
-#         coords = Observable(Point2d(0, 0))
-#         left_click = Observable(Point2d(0, 0))
-#         right_click = Observable(Point2d(0, 0))
-#         :mouse_observables in keys(Makie.interactions(axis)) && Makie.deregister_interaction!(axis, :mouse_observables)
-#         register_interaction!(axis, :mouse_observables) do event::MouseEvent, axis
-#             coords[] = event.data
-#             if event.type === MouseEventTypes.leftclick
-#                 left_click[] = event.data
-#                 notify(left_click)
-#             elseif event.type === MouseEventTypes.rightclick
-#                 right_click[] = event.data
-#                 notify(right_click)
-#             end
-#         end
-#         new(axis, coords, left_click, right_click)
-#     end
-# end
+"""
+    predict_on_grid!(grid::LevelSet.LevelSetGrid, sol::PINNSolution, t)
 
-# coords_string(x::Point2d) = "lon = $(round(mercator_to_lon(x[1]); digits=3))°, lat = $(round(mercator_to_lat(x[2]); digits=3))°"
+In-place version of `predict_on_grid`: updates `grid.phi` and `grid.t`.
 
-#-----------------------------------------------------------------------------# add_marshall_perimeter!
-function add_marshall_perimeter!(ax::GeoAxis, color=:red)
-    data = Data.MarshallFireFinalPerimeter().data
-    poly!(ax, data, color=(color, .2), strokecolor=color, strokewidth=1)
-end
-function add_marshall_perimeter!(ax::Axis, color=:red)
-    data = Data.MarshallFireFinalPerimeter().data
-    data2 = GO.reproject(data, "+proj=webmerc +datum=WGS84")
-    poly!(ax, data2, color=(color, .2), strokecolor=color, strokewidth=1)
-end
+Requires `Lux` to be loaded (triggers package extension).
+"""
+function predict_on_grid! end
 
-#-----------------------------------------------------------------------------# init_map
-function init_map(ext::Extents.Extent = GI.extent(Data.MarshallFireFinalPerimeter().data);
-        title = "Wildfire.jl Map Viewer",
-        provider = TileProviders.OpenStreetMap(), #TileProviders.Google(:terrain),
-        figure = Figure(size=(1200, 1000))
-    )
-    navbar = Box(figure[1, 1:2], color=:lightgray, height=40)
-    Label(figure[1, 1:2][1,1], title, fontsize=18, halign=:left)
-    Label(figure[1, 1:2][1,2], "(ctrl + click to reset view)", fontsize=12, halign=:right)
-
-    sidebar = Box(figure[2, 1], color=:lightgray, width=200)
-    axis = GeoAxis(figure[2, 2], dest="+proj=webmerc +datum=WGS84", panbutton=Mouse.left)
-    deregister_interaction!(axis, :rectanglezoom)  # Needed to enable panning with left mouse button
-    hidedecorations!(axis, label=false, ticklabels=false, ticks=false, grid=true)
-
-    m = Tyler.Map(ext; figure, axis)
-
-    display(figure)
-    (; figure, axis)
-end
-
-end  # module Wildfires
+end # module Wildfires

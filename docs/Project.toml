@@ -1,0 +1,12 @@
+[deps]
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+ComponentArrays = "b0b7db55-cfe3-40fc-9ded-d10e2dbeff66"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+LocalCoverage = "5f6e1e16-694c-5876-87ef-16b5274f298e"
+Lux = "b2108857-7c20-44ae-9111-449ecde12c47"
+Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+Optimization = "7f7a1694-90dd-40f0-9382-eb1efda571ba"
+OptimizationOptimisers = "42dfb2eb-d2b4-4451-abcd-913932933ac1"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Wildfires = "8a83dac0-8d4f-4b7e-b327-bade5b93bcdd"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"

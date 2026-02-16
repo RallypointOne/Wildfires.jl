@@ -1,0 +1,42 @@
+project:
+  type: book
+  output-dir: _site
+
+engine: julia
+julia:
+  project: "."
+  exeflags: ["--threads=auto"]
+
+book:
+  title: "Wildfires.jl"
+  navbar:
+    right:
+      - icon: star
+        href: https://github.com/RallypointOne/Wildfires.jl/stargazers
+        text: "Star"
+      - icon: github
+        href: https://github.com/RallypointOne/Wildfires.jl
+  chapters:
+    - part: "Docs"
+      chapters:
+        - index.qmd
+        - getting-started.qmd
+        - rothermel.qmd
+        - levelset.qmd
+        - spreadmodel.qmd
+        - pinn.qmd
+    - part: "Reference"
+      chapters:
+        - api.qmd
+        - changelog.qmd
+        - coverage.qmd
+
+format:
+  html:
+    css: styles.css
+    number-sections: false
+    theme:
+      light: flatly
+      dark: darkly
+    include-after-body:
+      - file: _version-selector.html

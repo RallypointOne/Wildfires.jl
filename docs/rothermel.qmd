@@ -1,0 +1,146 @@
+---
+title: "Rothermel"
+engine: julia
+---
+
+```{julia}
+#| echo: false
+#| output: false
+using Wildfires
+using Wildfires.Rothermel
+
+# Helper: print docstring as markdown with headings bumped to ####
+function printdoc(x)
+    doc = string(Docs.doc(x))
+    doc = replace(doc, r"^# "m => "#### ")
+    println(doc)
+end
+```
+
+The `Rothermel` module implements the [Rothermel (1972)](https://www.fs.usda.gov/research/treesearch/32533) surface fire spread model, the foundational model used by most US wildfire behavior systems (BehavePlus, FARSITE, ELMFIRE, etc.).
+
+## How It Works
+
+The model computes the **rate of spread** (m/min) of a surface fire given:
+
+| Input | Description | Source |
+|-------|-------------|--------|
+| **Fuel model** | Static fuel bed properties (loading, SAV ratio, heat content, depth, moisture of extinction) | `Rothermel` struct |
+| **Moisture** | Fuel moisture content per size class | `FuelClasses` (keyword arg) |
+| **Wind** | Midflame wind speed | Scalar (km/h) |
+| **Slope** | Terrain slope as rise/run | Scalar (fraction) |
+
+The fuel model is a **static landscape property** while moisture, wind, and slope are **dynamic environmental inputs** — matching how operational fire behavior systems separate these concerns.
+
+## Types
+
+### `FuelClasses`
+
+A container for values across the five Rothermel fuel size classes.
+
+```{julia}
+#| output: asis
+printdoc(FuelClasses)
+```
+
+**Supported operations:**
+
+```{julia}
+fc = FuelClasses(d1=1.0, d10=2.0, d100=3.0, herb=4.0, wood=5.0)
+
+sum(fc)
+```
+
+```{julia}
+map(x -> 2x, fc)
+```
+
+### `Rothermel`
+
+The fuel model struct parameterized by the Rothermel (1972) equations.
+
+```{julia}
+#| output: asis
+printdoc(typeof(SHORT_GRASS))
+```
+
+## NFFL Fuel Models
+
+The 13 standard fuel models from [Anderson (1982)](https://www.fs.usda.gov/research/treesearch/6447) are provided as named constants:
+
+| Constant | NFFL | Description | Depth (ft) | Mx |
+|----------|------|-------------|------------|-----|
+| `SHORT_GRASS` | 1 | Short grass (1 ft) | 1.0 | 0.12 |
+| `TIMBER_GRASS` | 2 | Timber grass/understory | 1.0 | 0.15 |
+| `TALL_GRASS` | 3 | Tall grass (2.5 ft) | 2.5 | 0.25 |
+| `CHAPARRAL` | 4 | Chaparral (6 ft) | 6.0 | 0.20 |
+| `BRUSH` | 5 | Brush (2 ft) | 2.0 | 0.20 |
+| `DORMANT_BRUSH` | 6 | Dormant brush/hardwood slash | 2.5 | 0.25 |
+| `SOUTHERN_ROUGH` | 7 | Southern rough | 2.5 | 0.40 |
+| `CLOSED_TIMBER_LITTER` | 8 | Closed timber litter | 0.2 | 0.30 |
+| `HARDWOOD_LITTER` | 9 | Hardwood litter | 0.2 | 0.25 |
+| `TIMBER_UNDERSTORY` | 10 | Timber litter/understory | 1.0 | 0.25 |
+| `LIGHT_SLASH` | 11 | Light logging slash | 1.0 | 0.15 |
+| `MEDIUM_SLASH` | 12 | Medium logging slash | 2.3 | 0.20 |
+| `HEAVY_SLASH` | 13 | Heavy logging slash | 3.0 | 0.25 |
+
+```{julia}
+SHORT_GRASS
+```
+
+## Rate of Spread
+
+```{julia}
+#| output: asis
+printdoc(rate_of_spread)
+```
+
+### Example
+
+```{julia}
+M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+rate_of_spread(SHORT_GRASS, moisture=M, wind=8.0, slope=0.0)
+```
+
+### Effect of Wind Speed
+
+```{julia}
+winds = 0:2:30
+rates = [rate_of_spread(SHORT_GRASS, moisture=M, wind=w, slope=0.0) for w in winds]
+
+using CairoMakie
+fig = Figure()
+ax = Axis(fig[1,1], xlabel="Wind speed (km/h)", ylabel="Rate of spread (m/min)",
+    title="NFFL 1: Short Grass")
+lines!(ax, collect(winds), rates)
+fig
+```
+
+### Comparing Fuel Models
+
+```{julia}
+fuels = [
+    ("Short Grass", SHORT_GRASS),
+    ("Chaparral", CHAPARRAL),
+    ("Timber Litter", CLOSED_TIMBER_LITTER),
+    ("Heavy Slash", HEAVY_SLASH),
+]
+
+M_dead = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+
+fig = Figure()
+ax = Axis(fig[1,1], xlabel="Wind speed (km/h)", ylabel="Rate of spread (m/min)",
+    title="Fuel Model Comparison")
+for (label, fuel) in fuels
+    rates = [rate_of_spread(fuel, moisture=M_dead, wind=w, slope=0.0) for w in winds]
+    lines!(ax, collect(winds), rates, label=label)
+end
+axislegend(ax, position=:lt)
+fig
+```
+
+## References
+
+- Rothermel, R.C. (1972). *A Mathematical Model for Predicting Fire Spread in Wildland Fuels.* Res. Paper INT-115, USDA Forest Service.
+- Anderson, H.E. (1982). *Aids to Determining Fuel Models for Estimating Fire Behavior.* Gen. Tech. Rep. INT-122, USDA Forest Service.
+- Andrews, P.L. (2018). *The Rothermel Surface Fire Spread Model and Associated Developments.* Gen. Tech. Rep. RMRS-GTR-371, USDA Forest Service.

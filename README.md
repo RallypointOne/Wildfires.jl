@@ -1,6 +1,9 @@
-# Wildfires
+[![CI](https://github.com/RallypointOne/Wildfires.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/RallypointOne/Wildfires.jl/actions/workflows/CI.yml)
+[![Docs Build](https://github.com/RallypointOne/Wildfires.jl/actions/workflows/Docs.yml/badge.svg)](https://github.com/RallypointOne/Wildfires.jl/actions/workflows/Docs.yml)
+[![Stable Docs](https://img.shields.io/badge/docs-stable-blue)](https://RallypointOne.github.io/Wildfires.jl/stable/)
+[![Dev Docs](https://img.shields.io/badge/docs-dev-blue)](https://RallypointOne.github.io/Wildfires.jl/dev/)
 
-[![Build Status](https://github.com/joshday/Wildfires.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/joshday/Wildfires.jl/actions/workflows/CI.yml?query=branch%3Amain)
+# Wildfires.jl
 
 
 # Installation

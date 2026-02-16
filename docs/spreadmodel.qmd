@@ -1,0 +1,215 @@
+---
+title: "Spread Model"
+engine: julia
+---
+
+```{julia}
+#| echo: false
+#| output: false
+using Wildfires
+using Wildfires.Rothermel
+using Wildfires.LevelSet
+using Wildfires.SpreadModel
+using CairoMakie
+```
+
+The `SpreadModel` module provides composable, differentiable components for driving level set fire simulations.  Instead of manually constructing a spread rate matrix `F`, you build a `FireSpreadModel` from pluggable wind, moisture, and terrain components — each a callable `(t, x, y)` struct.
+
+## Architecture
+
+```
+FireSpreadModel(fuel, wind, moisture, terrain)
+       │
+       ▼
+model(t, x, y) → rate_of_spread(fuel; moisture, wind, slope)
+       │
+       ▼
+simulate!(grid, model) → level set evolution
+```
+
+Each component is a callable struct with signature `(t, x, y)`:
+
+| Component | Returns | Example |
+|-----------|---------|---------|
+| `wind::AbstractWind` | `(speed, direction)` — speed [km/h], direction [radians] | `UniformWind(speed=8.0)` |
+| `moisture::AbstractMoisture` | `FuelClasses` — moisture fractions | `UniformMoisture(...)` |
+| `terrain::AbstractTerrain` | `(slope, aspect)` — slope [fraction], aspect [radians] | `FlatTerrain()` |
+
+## Quick Example
+
+```{julia}
+M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+
+model = FireSpreadModel(
+    SHORT_GRASS,
+    UniformWind(speed=8.0),
+    UniformMoisture(M),
+    FlatTerrain()
+)
+
+# Evaluate spread rate at a single point
+model(0.0, 100.0, 100.0)
+```
+
+```{julia}
+# Full simulation
+grid = LevelSetGrid(200, 200, dx=15.0)
+ignite!(grid, 1500.0, 1500.0, 50.0)
+simulate!(grid, model, steps=200, dt=0.5)
+
+fig = Figure()
+ax = Axis(fig[1, 1], title="t = $(grid.t) min", aspect=DataAspect(),
+    xlabel="x (m)", ylabel="y (m)")
+fireplot!(ax, grid)
+fig
+```
+
+## Wind
+
+### `UniformWind`
+
+Spatially and temporally constant wind field.
+
+```{julia}
+wind = UniformWind(speed=10.0, direction=π/4)
+wind(0.0, 0.0, 0.0)  # (speed, direction)
+```
+
+## Moisture
+
+### `UniformMoisture`
+
+Spatially and temporally constant fuel moisture.
+
+```{julia}
+moist = UniformMoisture(FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0))
+moist(0.0, 0.0, 0.0)
+```
+
+### `DynamicMoisture`
+
+Spatially varying fuel moisture that responds to fire-induced drying. As the fire front
+approaches, radiative heat dries unburned fuel ahead of the front. The 1-hr dead fuel
+moisture (`d1`) varies spatially while other size classes remain constant.
+
+The drying model at each unburned cell:
+
+$$\frac{dM}{dt} = -\frac{\text{dry\_rate}}{\phi^2 + 1} + \text{recovery\_rate} \cdot (M_{\text{ambient}} - M)$$
+
+where $\phi$ is the level set value (approximate distance to the fire front in meters).
+
+```{julia}
+grid_d = LevelSetGrid(100, 100, dx=30.0)
+ignite!(grid_d, 1500.0, 1500.0, 100.0)
+
+M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+dm = DynamicMoisture(grid_d, M, dry_rate=0.1, recovery_rate=0.001)
+```
+
+Comparing static vs. dynamic moisture:
+
+```{julia}
+M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+
+# Static
+grid_s = LevelSetGrid(150, 150, dx=20.0)
+ignite!(grid_s, 1500.0, 1500.0, 50.0)
+model_s = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+simulate!(grid_s, model_s, steps=150, dt=0.5)
+
+# Dynamic
+grid_d = LevelSetGrid(150, 150, dx=20.0)
+ignite!(grid_d, 1500.0, 1500.0, 50.0)
+model_d = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), DynamicMoisture(grid_d, M), FlatTerrain())
+simulate!(grid_d, model_d, steps=150, dt=0.5)
+
+fig = Figure(size=(700, 300))
+ax1 = Axis(fig[1, 1], title="Static Moisture\n$(count(<(0), grid_s.φ)) cells burned",
+    aspect=DataAspect())
+fireplot!(ax1, grid_s)
+hidedecorations!(ax1)
+
+ax2 = Axis(fig[1, 2], title="Dynamic Moisture\n$(count(<(0), grid_d.φ)) cells burned",
+    aspect=DataAspect())
+fireplot!(ax2, grid_d)
+hidedecorations!(ax2)
+fig
+```
+
+## Terrain
+
+### `FlatTerrain`
+
+Zero slope everywhere.
+
+```{julia}
+FlatTerrain()(0.0, 0.0, 0.0)  # (slope, aspect)
+```
+
+### `UniformSlope`
+
+Spatially constant terrain slope.
+
+```{julia}
+slope = UniformSlope(slope=0.3, aspect=0.0)
+slope(0.0, 0.0, 0.0)
+```
+
+Effect of slope on fire spread:
+
+```{julia}
+M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+
+fig = Figure(size=(800, 250))
+for (col, s) in enumerate([0.0, 0.3, 0.6])
+    g = LevelSetGrid(150, 150, dx=20.0)
+    ignite!(g, 1500.0, 1500.0, 50.0)
+    m = FireSpreadModel(SHORT_GRASS, UniformWind(speed=5.0), UniformMoisture(M), UniformSlope(slope=s))
+    simulate!(g, m, steps=150, dt=0.5)
+    ax = Axis(fig[1, col], title="slope = $s", aspect=DataAspect())
+    fireplot!(ax, g)
+    hidedecorations!(ax)
+end
+fig
+```
+
+## Custom Components
+
+To create a custom component, define a callable struct that subtypes `AbstractWind`, `AbstractMoisture`, or `AbstractTerrain`.
+
+For example, a wind field that varies in space:
+
+```{julia}
+struct GradientWind <: AbstractWind
+    base_speed::Float64
+    gradient::Float64   # speed increase per meter in x
+end
+
+function (w::GradientWind)(t, x, y)
+    speed = w.base_speed + w.gradient * x
+    direction = 0.0  # wind from the west
+    (speed, direction)
+end
+
+M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+g = LevelSetGrid(150, 150, dx=20.0)
+ignite!(g, 1500.0, 1500.0, 50.0)
+m = FireSpreadModel(SHORT_GRASS, GradientWind(5.0, 0.003), UniformMoisture(M), FlatTerrain())
+simulate!(g, m, steps=150, dt=0.5)
+
+fig = Figure()
+ax = Axis(fig[1, 1], title="Gradient Wind", aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)")
+fireplot!(ax, g)
+fig
+```
+
+For dynamic components that respond to fire state, also implement `update!`:
+
+```julia
+SpreadModel.update!(w::MyDynamicWind, grid::LevelSetGrid, dt) = ...
+```
+
+## References
+
+- Rothermel, R.C. (1972). *A Mathematical Model for Predicting Fire Spread in Wildland Fuels.* Res. Paper INT-115, USDA Forest Service.
+- Osher, S. & Sethian, J.A. (1988). *Fronts propagating with curvature-dependent speed.* J. Computational Physics, 79(1), 12-49.
