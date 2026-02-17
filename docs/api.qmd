@@ -45,7 +45,7 @@ for name in export_names
     doc = string(Docs.doc(binding))
     println("""
     ::: {.callout-note collapse="true" appearance="minimal"}
-    ## `$name` [*($(kind))*]{.text-muted}
+    ## `$name` [*($(kind))*]{.text-muted} {#$(lowercase(string(name)))}
 
     $doc
     :::

@@ -44,6 +44,7 @@ function Base.show(io::IO, fc::FuelClasses{T}) where {T}
     print(io, "FuelClasses{$T}(d1=$(fc.d1), d10=$(fc.d10), d100=$(fc.d100), herb=$(fc.herb), wood=$(fc.wood))")
 end
 
+Base.eltype(::Type{FuelClasses{T}}) where {T} = T
 Base.map(f, a::FuelClasses) = FuelClasses(f(a.d1), f(a.d10), f(a.d100), f(a.herb), f(a.wood))
 Base.map(f, a::FuelClasses, b::FuelClasses) = FuelClasses(f(a.d1, b.d1), f(a.d10, b.d10), f(a.d100, b.d100), f(a.herb, b.herb), f(a.wood, b.wood))
 Base.sum(fc::FuelClasses) = fc.d1 + fc.d10 + fc.d100 + fc.herb + fc.wood
