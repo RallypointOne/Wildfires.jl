@@ -165,7 +165,7 @@ const ALL_FUELS = [
             @test config.hidden_dims == [64, 64, 64]
             @test config.activation == :tanh
             @test config.n_interior == 5000
-            @test config.max_epochs == 5000
+            @test config.max_epochs == 10000
             @test config.learning_rate == 1e-3
         end
 

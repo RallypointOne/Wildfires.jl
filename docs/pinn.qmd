@@ -64,14 +64,14 @@ ignite!(grid, 500.0, 500.0, 80.0)
 # Simple constant spread model for fast training
 const_spread = (t, x, y) -> 5.0
 
-# Configure a small PINN for fast documentation rendering
+# Configure PINN
 config = PINNConfig(
     hidden_dims = [32, 32],
-    n_interior = 200,
-    n_boundary = 40,
-    max_epochs = 1000,
+    n_interior = 500,
+    n_boundary = 100,
+    max_epochs = 3000,
     learning_rate = 1e-3,
-    resample_every = 0,
+    resample_every = 500,
 )
 
 # Train
@@ -167,7 +167,7 @@ fig
 | `lambda_bc` | `1.0` | BC loss weight |
 | `lambda_data` | `1.0` | Data loss weight |
 | `learning_rate` | `1e-3` | Adam learning rate |
-| `max_epochs` | `5000` | Maximum training epochs |
+| `max_epochs` | `10000` | Maximum training epochs |
 | `resample_every` | `500` | Resample collocation points every N epochs |
 
 ## Loss Function

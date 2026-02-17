@@ -105,37 +105,182 @@ rate_of_spread(SHORT_GRASS, moisture=M, wind=8.0, slope=0.0)
 ### Effect of Wind Speed
 
 ```{julia}
-winds = 0:2:30
-rates = [rate_of_spread(SHORT_GRASS, moisture=M, wind=w, slope=0.0) for w in winds]
-
 using CairoMakie
+
+winds = 0:2:30
+rates = [
+    rate_of_spread(SHORT_GRASS, moisture=M,
+        wind=w, slope=0.0)
+    for w in winds
+]
+
 fig = Figure()
-ax = Axis(fig[1,1], xlabel="Wind speed (km/h)", ylabel="Rate of spread (m/min)",
+ax = Axis(fig[1,1],
+    xlabel="Wind speed (km/h)",
+    ylabel="Rate of spread (m/min)",
     title="NFFL 1: Short Grass")
 lines!(ax, collect(winds), rates)
 fig
 ```
 
-### Comparing Fuel Models
+### Comparing All 13 Fuel Models
+
+Rate of spread at a reference condition (wind = 8 km/h, slope = 0, dead fuel moisture 6–8%):
 
 ```{julia}
-fuels = [
-    ("Short Grass", SHORT_GRASS),
-    ("Chaparral", CHAPARRAL),
-    ("Timber Litter", CLOSED_TIMBER_LITTER),
-    ("Heavy Slash", HEAVY_SLASH),
+M_ref = FuelClasses(
+    d1=0.06, d10=0.07, d100=0.08,
+    herb=0.0, wood=0.0)
+M_live = FuelClasses(
+    d1=0.06, d10=0.07, d100=0.08,
+    herb=0.60, wood=0.90)
+
+all_fuels = [
+    SHORT_GRASS, TIMBER_GRASS, TALL_GRASS,
+    CHAPARRAL, BRUSH, DORMANT_BRUSH,
+    SOUTHERN_ROUGH, CLOSED_TIMBER_LITTER,
+    HARDWOOD_LITTER, TIMBER_UNDERSTORY,
+    LIGHT_SLASH, MEDIUM_SLASH, HEAVY_SLASH,
+]
+nffl_labels = string.(1:13)
+
+cat_colors = Dict(
+    "Grass" => :forestgreen,
+    "Shrub" => :goldenrod,
+    "Timber" => :sienna,
+    "Slash" => :slategray,
+)
+categories = [
+    "Grass", "Grass", "Grass",
+    "Shrub", "Shrub", "Shrub", "Shrub",
+    "Timber", "Timber", "Timber",
+    "Slash", "Slash", "Slash",
+]
+colors = [cat_colors[c] for c in categories]
+
+function has_live_fuel(f)
+    sum(f.w) > f.w.d1 + f.w.d10 + f.w.d100
+end
+
+ros = [
+    rate_of_spread(f,
+        moisture=has_live_fuel(f) ? M_live : M_ref,
+        wind=8.0, slope=0.0)
+    for f in all_fuels
 ]
 
-M_dead = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+fig = Figure(size=(700, 350))
+ax = Axis(fig[1,1],
+    xlabel="NFFL Model",
+    ylabel="Rate of spread (m/min)",
+    title="Rate of Spread at 8 km/h Wind",
+    xticks=(1:13, nffl_labels))
+barplot!(ax, 1:13, ros, color=colors)
 
-fig = Figure()
-ax = Axis(fig[1,1], xlabel="Wind speed (km/h)", ylabel="Rate of spread (m/min)",
-    title="Fuel Model Comparison")
-for (label, fuel) in fuels
-    rates = [rate_of_spread(fuel, moisture=M_dead, wind=w, slope=0.0) for w in winds]
-    lines!(ax, collect(winds), rates, label=label)
+cat_names = ["Grass", "Shrub", "Timber", "Slash"]
+elems = [PolyElement(color=cat_colors[c])
+    for c in cat_names]
+Legend(fig[1,2], elems, cat_names,
+    framevisible=false)
+
+fig
+```
+
+### Wind Sensitivity by Fuel Category
+
+```{julia}
+groups = [
+    "Grass" => [
+        ("1: Short", SHORT_GRASS),
+        ("2: Timber", TIMBER_GRASS),
+        ("3: Tall", TALL_GRASS),
+    ],
+    "Shrub" => [
+        ("4: Chaparral", CHAPARRAL),
+        ("5: Brush", BRUSH),
+        ("6: Dormant", DORMANT_BRUSH),
+        ("7: Southern", SOUTHERN_ROUGH),
+    ],
+    "Timber" => [
+        ("8: Closed", CLOSED_TIMBER_LITTER),
+        ("9: Hardwood", HARDWOOD_LITTER),
+        ("10: Understory", TIMBER_UNDERSTORY),
+    ],
+    "Slash" => [
+        ("11: Light", LIGHT_SLASH),
+        ("12: Medium", MEDIUM_SLASH),
+        ("13: Heavy", HEAVY_SLASH),
+    ],
+]
+
+mph = 0:1:15
+mph_to_kmh = 1.60934
+
+fig = Figure(size=(700, 500))
+axes = []
+for (col, (title, fuels)) in enumerate(groups)
+    row = col <= 2 ? 1 : 2
+    c   = col <= 2 ? col : col - 2
+    ax = Axis(fig[row, c],
+        xlabel="Wind (mph)",
+        ylabel="ROS (m/min)",
+        title=title)
+    push!(axes, ax)
+    for (label, fuel) in fuels
+        m = has_live_fuel(fuel) ? M_live : M_ref
+        r = [
+            rate_of_spread(fuel,
+                moisture=m,
+                wind=w * mph_to_kmh,
+                slope=0.0)
+            for w in mph
+        ]
+        lines!(ax, collect(mph), r, label=label)
+    end
+    axislegend(ax, position=:lt, labelsize=10)
 end
-axislegend(ax, position=:lt)
+linkyaxes!(axes...)
+fig
+```
+
+### Fuel Loading by Size Class
+
+```{julia}
+fig = Figure(size=(700, 350))
+ax = Axis(fig[1,1],
+    xlabel="NFFL Model",
+    ylabel="Fuel loading (tons/acre)",
+    title="Fuel Loading Breakdown",
+    xticks=(1:13, nffl_labels))
+
+xs = repeat(1:13, 5)
+vals = vcat(
+    [f.w.d1 for f in all_fuels],
+    [f.w.d10 for f in all_fuels],
+    [f.w.d100 for f in all_fuels],
+    [f.w.herb for f in all_fuels],
+    [f.w.wood for f in all_fuels],
+)
+grp = vcat(
+    fill(1, 13), fill(2, 13), fill(3, 13),
+    fill(4, 13), fill(5, 13),
+)
+bar_colors = [
+    :tomato, :sandybrown, :tan,
+    :limegreen, :forestgreen,
+]
+
+barplot!(ax, xs, vals,
+    stack=grp,
+    color=[bar_colors[g] for g in grp])
+
+bar_labels = [
+    "1-hr dead", "10-hr dead", "100-hr dead",
+    "Herb", "Wood",
+]
+elems = [PolyElement(color=c) for c in bar_colors]
+Legend(fig[1,2], elems, bar_labels,
+    framevisible=false)
 fig
 ```
 

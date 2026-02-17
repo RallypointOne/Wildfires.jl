@@ -20,7 +20,7 @@ The initial condition is enforced exactly via a hard constraint decomposition
 - `lambda_bc::Float64` - BC loss weight (default `1.0`)
 - `lambda_data::Float64` - Data loss weight (default `1.0`)
 - `learning_rate::Float64` - Adam learning rate (default `1e-3`)
-- `max_epochs::Int` - Maximum training epochs (default `5000`)
+- `max_epochs::Int` - Maximum training epochs (default `10000`)
 - `resample_every::Int` - Resample collocation points every N epochs (default `500`)
 
 ### Examples
@@ -37,7 +37,7 @@ Base.@kwdef struct PINNConfig
     lambda_bc::Float64 = 1.0
     lambda_data::Float64 = 1.0
     learning_rate::Float64 = 1e-3
-    max_epochs::Int = 5000
+    max_epochs::Int = 10000
     resample_every::Int = 500
 end
 

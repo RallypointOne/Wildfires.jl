@@ -48,14 +48,14 @@ model(0.0, 100.0, 100.0)
 Create a level set grid, ignite, and simulate:
 
 ```{julia}
-# 200x200 grid, 15m resolution -> 3km x 3km domain
-grid = LevelSetGrid(200, 200, dx=15.0)
+# 200x200 grid, 30m resolution -> 6km x 6km domain
+grid = LevelSetGrid(200, 200, dx=30.0)
 
 # Ignite a 50m-radius circle at the center
-ignite!(grid, 1500.0, 1500.0, 50.0)
+ignite!(grid, 3000.0, 3000.0, 50.0)
 
-# Simulate 200 steps of 0.5 min each (100 min total)
-simulate!(grid, model, steps=200, dt=0.5)
+# Simulate 100 steps of 0.5 min each (50 min total)
+simulate!(grid, model, steps=100, dt=0.5)
 
 grid
 ```

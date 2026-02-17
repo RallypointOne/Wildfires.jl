@@ -278,8 +278,11 @@ function Makie.plot!(p::FirePlot)
     xs = @lift collect(xcoords($grid_obs))
     ys = @lift collect(ycoords($grid_obs))
     φ = @lift copy($grid_obs.φ)
+    crange = @lift let v = max(abs(minimum($φ)), abs(maximum($φ)))
+        (-v, v)
+    end
 
-    heatmap!(p, xs, ys, φ; colormap=p[:colormap])
+    heatmap!(p, xs, ys, φ; colormap=p[:colormap], colorrange=crange)
     contour!(p, xs, ys, φ; levels=[0.0], color=p[:frontcolor], linewidth=p[:frontlinewidth])
     p
 end

@@ -80,7 +80,7 @@ end
 (m::UniformMoisture)(t, x, y) = m.moisture
 
 """
-    DynamicMoisture(grid::LevelSetGrid, moisture::FuelClasses; dry_rate=0.1, recovery_rate=0.001)
+    DynamicMoisture(grid::LevelSetGrid, moisture::FuelClasses; dry_rate=0.1, recovery_rate=0.001, min_d1=0.03)
 
 Spatially varying fuel moisture that responds to fire-induced drying.
 
@@ -93,6 +93,7 @@ The drying model at each unburned cell:
     dM/dt = -dry_rate / (φ² + 1) + recovery_rate · (M_ambient - M)
 
 where `φ` is the level set value (approximate distance to the fire front in meters).
+Moisture is clamped to `[min_d1, ambient_d1]` to prevent unrealistic drying.
 
 # Fields
 - `d1::Matrix{T}` - Spatially varying 1-hr dead fuel moisture [fraction]
@@ -100,6 +101,7 @@ where `φ` is the level set value (approximate distance to the fire front in met
 - `ambient_d1::T` - Equilibrium d1 moisture from weather [fraction]
 - `dry_rate::T` - Fire-induced drying coefficient [fraction/min]
 - `recovery_rate::T` - Moisture recovery rate toward ambient [1/min]
+- `min_d1::T` - Minimum d1 moisture floor [fraction]
 - `dx::T`, `dy::T`, `x0::T`, `y0::T` - Grid geometry for coordinate lookup
 """
 mutable struct DynamicMoisture{T} <: AbstractMoisture
@@ -108,6 +110,7 @@ mutable struct DynamicMoisture{T} <: AbstractMoisture
     ambient_d1::T
     dry_rate::T
     recovery_rate::T
+    min_d1::T
     dx::T
     dy::T
     x0::T
@@ -115,10 +118,10 @@ mutable struct DynamicMoisture{T} <: AbstractMoisture
 end
 
 function DynamicMoisture(grid::LevelSetGrid{T}, moisture::FuelClasses{T};
-                         dry_rate=T(0.1), recovery_rate=T(0.001)) where {T}
+                         dry_rate=T(0.1), recovery_rate=T(0.001), min_d1=T(0.03)) where {T}
     d1 = fill(moisture.d1, size(grid))
     DynamicMoisture(d1, moisture, moisture.d1, T(dry_rate), T(recovery_rate),
-                    grid.dx, grid.dy, grid.x0, grid.y0)
+                    T(min_d1), grid.dx, grid.dy, grid.x0, grid.y0)
 end
 
 function (m::DynamicMoisture{T})(t, x, y) where {T}
@@ -139,7 +142,7 @@ function update!(m::DynamicMoisture, grid::LevelSetGrid, dt)
             # Recovery toward ambient (weather-driven rewetting)
             recovery = m.recovery_rate * (m.ambient_d1 - m.d1[i, j])
 
-            m.d1[i, j] = clamp(m.d1[i, j] + (-fire_flux + recovery) * dt, 0.0, m.ambient_d1)
+            m.d1[i, j] = clamp(m.d1[i, j] + (-fire_flux + recovery) * dt, m.min_d1, m.ambient_d1)
         end
     end
 end
@@ -226,6 +229,17 @@ end
     spread_rate_field!(F::AbstractMatrix, model, grid::LevelSetGrid)
 
 Fill matrix `F` by evaluating `model(t, x, y)` at each cell center of `grid`.
+
+For a `FireSpreadModel`, the spread rate is direction-dependent: the Rothermel
+head-fire rate applies in the wind/slope push direction, while the base rate
+(no wind, no slope) applies for flanking and backing fire.  The effective rate
+at each cell is:
+
+    F = R_base + (R_head - R_base) · max(0, n̂ · d̂)
+
+where `n̂ = ∇φ/|∇φ|` is the front propagation direction and `d̂` is the
+combined wind + slope push direction (weighted by their individual
+contributions to spread rate).
 """
 function spread_rate_field!(F::AbstractMatrix, model, grid::LevelSetGrid)
     xs = xcoords(grid)
@@ -235,6 +249,80 @@ function spread_rate_field!(F::AbstractMatrix, model, grid::LevelSetGrid)
         F[i, j] = model(t, xs[j], ys[i])
     end
     F
+end
+
+function spread_rate_field!(F::AbstractMatrix, model::FireSpreadModel, grid::LevelSetGrid)
+    xs = xcoords(grid)
+    ys = ycoords(grid)
+    t = grid.t
+    φ = grid.φ
+    nrows, ncols = size(φ)
+    dxg, dyg = grid.dx, grid.dy
+
+    for j in eachindex(xs), i in eachindex(ys)
+        # Front normal from ∇φ (central differences)
+        dφdx = if j == 1
+            (φ[i, 2] - φ[i, 1]) / dxg
+        elseif j == ncols
+            (φ[i, ncols] - φ[i, ncols-1]) / dxg
+        else
+            (φ[i, j+1] - φ[i, j-1]) / (2dxg)
+        end
+        dφdy = if i == 1
+            (φ[2, j] - φ[1, j]) / dyg
+        elseif i == nrows
+            (φ[nrows, j] - φ[nrows-1, j]) / dyg
+        else
+            (φ[i+1, j] - φ[i-1, j]) / (2dyg)
+        end
+        grad = hypot(dφdx, dφdy)
+
+        if grad > 0
+            F[i, j] = _directional_rate(
+                model, t, xs[j], ys[i],
+                dφdx / grad, dφdy / grad)
+        else
+            F[i, j] = model(t, xs[j], ys[i])
+        end
+    end
+    F
+end
+
+# Direction-dependent spread rate using front normal (nx, ny)
+function _directional_rate(model::FireSpreadModel,
+        t, x, y, nx, ny)
+    speed, wind_dir = model.wind(t, x, y)
+    moist = model.moisture(t, x, y)
+    slope_val, aspect = model.terrain(t, x, y)
+
+    R_head = rate_of_spread(model.fuel,
+        moisture=moist, wind=speed, slope=slope_val)
+    R_head == 0 && return 0.0
+
+    R_base = rate_of_spread(model.fuel,
+        moisture=moist, wind=0.0, slope=0.0)
+    R_head ≈ R_base && return R_head
+
+    # Push direction weighted by each component's
+    # contribution to spread rate
+    R_w = rate_of_spread(model.fuel,
+        moisture=moist, wind=speed, slope=0.0)
+    R_s = rate_of_spread(model.fuel,
+        moisture=moist, wind=0.0, slope=slope_val)
+    w_wind = R_w - R_base
+    w_slope = R_s - R_base
+
+    # Wind pushes opposite to FROM direction
+    # Slope pushes uphill (opposite to aspect)
+    px = w_wind * (-cos(wind_dir)) +
+         w_slope * (-cos(aspect))
+    py = w_wind * (-sin(wind_dir)) +
+         w_slope * (-sin(aspect))
+    pmag = hypot(px, py)
+    pmag == 0 && return R_head
+
+    cos_theta = (nx * px + ny * py) / pmag
+    return R_base + (R_head - R_base) * max(0.0, cos_theta)
 end
 
 #-----------------------------------------------------------------------------# simulate!

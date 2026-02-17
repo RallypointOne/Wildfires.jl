@@ -72,6 +72,16 @@ end
 grid
 ```
 
+### CFL Condition
+
+The time step `dt` must satisfy the **Courant–Friedrichs–Lewy (CFL) condition** for numerical stability:
+
+$$\text{dt} < \frac{\text{dx}}{\max(F)}$$
+
+If `dt` is too large relative to `dx` and the maximum spread rate, the upwind scheme becomes unstable and `φ` values will diverge.  For example, with `dx = 30 m` and `max(F) = 31 m/min`, you need `dt < 0.97 min`.
+
+The `simulate!` function in the `SpreadModel` module does **not** automatically enforce the CFL condition — you are responsible for choosing a safe `dt`.
+
 ## Reinitialization
 
 Over many time steps, `φ` can drift away from a true signed distance function (gradients become too flat or too steep).  Periodic reinitialization restores `|∇φ| ≈ 1`, which keeps the upwind scheme accurate.
@@ -118,19 +128,21 @@ Simulate fire spread with a spatially varying spread rate and visualize snapshot
 g = LevelSetGrid(200, 200, dx=15.0)
 ignite!(g, 1500.0, 1500.0, 50.0)
 
-# Spread rate: faster on the right side (e.g. wind or fuel gradient)
-F = [5.0 + 10.0 * (j / 200) for i in 1:200, j in 1:200]
+# Spread rate: faster on the right side
+F = [5.0 + 10.0 * (j / 200)
+    for i in 1:200, j in 1:200]
 
-fig = Figure(size=(800, 250))
+fig = Figure(size=(700, 250))
 times = [0, 50, 100]
 for (col, target_t) in enumerate(times)
     while g.t < target_t
         advance!(g, F, 0.25)
     end
-    if col > 1
-        reinitialize!(g)
-    end
-    ax = Axis(fig[1, col], title="t = $(round(g.t, digits=1)) min", aspect=DataAspect())
+    col > 1 && reinitialize!(g)
+    t = round(g.t, digits=1)
+    ax = Axis(fig[1, col],
+        title="t = $t min",
+        aspect=DataAspect())
     fireplot!(ax, g)
     hidedecorations!(ax)
 end
