@@ -1,0 +1,121 @@
+---
+title: "GPU Acceleration"
+engine: julia
+---
+
+```{julia}
+#| echo: false
+#| output: false
+using Wildfires
+using Wildfires.LevelSet
+using Wildfires.SpreadModel
+using Wildfires.Rothermel
+using Adapt
+```
+
+Wildfires.jl supports GPU acceleration via a package extension backed by [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl).  This enables backend-agnostic GPU execution on CUDA (NVIDIA), ROCm (AMD), Metal (Apple), and oneAPI (Intel) devices.
+
+The GPU extension accelerates the compute-heavy stencil operations (`advance!`, `reinitialize!`) while spread rate computation stays on the CPU.
+
+## Setup
+
+Load a GPU backend alongside `KernelAbstractions` and `GPUArraysCore` to activate the extension:
+
+```julia
+# NVIDIA
+using CUDA, KernelAbstractions, GPUArraysCore
+
+# Apple Silicon
+using Metal, KernelAbstractions, GPUArraysCore
+
+# AMD
+using AMDGPU, KernelAbstractions, GPUArraysCore
+```
+
+Then load Wildfires as usual:
+
+```julia
+using Wildfires
+using Wildfires.LevelSet
+using Wildfires.SpreadModel
+using Wildfires.Rothermel
+```
+
+## Usage
+
+The workflow is: build your grid and model on the CPU, move to GPU with `Adapt.adapt`, simulate, then move back to CPU for plotting.
+
+```julia
+using Adapt
+
+# 1. Build on CPU
+grid = LevelSetGrid(500, 500, dx=30.0)
+ignite!(grid, 7500.0, 7500.0, 200.0)
+
+M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+
+# 2. Move grid to GPU
+gpu_grid = Adapt.adapt(CuArray, grid)   # CuArray for CUDA, MtlArray for Metal, etc.
+
+# 3. Simulate (uses GPU kernels automatically)
+simulate!(gpu_grid, model, steps=1000, dt=0.5)
+
+# 4. Move back to CPU for plotting
+cpu_grid = Adapt.adapt(Array, gpu_grid)
+fireplot(cpu_grid)
+```
+
+The `Adapt.adapt` call converts the `φ` array inside `LevelSetGrid` to the target array type.  All other fields (scalars like `dx`, `dy`, `t`) remain on the CPU.
+
+## What Runs on the GPU
+
+| Operation | GPU? | Notes |
+|-----------|------|-------|
+| `advance!` | Yes | Godunov upwind stencil — one thread per cell |
+| `reinitialize!` | Yes | Reinitialization stencil — 5 iterations, parallel within each |
+| `DynamicMoisture` `update!` | Yes | Element-wise moisture update kernel |
+| `spread_rate_field!` | No | Computed on CPU, uploaded to GPU (calls Rothermel model) |
+| `ignite!` | Yes | Uses broadcasting — works on any array type |
+
+The `spread_rate_field!` function evaluates the `FireSpreadModel` at each cell, which involves branching logic in the Rothermel model that isn't GPU-friendly.  The extension handles this transparently: it copies `φ` to the CPU, computes `F`, and uploads the result back to the GPU.
+
+## Type Parameterization
+
+`LevelSetGrid` and `DynamicMoisture` are parameterized on their array type:
+
+```{julia}
+grid = LevelSetGrid(20, 20, dx=30.0)
+typeof(grid)
+```
+
+On the GPU this becomes `LevelSetGrid{Float64, CuMatrix{Float64}}` (or `MtlMatrix`, etc.).  The GPU extension methods dispatch on `LevelSetGrid{T, <:AbstractGPUArray}`, so CPU code paths are completely unaffected.
+
+## `DynamicMoisture` on GPU
+
+If your model uses `DynamicMoisture`, the `d1` moisture array also lives on the GPU. The extension provides a GPU kernel for `update!` that runs the drying/recovery computation in parallel.
+
+For spread rate computation, the extension temporarily copies `d1` back to the CPU (since the Rothermel model requires scalar indexing).
+
+```julia
+dm = DynamicMoisture(grid, M)
+gpu_dm = Adapt.adapt(CuArray, dm)  # d1 array moves to GPU
+```
+
+## Tips
+
+- **Float32 for extra speed**: GPU hardware is typically much faster with `Float32`. Create a `Float32` grid with `LevelSetGrid(n, n, dx=30f0, x0=0f0, y0=0f0)` and ensure your `FuelClasses` and model parameters match.
+- **CFL condition**: The same CFL stability requirement applies on GPU — `dt < dx / max(F)`.
+- **Plotting**: Makie requires CPU arrays. The `fireplot` and `convert_arguments` recipes automatically call `collect()` on `φ`, but it's more efficient to `Adapt.adapt(Array, gpu_grid)` once rather than repeatedly plotting a GPU grid.
+- **Memory**: Each `advance!` call allocates a copy of `φ` for the stencil read buffer.  For very large grids, monitor GPU memory usage.
+
+## Dependencies
+
+The GPU extension is triggered by two weak dependencies:
+
+| Package | Purpose |
+|---------|---------|
+| `KernelAbstractions` | Backend-agnostic `@kernel` macro for GPU compute |
+| `GPUArraysCore` | Provides `AbstractGPUArray` for dispatch |
+
+These are **not** installed by default. Install your GPU backend package (e.g. `CUDA.jl`) which brings in both as transitive dependencies.

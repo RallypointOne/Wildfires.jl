@@ -96,7 +96,7 @@ where `φ` is the level set value (approximate distance to the fire front in met
 Moisture is clamped to `[min_d1, ambient_d1]` to prevent unrealistic drying.
 
 # Fields
-- `d1::Matrix{T}` - Spatially varying 1-hr dead fuel moisture [fraction]
+- `d1::M` - Spatially varying 1-hr dead fuel moisture (`M <: AbstractMatrix{T}`) [fraction]
 - `base::FuelClasses{T}` - Moisture values for other size classes
 - `ambient_d1::T` - Equilibrium d1 moisture from weather [fraction]
 - `dry_rate::T` - Fire-induced drying coefficient [fraction/min]
@@ -104,8 +104,8 @@ Moisture is clamped to `[min_d1, ambient_d1]` to prevent unrealistic drying.
 - `min_d1::T` - Minimum d1 moisture floor [fraction]
 - `dx::T`, `dy::T`, `x0::T`, `y0::T` - Grid geometry for coordinate lookup
 """
-mutable struct DynamicMoisture{T} <: AbstractMoisture
-    d1::Matrix{T}
+mutable struct DynamicMoisture{T, M <: AbstractMatrix{T}} <: AbstractMoisture
+    d1::M
     base::FuelClasses{T}
     ambient_d1::T
     dry_rate::T
@@ -342,7 +342,7 @@ simulate!(grid, model, steps=100, dt=0.5)
 ```
 """
 function simulate!(grid::LevelSetGrid, model; steps::Int=100, dt=0.5, reinit_every::Int=10)
-    F = Matrix{eltype(grid)}(undef, size(grid))
+    F = similar(grid.φ)
     for step in 1:steps
         update!(model, grid, dt)
         spread_rate_field!(F, model, grid)

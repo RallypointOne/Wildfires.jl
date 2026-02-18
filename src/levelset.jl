@@ -27,7 +27,7 @@ using Makie
 
 #-----------------------------------------------------------------------------# LevelSetGrid
 """
-    LevelSetGrid{T} <: AbstractMatrix{T}
+    LevelSetGrid{T, M} <: AbstractMatrix{T}
 
 A 2D grid representing a fire spread simulation via the level set method.
 
@@ -37,12 +37,12 @@ The grid stores a signed distance function `φ` where:
 - `φ > 0` → unburned
 
 # Fields
-- `φ::Matrix{T}`  - Level set function values
-- `dx::T`         - Grid spacing in x [m]
-- `dy::T`         - Grid spacing in y [m]
-- `x0::T`         - x-coordinate of grid origin (lower-left) [m]
-- `y0::T`         - y-coordinate of grid origin (lower-left) [m]
-- `t::T`          - Current simulation time [min]
+- `φ::M`   - Level set function values (`M <: AbstractMatrix{T}`)
+- `dx::T`  - Grid spacing in x [m]
+- `dy::T`  - Grid spacing in y [m]
+- `x0::T`  - x-coordinate of grid origin (lower-left) [m]
+- `y0::T`  - y-coordinate of grid origin (lower-left) [m]
+- `t::T`   - Current simulation time [min]
 
 # Constructor
     LevelSetGrid(nx, ny; dx=30.0, dy=dx, x0=0.0, y0=0.0)
@@ -55,8 +55,8 @@ grid = LevelSetGrid(100, 100, dx=30.0)
 ignite!(grid, 1500.0, 1500.0, 100.0)
 ```
 """
-mutable struct LevelSetGrid{T} <: AbstractMatrix{T}
-    φ::Matrix{T}
+mutable struct LevelSetGrid{T, M <: AbstractMatrix{T}} <: AbstractMatrix{T}
+    φ::M
     dx::T
     dy::T
     x0::T
@@ -134,10 +134,8 @@ ignite!(grid, 1500.0, 1500.0, 100.0)
 function ignite!(g::LevelSetGrid, cx, cy, r)
     xs = xcoords(g)
     ys = ycoords(g)
-    for j in eachindex(xs), i in eachindex(ys)
-        d = hypot(xs[j] - cx, ys[i] - cy) - r
-        g.φ[i, j] = min(g.φ[i, j], d)
-    end
+    # Broadcasting: ys is ny-column, xs' is 1×nx row → broadcasts to ny×nx
+    g.φ .= min.(g.φ, hypot.(xs' .- cx, ys .- cy) .- r)
     g
 end
 
@@ -248,7 +246,7 @@ Standard Makie plot types work on `LevelSetGrid` with correct spatial coordinate
 The plotted values are the level set function `φ`.
 """
 function Makie.convert_arguments(P::Type{<:Union{Makie.Heatmap,Makie.Contour,Makie.Contourf,Makie.Surface}}, g::LevelSetGrid)
-    Makie.convert_arguments(P, collect(xcoords(g)), collect(ycoords(g)), copy(g.φ))
+    Makie.convert_arguments(P, collect(xcoords(g)), collect(ycoords(g)), collect(g.φ))
 end
 
 """
@@ -277,7 +275,7 @@ function Makie.plot!(p::FirePlot)
     grid_obs = p[1]
     xs = @lift collect(xcoords($grid_obs))
     ys = @lift collect(ycoords($grid_obs))
-    φ = @lift copy($grid_obs.φ)
+    φ = @lift collect($grid_obs.φ)
     crange = @lift let v = max(abs(minimum($φ)), abs(maximum($φ)))
         (-v, v)
     end

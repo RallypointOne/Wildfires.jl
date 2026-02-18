@@ -24,6 +24,7 @@ book:
         - rothermel.qmd
         - levelset.qmd
         - spreadmodel.qmd
+        - gpu.qmd
         - pinn.qmd
     - part: "Reference"
       chapters:

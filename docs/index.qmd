@@ -12,6 +12,7 @@ Wildfires.jl is a Julia package for wildfire modeling and simulation, built arou
 - **[Rothermel](rothermel.qmd)** — The Rothermel (1972) surface fire spread model with the 13 standard NFFL fuel models from Anderson (1982).
 - **[Level Set](levelset.qmd)** — A level set method for simulating 2D fire front propagation driven by spatially varying spread rates.
 - **[Spread Model](spreadmodel.qmd)** — Composable, differentiable components (wind, moisture, terrain) that drive level set simulations via `FireSpreadModel`.
+- **[GPU Acceleration](gpu.qmd)** — Backend-agnostic GPU support (CUDA, Metal, ROCm) via KernelAbstractions.jl for large-grid simulations.
 
 ## Installation
 
