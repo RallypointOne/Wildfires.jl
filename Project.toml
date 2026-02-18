@@ -1,6 +1,6 @@
 name = "Wildfires"
 uuid = "8a83dac0-8d4f-4b7e-b327-bade5b93bcdd"
-version = "1.0.0-DEV"
+version = "1.0.0"
 authors = ["Josh Day <emailjoshday@gmail.com> and contributors"]
 
 [deps]
