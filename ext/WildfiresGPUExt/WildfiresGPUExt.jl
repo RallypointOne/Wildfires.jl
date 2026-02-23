@@ -1,7 +1,8 @@
 module WildfiresGPUExt
 
 using Wildfires
-using Wildfires.LevelSet: LevelSetGrid, LevelSet, xcoords, ycoords
+using Wildfires.LevelSet: LevelSetGrid, LevelSet, xcoords, ycoords,
+    AbstractBoundaryCondition, ZeroNeumann, Dirichlet, Periodic
 using Wildfires.SpreadModel: SpreadModel
 
 using KernelAbstractions

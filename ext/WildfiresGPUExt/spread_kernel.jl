@@ -21,7 +21,7 @@ function _gpu_spread_rate_field!(F, model, grid)
     T = eltype(F)
     F_cpu = Matrix{T}(undef, size(F))
     φ_cpu = Array(grid.φ)
-    cpu_grid = LevelSetGrid(φ_cpu, grid.dx, grid.dy, grid.x0, grid.y0, grid.t)
+    cpu_grid = LevelSetGrid(φ_cpu, grid.dx, grid.dy, grid.x0, grid.y0, grid.t, grid.bc)
     cm = _cpu_model(model)
     SpreadModel.spread_rate_field!(F_cpu, cm, cpu_grid)
     copyto!(F, F_cpu)
@@ -41,13 +41,14 @@ end
 #-----------------------------------------------------------------------------# GPU simulate!
 
 function SpreadModel.simulate!(grid::LevelSetGrid{T, <:AbstractGPUArray}, model;
-                               steps::Int=100, dt=0.5, reinit_every::Int=10) where {T}
+                               steps::Int=100, dt=nothing, cfl=0.5, reinit_every::Int=10) where {T}
     F_gpu = similar(grid.φ)
 
     for step in 1:steps
-        SpreadModel.update!(model, grid, dt)
         SpreadModel.spread_rate_field!(F_gpu, model, grid)
-        LevelSet.advance!(grid, F_gpu, dt)
+        step_dt = dt === nothing ? LevelSet.cfl_dt(grid, F_gpu; cfl=cfl) : dt
+        SpreadModel.update!(model, grid, step_dt)
+        LevelSet.advance!(grid, F_gpu, step_dt)
         step % reinit_every == 0 && LevelSet.reinitialize!(grid)
     end
     grid

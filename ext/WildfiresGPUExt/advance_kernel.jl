@@ -1,28 +1,29 @@
 #-----------------------------------------------------------------------------# GPU advance! kernel
 
-@kernel function _advance_kernel!(φ, @Const(φ_old), @Const(F), dx, dy, dt, nx, ny)
+@kernel function _advance_kernel!(φ, @Const(φ_old), @Const(F), dx, dy, dt, nx, ny, bc)
     i, j = @index(Global, NTuple)
 
     T = eltype(φ)
     z = zero(T)
 
-    Fij = F[i, j]
-    if Fij > z
-        # Upwind finite differences (Godunov)
-        Dxm = j > 1  ? (φ_old[i, j] - φ_old[i, j-1]) / dx : z
-        Dxp = j < nx ? (φ_old[i, j+1] - φ_old[i, j]) / dx : z
-        Dym = i > 1  ? (φ_old[i, j] - φ_old[i-1, j]) / dy : z
-        Dyp = i < ny ? (φ_old[i+1, j] - φ_old[i, j]) / dy : z
+    if !LevelSet._skip_update(i, j, ny, nx, bc)
+        Fij = F[i, j]
+        if Fij > z
+            dxm = LevelSet._Dxm(φ_old, i, j, dx, bc)
+            dxp = LevelSet._Dxp(φ_old, i, j, nx, dx, bc)
+            dym = LevelSet._Dym(φ_old, i, j, dy, bc)
+            dyp = LevelSet._Dyp(φ_old, i, j, ny, dy, bc)
 
-        Dxm_plus = max(Dxm, z)
-        Dxp_minus = min(Dxp, z)
-        Dym_plus = max(Dym, z)
-        Dyp_minus = min(Dyp, z)
+            Dxm_plus = max(dxm, z)
+            Dxp_minus = min(dxp, z)
+            Dym_plus = max(dym, z)
+            Dyp_minus = min(dyp, z)
 
-        grad_sq = max(Dxm_plus, -Dxp_minus)^2 + max(Dym_plus, -Dyp_minus)^2
-        if grad_sq > z
-            grad_mag = sqrt(grad_sq)
-            φ[i, j] = φ_old[i, j] - dt * Fij * grad_mag
+            grad_sq = max(Dxm_plus, -Dxp_minus)^2 + max(Dym_plus, -Dyp_minus)^2
+            if grad_sq > z
+                grad_mag = sqrt(grad_sq)
+                φ[i, j] = φ_old[i, j] - dt * Fij * grad_mag
+            end
         end
     end
 end
@@ -33,7 +34,7 @@ function LevelSet.advance!(g::LevelSetGrid{T, <:AbstractGPUArray}, F::AbstractGP
     φ_old = copy(φ)
 
     backend = get_backend(φ)
-    _advance_kernel!(backend)(φ, φ_old, F, g.dx, g.dy, dt, nx, ny, ndrange=(ny, nx))
+    _advance_kernel!(backend)(φ, φ_old, F, g.dx, g.dy, dt, nx, ny, g.bc, ndrange=(ny, nx))
     KernelAbstractions.synchronize(backend)
 
     g.t += dt

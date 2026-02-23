@@ -3,7 +3,8 @@ using Wildfires.Rothermel: FuelClasses, Rothermel, rate_of_spread,
     SHORT_GRASS, TIMBER_GRASS, TALL_GRASS, CHAPARRAL, BRUSH, DORMANT_BRUSH,
     SOUTHERN_ROUGH, CLOSED_TIMBER_LITTER, HARDWOOD_LITTER, TIMBER_UNDERSTORY,
     LIGHT_SLASH, MEDIUM_SLASH, HEAVY_SLASH
-using Wildfires.LevelSet: LevelSetGrid, xcoords, ycoords, ignite!, advance!, reinitialize!, burned, burn_area
+using Wildfires.LevelSet: LevelSetGrid, xcoords, ycoords, ignite!, advance!, reinitialize!, burned, burn_area,
+    cfl_dt, AbstractBoundaryCondition, ZeroNeumann, Dirichlet, Periodic
 using Wildfires.SpreadModel: FireSpreadModel, UniformWind, UniformMoisture, FlatTerrain,
     DynamicMoisture, spread_rate_field!, simulate!, update!
 using Adapt
@@ -276,6 +277,140 @@ const ALL_FUELS = [
             predict_on_grid!(grid_copy, sol, 5.0)
             @test grid_copy.t == 5.0
             @test grid_copy.φ == φ_mat
+        end
+    end
+
+    @testset "Boundary Conditions" begin
+        @testset "ZeroNeumann default" begin
+            grid = LevelSetGrid(30, 30, dx=30.0)
+            @test grid.bc isa ZeroNeumann
+            ignite!(grid, 450.0, 450.0, 50.0)
+            F = fill(10.0, size(grid))
+            for _ in 1:10
+                advance!(grid, F, 0.5)
+            end
+            reinitialize!(grid)
+            @test burn_area(grid) > 0
+        end
+
+        @testset "Dirichlet preserves edges" begin
+            grid = LevelSetGrid(30, 30, dx=30.0, bc=Dirichlet())
+            @test grid.bc isa Dirichlet
+            ignite!(grid, 450.0, 450.0, 50.0)
+            # Record edge values after ignition (before advance/reinit)
+            top = copy(grid.φ[1, :])
+            bot = copy(grid.φ[end, :])
+            left = copy(grid.φ[:, 1])
+            right = copy(grid.φ[:, end])
+            F = fill(10.0, size(grid))
+            for _ in 1:10
+                advance!(grid, F, 0.5)
+            end
+            reinitialize!(grid)
+            @test grid.φ[1, :] == top
+            @test grid.φ[end, :] == bot
+            @test grid.φ[:, 1] == left
+            @test grid.φ[:, end] == right
+        end
+
+        @testset "Periodic runs without error" begin
+            grid = LevelSetGrid(30, 30, dx=30.0, bc=Periodic())
+            @test grid.bc isa Periodic
+            ignite!(grid, 450.0, 450.0, 50.0)
+            F = fill(10.0, size(grid))
+            for _ in 1:10
+                advance!(grid, F, 0.5)
+            end
+            reinitialize!(grid)
+            @test burn_area(grid) > 0
+        end
+
+        @testset "Adapt roundtrip preserves BC" begin
+            for bc in (ZeroNeumann(), Dirichlet(), Periodic())
+                grid = LevelSetGrid(20, 20, dx=30.0, bc=bc)
+                grid2 = Adapt.adapt(Array, grid)
+                @test typeof(grid2.bc) == typeof(bc)
+            end
+        end
+
+        @testset "show includes non-default BC" begin
+            grid = LevelSetGrid(10, 10, dx=30.0, bc=Periodic())
+            s = sprint(show, MIME("text/plain"), grid)
+            @test contains(s, "Periodic")
+
+            grid2 = LevelSetGrid(10, 10, dx=30.0)
+            s2 = sprint(show, MIME("text/plain"), grid2)
+            @test !contains(s2, "Neumann")
+        end
+    end
+
+    @testset "NeuralPDE PINN" begin
+        using NeuralPDE, ModelingToolkit, OptimizationOptimJL
+
+        @testset "NeuralPDEConfig defaults" begin
+            config = NeuralPDEConfig()
+            @test config.hidden_dims == [16, 16]
+            @test config.activation == :σ
+            @test config.strategy == :grid
+            @test config.grid_step == 0.1
+            @test config.max_epochs == 1000
+            @test config.optimizer == :lbfgs
+            @test config.learning_rate == 1e-2
+        end
+
+        @testset "NeuralPDEConfig PINNSolution show" begin
+            sol = PINNSolution(nothing, nothing, nothing, NeuralPDEConfig(), Float64[], (tspan=(0,1), xspan=(0,1), yspan=(0,1), phi_scale=1.0), nothing)
+            s = sprint(show, sol)
+            @test contains(s, "PINNSolution{NeuralPDE}")
+        end
+
+        @testset "extension loaded" begin
+            ext = Base.get_extension(Wildfires, :WildfiresNeuralPDEExt)
+            @test ext !== nothing
+        end
+
+        @testset "train_pinn dispatch" begin
+            # Verify dispatch routes to NeuralPDE extension (not Lux)
+            grid = LevelSetGrid(5, 5, dx=200.0)
+            ignite!(grid, 500.0, 500.0, 100.0)
+            config = NeuralPDEConfig(hidden_dims=[4], max_epochs=2, grid_step=1.0)
+            m = methods(train_pinn, (typeof(grid), Function, Tuple{Float64,Float64}, typeof(config)))
+            @test length(m) == 1
+            @test occursin("NeuralPDE", string(first(m)))
+        end
+    end
+
+    @testset "CFL" begin
+        @testset "cfl_dt computation" begin
+            grid = LevelSetGrid(100, 100, dx=30.0)
+            F = fill(10.0, size(grid))
+            @test cfl_dt(grid, F) == 0.5 * 30.0 / 10.0  # 1.5
+            @test cfl_dt(grid, F; cfl=1.0) == 30.0 / 10.0  # 3.0
+        end
+
+        @testset "cfl_dt with zero spread" begin
+            grid = LevelSetGrid(10, 10, dx=30.0)
+            F = fill(0.0, size(grid))
+            @test cfl_dt(grid, F) == Inf
+        end
+
+        @testset "simulate! with auto CFL" begin
+            grid = LevelSetGrid(100, 100, dx=30.0)
+            ignite!(grid, 1500.0, 1500.0, 50.0)
+            M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+            simulate!(grid, model, steps=20)
+            @test burn_area(grid) > 0
+            @test grid.t > 0
+        end
+
+        @testset "simulate! with explicit dt still works" begin
+            grid = LevelSetGrid(30, 30, dx=30.0)
+            ignite!(grid, 450.0, 450.0, 50.0)
+            M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+            simulate!(grid, model, steps=10, dt=0.5)
+            @test grid.t ≈ 5.0
         end
     end
 

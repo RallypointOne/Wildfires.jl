@@ -1,7 +1,7 @@
 module LevelSet
 
-export LevelSetGrid, xcoords, ycoords, burned, burn_area, ignite!, advance!, reinitialize!
-export fireplot, fireplot!
+export LevelSetGrid, xcoords, ycoords, burned, burn_area, ignite!, advance!, reinitialize!, cfl_dt
+export AbstractBoundaryCondition, ZeroNeumann, Dirichlet, Periodic
 
 #=
     Level Set Method for Fire Spread
@@ -23,11 +23,85 @@ export fireplot, fireplot!
 =#
 
 using LinearAlgebra: norm
-using Makie
+
+#-----------------------------------------------------------------------------# Boundary Conditions
+"""
+    AbstractBoundaryCondition
+
+Supertype for level set boundary conditions.
+
+Subtypes control how `advance!` and `reinitialize!` handle grid edges.
+Implement `_Dxm`, `_Dxp`, `_Dym`, `_Dyp` and optionally `_skip_update`
+to define a custom boundary condition.
+"""
+abstract type AbstractBoundaryCondition end
+
+"""
+    ZeroNeumann()
+
+Zero-gradient (Neumann) boundary condition.  At grid edges, finite differences
+that would reference out-of-bounds cells return zero.  This is the default.
+"""
+struct ZeroNeumann <: AbstractBoundaryCondition end
+
+"""
+    Dirichlet()
+
+Fixed-value (Dirichlet) boundary condition.  Edge cells are not updated by
+`advance!` or `reinitialize!`, preserving their initial values.
+"""
+struct Dirichlet <: AbstractBoundaryCondition end
+
+"""
+    Periodic()
+
+Periodic (wrap-around) boundary condition.  At grid edges, finite differences
+use values from the opposite edge.
+"""
+struct Periodic <: AbstractBoundaryCondition end
+
+#-----------------------------------------------------------------------------# Boundary-aware finite differences
+# ZeroNeumann: missing neighbor → zero difference
+@inline _Dxm(φ, i, j, dx, ::ZeroNeumann) = j > 1 ? (φ[i, j] - φ[i, j-1]) / dx : zero(eltype(φ))
+@inline _Dxp(φ, i, j, nx, dx, ::ZeroNeumann) = j < nx ? (φ[i, j+1] - φ[i, j]) / dx : zero(eltype(φ))
+@inline _Dym(φ, i, j, dy, ::ZeroNeumann) = i > 1 ? (φ[i, j] - φ[i-1, j]) / dy : zero(eltype(φ))
+@inline _Dyp(φ, i, j, ny, dy, ::ZeroNeumann) = i < ny ? (φ[i+1, j] - φ[i, j]) / dy : zero(eltype(φ))
+
+# Dirichlet: same differences as ZeroNeumann (edge cells are skipped via _skip_update)
+@inline _Dxm(φ, i, j, dx, ::Dirichlet) = _Dxm(φ, i, j, dx, ZeroNeumann())
+@inline _Dxp(φ, i, j, nx, dx, ::Dirichlet) = _Dxp(φ, i, j, nx, dx, ZeroNeumann())
+@inline _Dym(φ, i, j, dy, ::Dirichlet) = _Dym(φ, i, j, dy, ZeroNeumann())
+@inline _Dyp(φ, i, j, ny, dy, ::Dirichlet) = _Dyp(φ, i, j, ny, dy, ZeroNeumann())
+
+# Periodic: wrap-around indices
+@inline function _Dxm(φ, i, j, dx, ::Periodic)
+    jm = j > 1 ? j - 1 : size(φ, 2)
+    (φ[i, j] - φ[i, jm]) / dx
+end
+@inline function _Dxp(φ, i, j, nx, dx, ::Periodic)
+    jp = j < nx ? j + 1 : 1
+    (φ[i, jp] - φ[i, j]) / dx
+end
+@inline function _Dym(φ, i, j, dy, ::Periodic)
+    im = i > 1 ? i - 1 : size(φ, 1)
+    (φ[i, j] - φ[im, j]) / dy
+end
+@inline function _Dyp(φ, i, j, ny, dy, ::Periodic)
+    ip = i < ny ? i + 1 : 1
+    (φ[ip, j] - φ[i, j]) / dy
+end
+
+"""
+    _skip_update(i, j, ny, nx, bc::AbstractBoundaryCondition) -> Bool
+
+Return `true` if cell `(i, j)` should be skipped during the update.
+"""
+@inline _skip_update(i, j, ny, nx, ::AbstractBoundaryCondition) = false
+@inline _skip_update(i, j, ny, nx, ::Dirichlet) = i == 1 || i == ny || j == 1 || j == nx
 
 #-----------------------------------------------------------------------------# LevelSetGrid
 """
-    LevelSetGrid{T, M} <: AbstractMatrix{T}
+    LevelSetGrid{T, M, BC} <: AbstractMatrix{T}
 
 A 2D grid representing a fire spread simulation via the level set method.
 
@@ -37,15 +111,16 @@ The grid stores a signed distance function `φ` where:
 - `φ > 0` → unburned
 
 # Fields
-- `φ::M`   - Level set function values (`M <: AbstractMatrix{T}`)
-- `dx::T`  - Grid spacing in x [m]
-- `dy::T`  - Grid spacing in y [m]
-- `x0::T`  - x-coordinate of grid origin (lower-left) [m]
-- `y0::T`  - y-coordinate of grid origin (lower-left) [m]
-- `t::T`   - Current simulation time [min]
+- `φ::M`    - Level set function values (`M <: AbstractMatrix{T}`)
+- `dx::T`   - Grid spacing in x [m]
+- `dy::T`   - Grid spacing in y [m]
+- `x0::T`   - x-coordinate of grid origin (lower-left) [m]
+- `y0::T`   - y-coordinate of grid origin (lower-left) [m]
+- `t::T`    - Current simulation time [min]
+- `bc::BC`  - Boundary condition (`BC <: AbstractBoundaryCondition`)
 
 # Constructor
-    LevelSetGrid(nx, ny; dx=30.0, dy=dx, x0=0.0, y0=0.0)
+    LevelSetGrid(nx, ny; dx=30.0, dy=dx, x0=0.0, y0=0.0, bc=ZeroNeumann())
 
 Create an unburned grid with `nx × ny` cells.
 
@@ -53,21 +128,24 @@ Create an unburned grid with `nx × ny` cells.
 ```julia
 grid = LevelSetGrid(100, 100, dx=30.0)
 ignite!(grid, 1500.0, 1500.0, 100.0)
+
+grid = LevelSetGrid(100, 100, dx=30.0, bc=Periodic())
 ```
 """
-mutable struct LevelSetGrid{T, M <: AbstractMatrix{T}} <: AbstractMatrix{T}
+mutable struct LevelSetGrid{T, M <: AbstractMatrix{T}, BC <: AbstractBoundaryCondition} <: AbstractMatrix{T}
     φ::M
     dx::T
     dy::T
     x0::T
     y0::T
     t::T
+    bc::BC
 end
 
-function LevelSetGrid(nx::Integer, ny::Integer; dx=30.0, dy=dx, x0=0.0, y0=0.0)
+function LevelSetGrid(nx::Integer, ny::Integer; dx=30.0, dy=dx, x0=0.0, y0=0.0, bc::AbstractBoundaryCondition=ZeroNeumann())
     T = promote_type(typeof(dx), typeof(dy), typeof(x0), typeof(y0))
     φ = ones(T, ny, nx)  # all positive → unburned
-    LevelSetGrid(φ, T(dx), T(dy), T(x0), T(y0), zero(T))
+    LevelSetGrid(φ, T(dx), T(dy), T(x0), T(y0), zero(T), bc)
 end
 
 #-----------------------------------------------------------------------------# AbstractMatrix interface
@@ -78,7 +156,8 @@ Base.setindex!(g::LevelSetGrid, v, i...) = setindex!(g.φ, v, i...)
 function Base.show(io::IO, ::MIME"text/plain", g::LevelSetGrid{T}) where {T}
     ny, nx = size(g.φ)
     nb = count(<(0), g.φ)
-    print(io, "LevelSetGrid{$T} $(nx)×$(ny) (t=$(g.t), burned=$(nb)/$(nx*ny))")
+    bc_str = g.bc isa ZeroNeumann ? "" : ", bc=$(nameof(typeof(g.bc)))"
+    print(io, "LevelSetGrid{$T} $(nx)×$(ny) (t=$(g.t), burned=$(nb)/$(nx*ny)$(bc_str))")
 end
 
 function Base.show(io::IO, g::LevelSetGrid{T}) where {T}
@@ -156,33 +235,30 @@ function advance!(g::LevelSetGrid{T}, F::AbstractMatrix, dt) where {T}
     φ = g.φ
     ny, nx = size(φ)
     dx, dy = g.dx, g.dy
+    bc = g.bc
     z = zero(T)
 
-    # In-place update (safe because each cell only reads neighbors of φ)
-    # We need a copy of φ to read from while writing
     φ_old = copy(φ)
 
     for j in 1:nx, i in 1:ny
+        _skip_update(i, j, ny, nx, bc) && continue
+
         Fij = F[i, j]
-        Fij > z || continue  # no spread where F ≤ 0
+        Fij > z || continue
 
-        # --- Upwind finite differences (Godunov) ---
-        # x-direction
-        Dxm = j > 1  ? (φ_old[i, j] - φ_old[i, j-1]) / dx : z
-        Dxp = j < nx ? (φ_old[i, j+1] - φ_old[i, j]) / dx : z
+        # Upwind finite differences (Godunov)
+        dxm = _Dxm(φ_old, i, j, dx, bc)
+        dxp = _Dxp(φ_old, i, j, nx, dx, bc)
+        dym = _Dym(φ_old, i, j, dy, bc)
+        dyp = _Dyp(φ_old, i, j, ny, dy, bc)
 
-        # y-direction
-        Dym = i > 1  ? (φ_old[i, j] - φ_old[i-1, j]) / dy : z
-        Dyp = i < ny ? (φ_old[i+1, j] - φ_old[i, j]) / dy : z
-
-        # Godunov upwind: for F > 0, use max of backward and min of forward
-        Dxm_plus = max(Dxm, z)
-        Dxp_minus = min(Dxp, z)
-        Dym_plus = max(Dym, z)
-        Dyp_minus = min(Dyp, z)
+        Dxm_plus = max(dxm, z)
+        Dxp_minus = min(dxp, z)
+        Dym_plus = max(dym, z)
+        Dyp_minus = min(dyp, z)
 
         grad_sq = max(Dxm_plus, -Dxp_minus)^2 + max(Dym_plus, -Dyp_minus)^2
-        grad_sq > z || continue  # no gradient → no front to propagate
+        grad_sq > z || continue
         grad_mag = sqrt(grad_sq)
 
         φ[i, j] = φ_old[i, j] - dt * Fij * grad_mag
@@ -190,6 +266,27 @@ function advance!(g::LevelSetGrid{T}, F::AbstractMatrix, dt) where {T}
 
     g.t += dt
     g
+end
+
+#-----------------------------------------------------------------------------# cfl_dt
+"""
+    cfl_dt(grid::LevelSetGrid, F::AbstractMatrix; cfl=0.5)
+
+Compute a CFL-stable time step for the level set equation given spread rate field `F`.
+
+Returns `cfl * min(dx, dy) / max(F)`.  If `max(F) ≤ 0` (no active spread), returns `Inf`.
+
+### Examples
+```julia
+grid = LevelSetGrid(100, 100, dx=30.0)
+F = fill(10.0, size(grid))
+cfl_dt(grid, F)  # 1.5
+```
+"""
+function cfl_dt(g::LevelSetGrid, F::AbstractMatrix; cfl=0.5)
+    Fmax = maximum(F)
+    Fmax > 0 || return typeof(g.dx)(Inf)
+    cfl * min(g.dx, g.dy) / Fmax
 end
 
 #-----------------------------------------------------------------------------# reinitialize!
@@ -206,26 +303,28 @@ function reinitialize!(g::LevelSetGrid{T}; iterations::Int=5) where {T}
     φ = g.φ
     ny, nx = size(φ)
     dx, dy = g.dx, g.dy
+    bc = g.bc
     dτ = min(dx, dy) * 0.5  # pseudo-timestep
     z = zero(T)
 
     for _ in 1:iterations
         φ_old = copy(φ)
         for j in 1:nx, i in 1:ny
+            _skip_update(i, j, ny, nx, bc) && continue
+
             S = sign(φ_old[i, j])
 
-            # Central differences for gradient
-            Dxm = j > 1  ? (φ_old[i, j] - φ_old[i, j-1]) / dx : z
-            Dxp = j < nx ? (φ_old[i, j+1] - φ_old[i, j]) / dx : z
-            Dym = i > 1  ? (φ_old[i, j] - φ_old[i-1, j]) / dy : z
-            Dyp = i < ny ? (φ_old[i+1, j] - φ_old[i, j]) / dy : z
+            dxm = _Dxm(φ_old, i, j, dx, bc)
+            dxp = _Dxp(φ_old, i, j, nx, dx, bc)
+            dym = _Dym(φ_old, i, j, dy, bc)
+            dyp = _Dyp(φ_old, i, j, ny, dy, bc)
 
             if S > 0
-                a = max(max(Dxm, z), -min(Dxp, z))
-                b = max(max(Dym, z), -min(Dyp, z))
+                a = max(max(dxm, z), -min(dxp, z))
+                b = max(max(dym, z), -min(dyp, z))
             else
-                a = max(-min(Dxm, z), max(Dxp, z))
-                b = max(-min(Dym, z), max(Dyp, z))
+                a = max(-min(dxm, z), max(dxp, z))
+                b = max(-min(dym, z), max(dyp, z))
             end
 
             grad_mag = hypot(a, b)
@@ -233,56 +332,6 @@ function reinitialize!(g::LevelSetGrid{T}; iterations::Int=5) where {T}
         end
     end
     g
-end
-
-#-----------------------------------------------------------------------------# Makie recipes
-"""
-    heatmap(grid::LevelSetGrid)
-    contour(grid::LevelSetGrid)
-    contourf(grid::LevelSetGrid)
-    surface(grid::LevelSetGrid)
-
-Standard Makie plot types work on `LevelSetGrid` with correct spatial coordinates.
-The plotted values are the level set function `φ`.
-"""
-function Makie.convert_arguments(P::Type{<:Union{Makie.Heatmap,Makie.Contour,Makie.Contourf,Makie.Surface}}, g::LevelSetGrid)
-    Makie.convert_arguments(P, collect(xcoords(g)), collect(ycoords(g)), collect(g.φ))
-end
-
-"""
-    fireplot(grid::LevelSetGrid; colormap=:RdYlGn, frontcolor=:black, frontlinewidth=2.0)
-    fireplot!(ax, grid; ...)
-
-Plot a `LevelSetGrid` as a heatmap of the `φ` field with the fire front (`φ = 0`)
-overlaid as a contour line.
-
-### Examples
-```julia
-grid = LevelSetGrid(100, 100, dx=30.0)
-ignite!(grid, 1500.0, 1500.0, 100.0)
-fireplot(grid)
-```
-"""
-@recipe(FirePlot, grid) do scene
-    Attributes(
-        colormap = :RdYlGn,
-        frontcolor = :black,
-        frontlinewidth = 2.0,
-    )
-end
-
-function Makie.plot!(p::FirePlot)
-    grid_obs = p[1]
-    xs = @lift collect(xcoords($grid_obs))
-    ys = @lift collect(ycoords($grid_obs))
-    φ = @lift collect($grid_obs.φ)
-    crange = @lift let v = max(abs(minimum($φ)), abs(maximum($φ)))
-        (-v, v)
-    end
-
-    heatmap!(p, xs, ys, φ; colormap=p[:colormap], colorrange=crange)
-    contour!(p, xs, ys, φ; levels=[0.0], color=p[:frontcolor], linewidth=p[:frontlinewidth])
-    p
 end
 
 end # module

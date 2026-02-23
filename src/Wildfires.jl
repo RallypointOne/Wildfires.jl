@@ -10,18 +10,49 @@ include("PINNTypes.jl")
 
 #-----------------------------------------------------------------------------# Adapt.jl integration
 Adapt.adapt_structure(to, g::LevelSet.LevelSetGrid) =
-    LevelSet.LevelSetGrid(Adapt.adapt(to, g.φ), g.dx, g.dy, g.x0, g.y0, g.t)
+    LevelSet.LevelSetGrid(Adapt.adapt(to, g.φ), g.dx, g.dy, g.x0, g.y0, g.t, g.bc)
 
 Adapt.adapt_structure(to, m::SpreadModel.DynamicMoisture) =
     SpreadModel.DynamicMoisture(Adapt.adapt(to, m.d1), m.base, m.ambient_d1,
         m.dry_rate, m.recovery_rate, m.min_d1, m.dx, m.dy, m.x0, m.y0)
 
-using .PINNTypes: PINNConfig, PINNSolution
-export PINNConfig, PINNSolution, train_pinn, predict_on_grid, predict_on_grid!
+using .PINNTypes: AbstractPINNConfig, PINNConfig, NeuralPDEConfig, PINNSolution
+export AbstractPINNConfig, PINNConfig, NeuralPDEConfig, PINNSolution
+export train_pinn, predict_on_grid, predict_on_grid!
+export fireplot, fireplot!
+
+#-----------------------------------------------------------------------------# Makie stubs (implemented in WildfiresMakieExt)
+"""
+    fireplot(grid::LevelSetGrid; colormap=:RdYlGn, frontcolor=:black, frontlinewidth=2.0)
+
+Plot a `LevelSetGrid` as a heatmap of the `φ` field with the fire front (`φ = 0`)
+overlaid as a contour line.  Returns a `Makie.Figure`.
+
+Requires `Makie` (or a backend like `CairoMakie` / `GLMakie`) to be loaded.
+
+### Examples
+```julia
+using CairoMakie
+grid = LevelSetGrid(100, 100, dx=30.0)
+ignite!(grid, 1500.0, 1500.0, 100.0)
+fireplot(grid)
+```
+"""
+function fireplot end
+
+"""
+    fireplot!(ax, grid::LevelSetGrid; colormap=:RdYlGn, frontcolor=:black, frontlinewidth=2.0)
+
+In-place version of `fireplot`: draws into an existing `Axis`.
+
+Requires `Makie` (or a backend like `CairoMakie` / `GLMakie`) to be loaded.
+"""
+function fireplot! end
 
 #-----------------------------------------------------------------------------# PINN API stubs
 """
-    train_pinn(grid::LevelSet.LevelSetGrid, model, tspan; config=PINNConfig(), observations=nothing)
+    train_pinn(grid, model, tspan; config=PINNConfig(), ...)
+    train_pinn(grid, model, tspan, config; ...)
 
 Train a Physics-Informed Neural Network to solve the fire spread level set PDE.
 
@@ -31,33 +62,44 @@ The PINN learns a function `phi_theta(x, y, t)` satisfying:
 
 where `F` is the spread rate from the `FireSpreadModel`.
 
-Requires `Lux` to be loaded (triggers package extension).
+The solver backend is selected by the `config` type:
+- `PINNConfig` — custom Lux solver with hard IC constraint (requires `Lux`)
+- `NeuralPDEConfig` — NeuralPDE.jl symbolic solver (requires `NeuralPDE`)
 
 # Arguments
 - `grid` - `LevelSetGrid` providing domain geometry and initial condition
 - `model` - Callable `model(t, x, y) -> spread_rate` (e.g. `FireSpreadModel`)
 - `tspan` - Time interval `(t_start, t_end)`
-- `config` - `PINNConfig` with training hyperparameters
-- `observations` - Optional `(t, x, y, phi)` tuple of observation data
+- `config` - `PINNConfig` or `NeuralPDEConfig` with training hyperparameters
+- `observations` - Optional `(t, x, y, phi)` tuple of observation data (Lux backend only)
 
 # Returns
 A `PINNSolution` callable as `sol(t, x, y)`.
 
 ### Examples
 ```julia
+# Custom Lux backend (default)
 sol = train_pinn(grid, model, (0.0, 50.0))
-sol(25.0, 500.0, 500.0)  # evaluate at any point
+
+# NeuralPDE backend
+sol = train_pinn(grid, model, (0.0, 50.0); config=NeuralPDEConfig())
 ```
 """
-function train_pinn end
+function train_pinn(grid::LevelSet.LevelSetGrid, model, tspan::Tuple;
+                    config::AbstractPINNConfig=PINNConfig(), kwargs...)
+    train_pinn(grid, model, tspan, config; kwargs...)
+end
+
+function train_pinn(grid::LevelSet.LevelSetGrid, model, tspan::Tuple,
+                    config::AbstractPINNConfig; kwargs...)
+    error("No PINN backend loaded. Load the Lux or NeuralPDE extension.")
+end
 
 """
     predict_on_grid(sol::PINNSolution, grid::LevelSet.LevelSetGrid, t)
 
 Evaluate the trained PINN on every cell center of `grid` at time `t`.
 Returns a matrix of phi values with the same dimensions as `grid`.
-
-Requires `Lux` to be loaded (triggers package extension).
 """
 function predict_on_grid end
 
@@ -65,9 +107,38 @@ function predict_on_grid end
     predict_on_grid!(grid::LevelSet.LevelSetGrid, sol::PINNSolution, t)
 
 In-place version of `predict_on_grid`: updates `grid.phi` and `grid.t`.
-
-Requires `Lux` to be loaded (triggers package extension).
 """
 function predict_on_grid! end
+
+#-----------------------------------------------------------------------------# PINNSolution fallback callable + predict
+# Base-module fallbacks: work when model stores a callable (e.g. NeuralPDE backend).
+# The Lux extension overrides these with its own methods.
+
+function (sol::PINNSolution)(t, x, y)
+    if applicable(sol.model, t, x, y)
+        return sol.model(t, x, y)
+    end
+    error("PINNSolution is not callable. Load the appropriate PINN extension (Lux or NeuralPDE).")
+end
+
+function predict_on_grid(sol::PINNSolution, grid::LevelSet.LevelSetGrid, t)
+    xs = LevelSet.xcoords(grid)
+    ys = LevelSet.ycoords(grid)
+    φ = Matrix{Float64}(undef, length(ys), length(xs))
+    for j in eachindex(xs), i in eachindex(ys)
+        φ[i, j] = sol(t, xs[j], ys[i])
+    end
+    φ
+end
+
+function predict_on_grid!(grid::LevelSet.LevelSetGrid, sol::PINNSolution, t)
+    xs = LevelSet.xcoords(grid)
+    ys = LevelSet.ycoords(grid)
+    for j in eachindex(xs), i in eachindex(ys)
+        grid.φ[i, j] = sol(t, xs[j], ys[i])
+    end
+    grid.t = t
+    grid
+end
 
 end # module Wildfires

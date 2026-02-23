@@ -31,6 +31,25 @@ where $F(x, y, t) \geq 0$ is the local spread rate (e.g. from the [Rothermel mod
 grid = LevelSetGrid(100, 100, dx=30.0)
 ```
 
+## Boundary Conditions
+
+The `bc` keyword controls how the solver handles grid edges.  Three built-in options are available:
+
+| Type | Behavior |
+|------|----------|
+| `ZeroNeumann()` | Zero-gradient at edges (default).  Missing neighbors contribute zero to finite differences. |
+| `Dirichlet()` | Fixed-value edges.  Edge cells are never updated by `advance!` or `reinitialize!`. |
+| `Periodic()` | Wrap-around.  Edges reference values from the opposite side of the grid. |
+
+```{julia}
+grid_d = LevelSetGrid(50, 50, dx=30.0, bc=Dirichlet())
+grid_p = LevelSetGrid(50, 50, dx=30.0, bc=Periodic())
+println("Dirichlet: ", grid_d)
+println("Periodic:  ", grid_p)
+```
+
+Custom boundary conditions can be defined by subtyping `AbstractBoundaryCondition` and implementing the `_Dxm`, `_Dxp`, `_Dym`, `_Dyp` helper functions (see source for signatures).
+
 ### Coordinates
 
 ```{julia}
@@ -72,15 +91,53 @@ end
 grid
 ```
 
+### Godunov's Upwind Scheme
+
+The `advance!` function computes $|\nabla\phi|$ using **Godunov's upwind scheme**, a monotone numerical flux for Hamilton-Jacobi equations.  The idea is to use one-sided (upwind) finite differences that respect the direction information is traveling — toward the fire front.
+
+At each cell, four one-sided differences are computed:
+
+$$D_x^- = \frac{\phi_{i,j} - \phi_{i,j-1}}{\Delta x}, \quad D_x^+ = \frac{\phi_{i,j+1} - \phi_{i,j}}{\Delta x}$$
+
+$$D_y^- = \frac{\phi_{i,j} - \phi_{i-1,j}}{\Delta y}, \quad D_y^+ = \frac{\phi_{i+1,j} - \phi_{i,j}}{\Delta y}$$
+
+Since the spread rate $F \geq 0$, the front moves in the direction of $\nabla\phi$ (outward from burned regions).  Godunov's scheme selects the appropriate one-sided difference in each coordinate:
+
+$$\hat{D}_x = \max\!\bigl(\max(D_x^-,\, 0),\; -\min(D_x^+,\, 0)\bigr)$$
+
+$$\hat{D}_y = \max\!\bigl(\max(D_y^-,\, 0),\; -\min(D_y^+,\, 0)\bigr)$$
+
+Then $|\nabla\phi| \approx \sqrt{\hat{D}_x^2 + \hat{D}_y^2}$ and the update is:
+
+$$\phi^{n+1}_{i,j} = \phi^n_{i,j} - \Delta t \; F_{i,j} \; \sqrt{\hat{D}_x^2 + \hat{D}_y^2}$$
+
+This selection rule ensures that only **upstream** information influences the update, preventing oscillations that would occur with central differences.  At domain boundaries, the one-sided differences that would require out-of-bounds data are set to zero (implicit zero-Neumann / reflective boundary condition).
+
 ### CFL Condition
 
-The time step `dt` must satisfy the **Courant–Friedrichs–Lewy (CFL) condition** for numerical stability:
+The time step `dt` must satisfy the **Courant-Friedrichs-Lewy (CFL) condition** for numerical stability:
 
-$$\text{dt} < \frac{\text{dx}}{\max(F)}$$
+$$\text{dt} \leq \text{cfl} \cdot \frac{\min(\text{dx}, \text{dy})}{\max(F)}$$
 
-If `dt` is too large relative to `dx` and the maximum spread rate, the upwind scheme becomes unstable and `φ` values will diverge.  For example, with `dx = 30 m` and `max(F) = 31 m/min`, you need `dt < 0.97 min`.
+where `cfl` is a safety coefficient (default `0.5`).  If `dt` is too large, the upwind scheme becomes unstable and `φ` values will diverge.
 
-The `simulate!` function in the `SpreadModel` module does **not** automatically enforce the CFL condition — you are responsible for choosing a safe `dt`.
+The `cfl_dt` function computes a stable time step:
+
+```{julia}
+F = fill(10.0, size(grid))
+cfl_dt(grid, F)           # cfl=0.5 by default
+```
+
+```{julia}
+cfl_dt(grid, F; cfl=1.0)  # less conservative
+```
+
+The `simulate!` function uses automatic CFL-limited time stepping by default.  Pass an explicit `dt` to override:
+
+```julia
+simulate!(grid, model, steps=100)           # auto CFL (recommended)
+simulate!(grid, model, steps=100, dt=0.5)   # fixed dt (user must ensure stability)
+```
 
 ## Reinitialization
 

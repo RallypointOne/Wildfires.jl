@@ -239,8 +239,8 @@ function pinn_loss(θ, p)
 end
 
 #-----------------------------------------------------------------------------# train_pinn
-function Wildfires.train_pinn(grid::LevelSetGrid, spread_model, tspan::Tuple;
-                              config::PINNConfig=PINNConfig(),
+function Wildfires.train_pinn(grid::LevelSetGrid, spread_model, tspan::Tuple,
+                              config::PINNConfig;
                               observations=nothing,
                               rng=Random.default_rng(),
                               verbose::Bool=true)
@@ -271,7 +271,7 @@ function Wildfires.train_pinn(grid::LevelSetGrid, spread_model, tspan::Tuple;
     ic_y0 = Float64(first(ys))
     ic_dx = Float64(step(xs))
     ic_dy = Float64(step(ys))
-    grid_ic = LevelSetGrid(copy(grid.φ), grid.dx, grid.dy, grid.x0, grid.y0, grid.t)
+    grid_ic = LevelSetGrid(copy(grid.φ), grid.dx, grid.dy, grid.x0, grid.y0, grid.t, grid.bc)
 
     # Collocation points (mutable for resampling)
     colloc_ref = Ref(sample_collocation(config, domain, rng))
@@ -332,62 +332,21 @@ function Wildfires.train_pinn(grid::LevelSetGrid, spread_model, tspan::Tuple;
 
     verbose && println(stderr, "PINN Training Complete: epochs=$(epoch_counter[]) final_loss=$(round(loss_history[end], sigdigits=4))")
 
-    return PINNSolution(nn, result.u, st, config, loss_history, domain, grid_ic)
-end
-
-#-----------------------------------------------------------------------------# PINNSolution evaluation
-function _ic_params(sol::PINNSolution)
-    g = sol.grid_ic
-    ic_xs = xcoords(g)
-    ic_ys = ycoords(g)
-    (g.φ, Float64(first(ic_xs)), Float64(first(ic_ys)), Float64(step(ic_xs)), Float64(step(ic_ys)))
-end
-
-function (sol::PINNSolution)(t, x, y)
-    ic_φ, ic_x0, ic_y0, ic_dx, ic_dy = _ic_params(sol)
-    phi_scale = sol.domain.phi_scale
-    # Direct evaluation (no AD), can use bilinear_interp directly
-    ic_val = bilinear_interp(ic_φ, ic_x0, ic_y0, ic_dx, ic_dy, x, y) / phi_scale
-    t_min, t_max = sol.domain.tspan
-    tau = (t - t_min) / (t_max - t_min)
-    t_n, x_n, y_n = normalize_input(t, x, y, sol.domain)
-    nn_out, _ = sol.model([x_n, y_n, t_n], sol.parameters, sol.state)
-    return (ic_val + tau * nn_out[1]) * phi_scale
-end
-
-#-----------------------------------------------------------------------------# predict_on_grid
-function Wildfires.predict_on_grid(sol::PINNSolution, grid::LevelSetGrid, t)
-    xs = xcoords(grid)
-    ys = ycoords(grid)
-    ic_φ, ic_x0, ic_y0, ic_dx, ic_dy = _ic_params(sol)
-    phi_scale = sol.domain.phi_scale
-    t_min, t_max = sol.domain.tspan
-    tau = (t - t_min) / (t_max - t_min)
-    φ = Matrix{Float64}(undef, length(ys), length(xs))
-    for j in eachindex(xs), i in eachindex(ys)
-        ic_val = bilinear_interp(ic_φ, ic_x0, ic_y0, ic_dx, ic_dy, xs[j], ys[i]) / phi_scale
-        t_n, x_n, y_n = normalize_input(t, xs[j], ys[i], sol.domain)
-        nn_out, _ = sol.model([x_n, y_n, t_n], sol.parameters, sol.state)
-        φ[i, j] = (ic_val + tau * nn_out[1]) * phi_scale
+    # Store a callable closure in model so the base-module fallback works
+    eval_fn = let nn = nn, ps = result.u, st = st, domain = domain,
+                  ic_φ = ic_φ, ic_x0 = ic_x0, ic_y0 = ic_y0, ic_dx = ic_dx, ic_dy = ic_dy,
+                  phi_scale = phi_scale
+        function (t, x, y)
+            ic_val = bilinear_interp(ic_φ, ic_x0, ic_y0, ic_dx, ic_dy, Float64(x), Float64(y)) / phi_scale
+            t_min, t_max = domain.tspan
+            tau = (t - t_min) / (t_max - t_min)
+            t_n, x_n, y_n = normalize_input(t, x, y, domain)
+            nn_out, _ = nn([x_n, y_n, t_n], ps, st)
+            (ic_val + tau * nn_out[1]) * phi_scale
+        end
     end
-    return φ
-end
 
-function Wildfires.predict_on_grid!(grid::LevelSetGrid, sol::PINNSolution, t)
-    xs = xcoords(grid)
-    ys = ycoords(grid)
-    ic_φ, ic_x0, ic_y0, ic_dx, ic_dy = _ic_params(sol)
-    phi_scale = sol.domain.phi_scale
-    t_min, t_max = sol.domain.tspan
-    tau = (t - t_min) / (t_max - t_min)
-    for j in eachindex(xs), i in eachindex(ys)
-        ic_val = bilinear_interp(ic_φ, ic_x0, ic_y0, ic_dx, ic_dy, xs[j], ys[i]) / phi_scale
-        t_n, x_n, y_n = normalize_input(t, xs[j], ys[i], sol.domain)
-        nn_out, _ = sol.model([x_n, y_n, t_n], sol.parameters, sol.state)
-        grid.φ[i, j] = (ic_val + tau * nn_out[1]) * phi_scale
-    end
-    grid.t = t
-    return grid
+    return PINNSolution(eval_fn, result.u, st, config, loss_history, domain, grid_ic)
 end
 
 end # module

@@ -5,7 +5,7 @@ export UniformWind, UniformMoisture, UniformSlope, FlatTerrain, DynamicMoisture
 export FireSpreadModel, spread_rate_field!, simulate!, fire_loss, update!
 
 using ..Rothermel: Rothermel as RothermelModel, FuelClasses, rate_of_spread
-using ..LevelSet: LevelSetGrid, xcoords, ycoords, ignite!, advance!, reinitialize!
+using ..LevelSet: LevelSetGrid, xcoords, ycoords, ignite!, advance!, reinitialize!, cfl_dt
 
 #-----------------------------------------------------------------------------# Abstract Types
 """
@@ -327,9 +327,13 @@ end
 
 #-----------------------------------------------------------------------------# simulate!
 """
-    simulate!(grid::LevelSetGrid, model; steps=100, dt=0.5, reinit_every=10)
+    simulate!(grid::LevelSetGrid, model; steps=100, dt=nothing, cfl=0.5, reinit_every=10)
 
 Run the level set simulation using a `FireSpreadModel` to compute spread rates.
+
+When `dt` is `nothing` (the default), the time step is computed automatically each
+step via the CFL condition: `dt = cfl * min(dx, dy) / max(F)`.  Pass an explicit
+`dt` to use a fixed time step instead.
 
 Between time steps, dynamic components are updated via `update!(model, grid, dt)`.
 This allows components like `DynamicMoisture` to respond to the evolving fire state.
@@ -338,15 +342,21 @@ This allows components like `DynamicMoisture` to respond to the evolving fire st
 ```julia
 grid = LevelSetGrid(100, 100, dx=30.0)
 ignite!(grid, 1500.0, 1500.0, 50.0)
+
+# Automatic CFL-limited time stepping (recommended)
+simulate!(grid, model, steps=100)
+
+# Fixed time step (user must ensure CFL stability)
 simulate!(grid, model, steps=100, dt=0.5)
 ```
 """
-function simulate!(grid::LevelSetGrid, model; steps::Int=100, dt=0.5, reinit_every::Int=10)
+function simulate!(grid::LevelSetGrid, model; steps::Int=100, dt=nothing, cfl=0.5, reinit_every::Int=10)
     F = similar(grid.φ)
     for step in 1:steps
-        update!(model, grid, dt)
         spread_rate_field!(F, model, grid)
-        advance!(grid, F, dt)
+        step_dt = dt === nothing ? cfl_dt(grid, F; cfl=cfl) : dt
+        update!(model, grid, step_dt)
+        advance!(grid, F, step_dt)
         step % reinit_every == 0 && reinitialize!(grid)
     end
     grid

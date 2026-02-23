@@ -1,28 +1,30 @@
 #-----------------------------------------------------------------------------# GPU reinitialize! kernel
 
-@kernel function _reinit_kernel!(φ, @Const(φ_old), dx, dy, dτ, nx, ny)
+@kernel function _reinit_kernel!(φ, @Const(φ_old), dx, dy, dτ, nx, ny, bc)
     i, j = @index(Global, NTuple)
 
     T = eltype(φ)
     z = zero(T)
 
-    S = sign(φ_old[i, j])
+    if !LevelSet._skip_update(i, j, ny, nx, bc)
+        S = sign(φ_old[i, j])
 
-    Dxm = j > 1  ? (φ_old[i, j] - φ_old[i, j-1]) / dx : z
-    Dxp = j < nx ? (φ_old[i, j+1] - φ_old[i, j]) / dx : z
-    Dym = i > 1  ? (φ_old[i, j] - φ_old[i-1, j]) / dy : z
-    Dyp = i < ny ? (φ_old[i+1, j] - φ_old[i, j]) / dy : z
+        dxm = LevelSet._Dxm(φ_old, i, j, dx, bc)
+        dxp = LevelSet._Dxp(φ_old, i, j, nx, dx, bc)
+        dym = LevelSet._Dym(φ_old, i, j, dy, bc)
+        dyp = LevelSet._Dyp(φ_old, i, j, ny, dy, bc)
 
-    if S > z
-        a = max(max(Dxm, z), -min(Dxp, z))
-        b = max(max(Dym, z), -min(Dyp, z))
-    else
-        a = max(-min(Dxm, z), max(Dxp, z))
-        b = max(-min(Dym, z), max(Dyp, z))
+        if S > z
+            a = max(max(dxm, z), -min(dxp, z))
+            b = max(max(dym, z), -min(dyp, z))
+        else
+            a = max(-min(dxm, z), max(dxp, z))
+            b = max(-min(dym, z), max(dyp, z))
+        end
+
+        grad_mag = hypot(a, b)
+        φ[i, j] = φ_old[i, j] - dτ * S * (grad_mag - one(T))
     end
-
-    grad_mag = hypot(a, b)
-    φ[i, j] = φ_old[i, j] - dτ * S * (grad_mag - one(T))
 end
 
 function LevelSet.reinitialize!(g::LevelSetGrid{T, <:AbstractGPUArray}; iterations::Int=5) where {T}
@@ -34,7 +36,7 @@ function LevelSet.reinitialize!(g::LevelSetGrid{T, <:AbstractGPUArray}; iteratio
     backend = get_backend(φ)
     for _ in 1:iterations
         φ_old = copy(φ)
-        _reinit_kernel!(backend)(φ, φ_old, dx, dy, dτ, nx, ny, ndrange=(ny, nx))
+        _reinit_kernel!(backend)(φ, φ_old, dx, dy, dτ, nx, ny, g.bc, ndrange=(ny, nx))
         KernelAbstractions.synchronize(backend)
     end
     g
