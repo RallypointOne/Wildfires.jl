@@ -1,0 +1,22 @@
+---
+title: "Changelog"
+engine: julia
+---
+
+```{julia}
+#| echo: false
+#| output: asis
+
+changelog = read(joinpath(@__DIR__, "..", "..", "CHANGELOG.md"), String)
+
+if !contains(changelog, r"## v\d")
+    println("::: {.callout-note}")
+    println("## No releases yet")
+    println()
+    println("This package has not published a release yet.")
+    println(":::")
+    println()
+end
+
+print(changelog)
+```

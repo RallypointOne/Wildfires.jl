@@ -9,7 +9,13 @@ julia:
 
 book:
   title: "Wildfires.jl"
+  search:
+    location: sidebar
+    keyboard-shortcut:
+      - "/"
   navbar:
+    logo: https://github.com/user-attachments/assets/f7216152-0d6e-4459-8e65-b9ed59421638
+    logo-href: https://rallypoint1.com
     right:
       - icon: star
         href: https://github.com/RallypointOne/Wildfires.jl/stargazers
@@ -26,21 +32,27 @@ book:
         - spreadmodel.qmd
         - gpu.qmd
         - pinn.qmd
-    - part: "Reference"
+    - part: "API"
       chapters:
         - api.qmd
-        - changelog.qmd
-        - coverage.qmd
+    - part: "Resources"
+      chapters:
+        - resources/benchmarks.qmd
+        - resources/changelog.qmd
+        - resources/coverage.qmd
 
   page-footer:
     center: "Built on __BUILD_DATE__"
+
+language:
+  search-text-placeholder: "Search  (/)"
 
 format:
   html:
     css: styles.css
     number-sections: false
     theme:
-      light: flatly
-      dark: darkly
+      - flatly
+      - theme.scss
     include-after-body:
       - file: _version-selector.html

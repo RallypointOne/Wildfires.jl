@@ -19,7 +19,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Save docs infrastructure from main (without coverage -- too slow for backfill)
+      # Save docs infrastructure from main (without coverage — too slow for backfill)
       - name: Save docs infrastructure
         run: |
           cp -r docs /tmp/docs-infrastructure
@@ -135,7 +135,7 @@ jobs:
           print('versions.json:', versions)
           "
 
-          # Stable redirect -> latest version
+          # Stable redirect → latest version
           LATEST=$(python3 -c "
           import json
           with open('versions.json') as f:
@@ -154,7 +154,7 @@ jobs:
           STABLE_EOF
           fi
 
-          # Root redirect -> stable
+          # Root redirect → stable
           cat > index.html << ROOT_EOF
           <!DOCTYPE html>
           <html>
