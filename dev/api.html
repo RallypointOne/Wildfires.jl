@@ -79,9 +79,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="site_libs/quarto-html/quarto-syntax-highlighting-ed96de9b727972fe78a7b5d16c58bf87.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-c58f986be3ff872790ab570c6d9e49f2.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
-<link href="site_libs/bootstrap/bootstrap-dark-7c8ba9dac8feea6a77ed63b2e2898d0e.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
-<link href="site_libs/bootstrap/bootstrap-c58f986be3ff872790ab570c6d9e49f2.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-4ff66e45b39d49436fe97d3fe27b9920.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-dark-7e34ecb6a0e7991f0346b0751d4a7c3f.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-4ff66e45b39d49436fe97d3fe27b9920.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -446,8 +446,12 @@ document.getElementById('toggle-all-callouts').addEventListener('click', functio
 });
 </script>
 <ul>
+<li><a href="#abstractpinnconfig"><code>AbstractPINNConfig</code></a> <em>(type)</em></li>
+<li><a href="#neuralpdeconfig"><code>NeuralPDEConfig</code></a> <em>(type)</em></li>
 <li><a href="#pinnconfig"><code>PINNConfig</code></a> <em>(type)</em></li>
 <li><a href="#pinnsolution"><code>PINNSolution</code></a> <em>(type)</em></li>
+<li><a href="levelset.html#fireplot"><code>fireplot</code></a> <em>(function)</em></li>
+<li><a href="#fireplot!"><code>fireplot!</code></a> <em>(function)</em></li>
 <li><a href="#predict_on_grid"><code>predict_on_grid</code></a> <em>(function)</em></li>
 <li><a href="#predict_on_grid!"><code>predict_on_grid!</code></a> <em>(function)</em></li>
 <li><a href="#train_pinn"><code>train_pinn</code></a> <em>(function)</em></li>
@@ -458,16 +462,73 @@ document.getElementById('toggle-all-callouts').addEventListener('click', functio
 <i class="callout-icon no-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span><code>PINNConfig</code> <span class="text-muted"><em>(type)</em></span>
+<span class="screen-reader-only">Note</span><code>AbstractPINNConfig</code> <span class="text-muted"><em>(type)</em></span>
 </div>
 <div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
 <div id="callout-1" class="callout-1-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">PINNConfig</span>(; kwargs<span class="op">...</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Training hyperparameters for the Physics-Informed Neural Network solver.</p>
-<p>The initial condition is enforced exactly via a hard constraint decomposition (no IC loss term or IC collocation points needed).</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>AbstractPINNConfig</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Supertype for PINN training configurations. Subtypes select the solver backend:</p>
+<ul>
+<li><code>PINNConfig</code> — custom Lux solver with hard IC constraint</li>
+<li><code>NeuralPDEConfig</code> — NeuralPDE.jl / ModelingToolkit solver</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-note no-icon callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-2-contents" aria-controls="callout-2" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span><code>NeuralPDEConfig</code> <span class="text-muted"><em>(type)</em></span>
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-2" class="callout-2-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">NeuralPDEConfig</span>(; kwargs<span class="op">...</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Training hyperparameters for the NeuralPDE.jl PINN solver.</p>
+<p>Uses ModelingToolkit symbolic PDE definition with <code>PhysicsInformedNN</code> discretization. IC and BC are enforced as soft constraints (loss terms).</p>
+<p>Requires <code>NeuralPDE</code> and <code>ModelingToolkit</code> to be loaded (triggers package extension).</p>
 <section id="keyword-arguments" class="level1">
+<h1>Keyword Arguments</h1>
+<ul>
+<li><code>hidden_dims::Vector{Int}</code> - Hidden layer sizes (default <code>[16, 16]</code>)</li>
+<li><code>activation::Symbol</code> - Activation function (default <code>:σ</code>)</li>
+<li><code>strategy::Symbol</code> - Training strategy: <code>:grid</code>, <code>:stochastic</code> (default <code>:grid</code>)</li>
+<li><code>grid_step::Float64</code> - Grid spacing for <code>GridTraining</code> (default <code>0.1</code>)</li>
+<li><code>max_epochs::Int</code> - Maximum training iterations (default <code>1000</code>)</li>
+<li><code>optimizer::Symbol</code> - Optimizer: <code>:lbfgs</code>, <code>:bfgs</code> (default <code>:lbfgs</code>)</li>
+<li><code>learning_rate::Float64</code> - Learning rate for Adam (default <code>1e-2</code>)</li>
+</ul>
+<section id="examples" class="level3">
+<h3 class="anchored" data-anchor-id="examples">Examples</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>config <span class="op">=</span> <span class="fu">NeuralPDEConfig</span>(hidden_dims<span class="op">=</span>[<span class="fl">32</span>, <span class="fl">32</span>], max_epochs<span class="op">=</span><span class="fl">2000</span>)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>sol <span class="op">=</span> <span class="fu">train_pinn</span>(grid, model, tspan; config<span class="op">=</span>config)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+</section>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-note no-icon callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-3-contents" aria-controls="callout-3" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span><code>PINNConfig</code> <span class="text-muted"><em>(type)</em></span>
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-3" class="callout-3-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">PINNConfig</span>(; kwargs<span class="op">...</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Training hyperparameters for the custom Lux-based PINN solver.</p>
+<p>The initial condition is enforced exactly via a hard constraint decomposition (no IC loss term or IC collocation points needed).</p>
+<section id="keyword-arguments-1" class="level1">
 <h1>Keyword Arguments</h1>
 <ul>
 <li><code>hidden_dims::Vector{Int}</code> - Hidden layer sizes (default <code>[64, 64, 64]</code>)</li>
@@ -481,62 +542,11 @@ document.getElementById('toggle-all-callouts').addEventListener('click', functio
 <li><code>max_epochs::Int</code> - Maximum training epochs (default <code>10000</code>)</li>
 <li><code>resample_every::Int</code> - Resample collocation points every N epochs (default <code>500</code>)</li>
 </ul>
-<section id="examples" class="level3">
-<h3 class="anchored" data-anchor-id="examples">Examples</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>config <span class="op">=</span> <span class="fu">PINNConfig</span>(hidden_dims<span class="op">=</span>[<span class="fl">128</span>, <span class="fl">128</span>], max_epochs<span class="op">=</span><span class="fl">10000</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</section>
-</section>
-</div>
-</div>
-</div>
-<div class="callout callout-style-simple callout-note no-icon callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-2-contents" aria-controls="callout-2" aria-expanded="false" aria-label="Toggle callout">
-<div class="callout-icon-container">
-<i class="callout-icon no-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span><code>PINNSolution</code> <span class="text-muted"><em>(type)</em></span>
-</div>
-<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
-</div>
-<div id="callout-2" class="callout-2-contents callout-collapse collapse">
-<div class="callout-body-container callout-body">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>PINNSolution</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Trained PINN model. Callable as <code>sol(t, x, y)</code> to evaluate the level set function.</p>
-<section id="fields" class="level1">
-<h1>Fields</h1>
-<ul>
-<li><code>model</code> - Lux neural network chain</li>
-<li><code>parameters</code> - Trained parameters (ComponentArray)</li>
-<li><code>state</code> - Lux model state</li>
-<li><code>config::PINNConfig</code> - Training configuration</li>
-<li><code>loss_history::Vector{Float64}</code> - Loss at each epoch</li>
-<li><code>domain::NamedTuple</code> - <code>(tspan, xspan, yspan, phi_scale)</code> for input normalization</li>
-<li><code>grid_ic</code> - Initial condition grid (for hard IC constraint decomposition)</li>
-</ul>
 <section id="examples-1" class="level3">
 <h3 class="anchored" data-anchor-id="examples-1">Examples</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>phi <span class="op">=</span> <span class="fu">sol</span>(<span class="fl">10.0</span>, <span class="fl">500.0</span>, <span class="fl">500.0</span>)  <span class="co"># evaluate at t=10, x=500, y=500</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>config <span class="op">=</span> <span class="fu">PINNConfig</span>(hidden_dims<span class="op">=</span>[<span class="fl">128</span>, <span class="fl">128</span>], max_epochs<span class="op">=</span><span class="fl">10000</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 </section>
-</div>
-</div>
-</div>
-<div class="callout callout-style-simple callout-note no-icon callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-3-contents" aria-controls="callout-3" aria-expanded="false" aria-label="Toggle callout">
-<div class="callout-icon-container">
-<i class="callout-icon no-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span><code>predict_on_grid</code> <span class="text-muted"><em>(function)</em></span>
-</div>
-<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
-</div>
-<div id="callout-3" class="callout-3-contents callout-collapse collapse">
-<div class="callout-body-container callout-body">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">predict_on_grid</span>(sol<span class="op">::</span><span class="dt">PINNSolution</span>, grid<span class="op">::</span><span class="dt">LevelSet.LevelSetGrid</span>, t)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Evaluate the trained PINN on every cell center of <code>grid</code> at time <code>t</code>. Returns a matrix of phi values with the same dimensions as <code>grid</code>.</p>
-<p>Requires <code>Lux</code> to be loaded (triggers package extension).</p>
 </div>
 </div>
 </div>
@@ -546,15 +556,30 @@ document.getElementById('toggle-all-callouts').addEventListener('click', functio
 <i class="callout-icon no-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span><code>predict_on_grid!</code> <span class="text-muted"><em>(function)</em></span> {#predict_on_grid!}
+<span class="screen-reader-only">Note</span><code>PINNSolution</code> <span class="text-muted"><em>(type)</em></span>
 </div>
 <div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
 <div id="callout-4" class="callout-4-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">predict_on_grid!</span>(grid<span class="op">::</span><span class="dt">LevelSet.LevelSetGrid</span>, sol<span class="op">::</span><span class="dt">PINNSolution</span>, t)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>In-place version of <code>predict_on_grid</code>: updates <code>grid.phi</code> and <code>grid.t</code>.</p>
-<p>Requires <code>Lux</code> to be loaded (triggers package extension).</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>PINNSolution</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Trained PINN model. Callable as <code>sol(t, x, y)</code> to evaluate the level set function.</p>
+<section id="fields" class="level1">
+<h1>Fields</h1>
+<ul>
+<li><code>model</code> - Neural network or callable evaluator</li>
+<li><code>parameters</code> - Trained parameters</li>
+<li><code>state</code> - Model state (backend-specific)</li>
+<li><code>config::AbstractPINNConfig</code> - Training configuration</li>
+<li><code>loss_history::Vector{Float64}</code> - Loss at each epoch</li>
+<li><code>domain::NamedTuple</code> - <code>(tspan, xspan, yspan, phi_scale)</code> for input normalization</li>
+<li><code>grid_ic</code> - Initial condition grid</li>
+</ul>
+<section id="examples-2" class="level3">
+<h3 class="anchored" data-anchor-id="examples-2">Examples</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>phi <span class="op">=</span> <span class="fu">sol</span>(<span class="fl">10.0</span>, <span class="fl">500.0</span>, <span class="fl">500.0</span>)  <span class="co"># evaluate at t=10, x=500, y=500</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+</section>
 </div>
 </div>
 </div>
@@ -564,35 +589,120 @@ document.getElementById('toggle-all-callouts').addEventListener('click', functio
 <i class="callout-icon no-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span><code>train_pinn</code> <span class="text-muted"><em>(function)</em></span>
+<span class="screen-reader-only">Note</span><code>fireplot</code> <span class="text-muted"><em>(function)</em></span>
 </div>
 <div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
 <div id="callout-5" class="callout-5-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">train_pinn</span>(grid<span class="op">::</span><span class="dt">LevelSet.LevelSetGrid</span>, model, tspan; config<span class="op">=</span><span class="fu">PINNConfig</span>(), observations<span class="op">=</span><span class="cn">nothing</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">fireplot</span>(grid<span class="op">::</span><span class="dt">LevelSetGrid</span>; colormap<span class="op">=:</span>RdYlGn, frontcolor<span class="op">=:</span>black, frontlinewidth<span class="op">=</span><span class="fl">2.0</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Plot a <code>LevelSetGrid</code> as a heatmap of the <code>φ</code> field with the fire front (<code>φ = 0</code>) overlaid as a contour line. Returns a <code>Makie.Figure</code>.</p>
+<p>Requires <code>Makie</code> (or a backend like <code>CairoMakie</code> / <code>GLMakie</code>) to be loaded.</p>
+<section id="examples-3" class="level3">
+<h3 class="anchored" data-anchor-id="examples-3">Examples</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">CairoMakie</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>grid <span class="op">=</span> <span class="fu">LevelSetGrid</span>(<span class="fl">100</span>, <span class="fl">100</span>, dx<span class="op">=</span><span class="fl">30.0</span>)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ignite!</span>(grid, <span class="fl">1500.0</span>, <span class="fl">1500.0</span>, <span class="fl">100.0</span>)</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="fu">fireplot</span>(grid)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-note no-icon callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-6-contents" aria-controls="callout-6" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span><code>fireplot!</code> <span class="text-muted"><em>(function)</em></span> {#fireplot!}
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-6" class="callout-6-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">fireplot!</span>(ax, grid<span class="op">::</span><span class="dt">LevelSetGrid</span>; colormap<span class="op">=:</span>RdYlGn, frontcolor<span class="op">=:</span>black, frontlinewidth<span class="op">=</span><span class="fl">2.0</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>In-place version of <code>fireplot</code>: draws into an existing <code>Axis</code>.</p>
+<p>Requires <code>Makie</code> (or a backend like <code>CairoMakie</code> / <code>GLMakie</code>) to be loaded.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-note no-icon callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-7-contents" aria-controls="callout-7" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span><code>predict_on_grid</code> <span class="text-muted"><em>(function)</em></span>
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-7" class="callout-7-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">predict_on_grid</span>(sol<span class="op">::</span><span class="dt">PINNSolution</span>, grid<span class="op">::</span><span class="dt">LevelSet.LevelSetGrid</span>, t)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Evaluate the trained PINN on every cell center of <code>grid</code> at time <code>t</code>. Returns a matrix of phi values with the same dimensions as <code>grid</code>.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-note no-icon callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-8-contents" aria-controls="callout-8" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span><code>predict_on_grid!</code> <span class="text-muted"><em>(function)</em></span> {#predict_on_grid!}
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-8" class="callout-8-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">predict_on_grid!</span>(grid<span class="op">::</span><span class="dt">LevelSet.LevelSetGrid</span>, sol<span class="op">::</span><span class="dt">PINNSolution</span>, t)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>In-place version of <code>predict_on_grid</code>: updates <code>grid.phi</code> and <code>grid.t</code>.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-note no-icon callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-9-contents" aria-controls="callout-9" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span><code>train_pinn</code> <span class="text-muted"><em>(function)</em></span>
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-9" class="callout-9-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">train_pinn</span>(grid, model, tspan; config<span class="op">=</span><span class="fu">PINNConfig</span>(), <span class="op">...</span>)</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fu">train_pinn</span>(grid, model, tspan, config; <span class="op">...</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Train a Physics-Informed Neural Network to solve the fire spread level set PDE.</p>
 <p>The PINN learns a function <code>phi_theta(x, y, t)</code> satisfying:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>dphi<span class="op">/</span>dt <span class="op">+</span> <span class="fu">F</span>(x,y,t)<span class="op">|</span>nabla phi<span class="op">|</span> <span class="op">=</span> <span class="fl">0</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>dphi<span class="op">/</span>dt <span class="op">+</span> <span class="fu">F</span>(x,y,t)<span class="op">|</span>nabla phi<span class="op">|</span> <span class="op">=</span> <span class="fl">0</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>where <code>F</code> is the spread rate from the <code>FireSpreadModel</code>.</p>
-<p>Requires <code>Lux</code> to be loaded (triggers package extension).</p>
+<p>The solver backend is selected by the <code>config</code> type:</p>
+<ul>
+<li><code>PINNConfig</code> — custom Lux solver with hard IC constraint (requires <code>Lux</code>)</li>
+<li><code>NeuralPDEConfig</code> — NeuralPDE.jl symbolic solver (requires <code>NeuralPDE</code>)</li>
+</ul>
 <section id="arguments" class="level1">
 <h1>Arguments</h1>
 <ul>
 <li><code>grid</code> - <code>LevelSetGrid</code> providing domain geometry and initial condition</li>
 <li><code>model</code> - Callable <code>model(t, x, y) -&gt; spread_rate</code> (e.g.&nbsp;<code>FireSpreadModel</code>)</li>
 <li><code>tspan</code> - Time interval <code>(t_start, t_end)</code></li>
-<li><code>config</code> - <code>PINNConfig</code> with training hyperparameters</li>
-<li><code>observations</code> - Optional <code>(t, x, y, phi)</code> tuple of observation data</li>
+<li><code>config</code> - <code>PINNConfig</code> or <code>NeuralPDEConfig</code> with training hyperparameters</li>
+<li><code>observations</code> - Optional <code>(t, x, y, phi)</code> tuple of observation data (Lux backend only)</li>
 </ul>
 </section>
 <section id="returns" class="level1">
 <h1>Returns</h1>
 <p>A <code>PINNSolution</code> callable as <code>sol(t, x, y)</code>.</p>
-<section id="examples-2" class="level3">
-<h3 class="anchored" data-anchor-id="examples-2">Examples</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>sol <span class="op">=</span> <span class="fu">train_pinn</span>(grid, model, (<span class="fl">0.0</span>, <span class="fl">50.0</span>))</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">sol</span>(<span class="fl">25.0</span>, <span class="fl">500.0</span>, <span class="fl">500.0</span>)  <span class="co"># evaluate at any point</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<section id="examples-4" class="level3">
+<h3 class="anchored" data-anchor-id="examples-4">Examples</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Custom Lux backend (default)</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>sol <span class="op">=</span> <span class="fu">train_pinn</span>(grid, model, (<span class="fl">0.0</span>, <span class="fl">50.0</span>))</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="co"># NeuralPDE backend</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>sol <span class="op">=</span> <span class="fu">train_pinn</span>(grid, model, (<span class="fl">0.0</span>, <span class="fl">50.0</span>); config<span class="op">=</span><span class="fu">NeuralPDEConfig</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 </section>
 </div>
@@ -1034,7 +1144,7 @@ document.getElementById('toggle-all-callouts').addEventListener('click', functio
       &nbsp;
     </div>   
     <div class="nav-footer-center">
-<p>Built on 2026-02-18</p>
+<p>Built on 2026-02-23</p>
 </div>
     <div class="nav-footer-right">
       &nbsp;
