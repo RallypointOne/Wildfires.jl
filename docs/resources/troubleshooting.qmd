@@ -1,0 +1,85 @@
+---
+title: "Troubleshooting"
+engine: julia
+---
+
+Common issues and how to resolve them.
+
+## Simulation Diverges or Produces NaN
+
+**Symptom**: `φ` values grow unbounded or become `NaN` after a few steps.
+
+**Cause**: The time step `dt` violates the CFL condition.
+
+**Fix**:
+
+- Use automatic time stepping (the default): `simulate!(grid, model, steps=100)`.  This computes a stable `dt` each step.
+- If using a fixed `dt`, ensure it satisfies `dt ≤ cfl * min(dx, dy) / max(F)`.  Reduce `dt` or use a smaller `cfl` (e.g., `0.3`).
+- Check that the spread rate field `F` doesn't contain unreasonably large values.  Spread rates above ~100 m/min are extreme even for crown fires.
+
+## Fire Doesn't Spread
+
+**Symptom**: The fire perimeter stays at the ignition point.
+
+**Possible causes**:
+
+- **Fuel moisture too high**: If moisture exceeds the extinction threshold for the fuel model, the Rothermel rate of spread is zero.  Check `rate_of_spread(fuel, moisture=m)` with your moisture values.
+- **Spread rate is zero**: Evaluate `model(t, x, y)` at several points to verify non-zero output.
+- **Not enough steps**: With small `cfl` and large `dx`, each step may advance the front by less than one cell.  Increase `steps` or reduce `dx`.
+
+## Unexpected Fire Shape
+
+**Symptom**: Fire spreads in unexpected directions or has artifacts.
+
+**Possible causes**:
+
+- **Wind direction convention**: Wind direction is the direction the wind blows **from**, in radians.  `0.0` = from the east, `π/2` = from the north.  Fire spreads **opposite** to the wind-from direction.
+- **Aspect convention**: Aspect is the **downslope** direction in radians.  Fire spreads **uphill** (opposite to aspect).
+- **Reinitialization too infrequent**: If `reinit_every` is too large, `φ` drifts from a signed distance function and the upwind scheme becomes inaccurate.  Try `reinit_every=5`.
+- **Grid resolution too coarse**: With large `dx`, the fire front is poorly resolved.  Try halving `dx` to see if artifacts disappear.
+
+## PINN Loss Plateaus
+
+**Symptom**: Training loss stops decreasing well above expected values.
+
+**Possible causes**:
+
+- **Network too small**: Increase `hidden_dims` (e.g., from `[32, 32]` to `[64, 64, 64]`).
+- **Learning rate too high**: Reduce `learning_rate` to `1e-4` or `3e-4`.
+- **Too few collocation points**: Increase `n_interior`.  Use at least 10x the number of grid cells.
+- **Loss weight imbalance**: If one loss term dominates, the others are undertrained.  Check individual loss components and adjust `lambda_pde`, `lambda_bc`, `lambda_data`.
+- **Stale collocation points**: Decrease `resample_every` (e.g., `100`) so the network sees diverse training locations.
+
+## PINN Fire Front Bleeds Through Boundaries
+
+**Symptom**: The PINN predicts `φ < 0` (burned) at the domain boundary.
+
+**Fix**: Increase the boundary loss weight, e.g., `lambda_bc=10.0`.
+
+## Out of Memory (GPU)
+
+**Symptom**: GPU OOM error during simulation.
+
+**Possible causes**:
+
+- **Grid too large for GPU memory**: Reduce grid size or use `Float32` to halve memory usage.
+- **Many time steps without clearing**: Each `advance!` call allocates a copy of `φ`.  Julia's garbage collector may lag behind.  Call `GC.gc(false)` periodically or use `CUDA.reclaim()` for CUDA-based runs.
+
+## Package Extension Not Loading
+
+**Symptom**: `PINNConfig`, `train_pinn`, or GPU functions are not defined.
+
+**Fix**: Package extensions only load when their trigger packages are imported in the same session:
+
+```julia
+# For PINN:
+using Lux, ComponentArrays, ForwardDiff, Zygote, Optimization, OptimizationOptimisers
+
+# For GPU:
+using KernelAbstractions, CUDA  # or AMDGPU, Metal, etc.
+
+# Then:
+using Wildfires
+```
+
+The trigger packages must be loaded **before or at the same time** as `Wildfires`.

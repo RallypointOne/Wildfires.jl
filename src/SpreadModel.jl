@@ -366,7 +366,23 @@ end
 """
     fire_loss(grid::LevelSetGrid, φ_observed::AbstractMatrix)
 
-Compute the sum-of-squares loss between the current level set field and an observed field.
+Compute the sum-of-squares loss between the current level set field and an observed field:
+
+``\\sum_i (\\phi_i - \\phi^{\\text{obs}}_i)^2``
+
+This is useful for calibrating model parameters (wind speed, moisture, etc.) against
+observed fire perimeter data, or as an objective function in optimization/inverse problems.
+
+### Examples
+```julia
+# Compare simulation result against observed fire state
+grid = LevelSetGrid(100, 100, dx=30.0)
+ignite!(grid, 1500.0, 1500.0, 50.0)
+simulate!(grid, model, steps=100)
+
+# φ_observed from satellite/sensor data (same grid dimensions)
+loss = fire_loss(grid, φ_observed)
+```
 """
 fire_loss(grid::LevelSetGrid, φ_observed::AbstractMatrix) = sum(x -> x^2, grid.φ .- φ_observed)
 

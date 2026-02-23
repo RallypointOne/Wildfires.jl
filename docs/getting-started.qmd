@@ -70,4 +70,11 @@ fireplot!(ax, grid)
 fig
 ```
 
-See the [Level Set](levelset.qmd) page for more plotting options and the [Spread Model](spreadmodel.qmd) page for dynamic moisture, custom components, and more.
+## Next Steps
+
+- [Rothermel](rothermel.qmd) — fuel models, parameter sensitivity, and the physics behind rate of spread
+- [Level Set](levelset.qmd) — boundary conditions, reinitialization, plotting options, and the numerical scheme
+- [Spread Model](spreadmodel.qmd) — dynamic moisture, custom wind/terrain components, and simulation parameters
+- [GPU](gpu.qmd) — running simulations on CUDA, ROCm, or Metal backends
+- [PINN Solver](pinn.qmd) — mesh-free fire spread via physics-informed neural networks
+- [API Reference](api.qmd) — full documentation of all exported functions and types

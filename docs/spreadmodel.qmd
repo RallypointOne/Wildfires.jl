@@ -106,6 +106,16 @@ M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
 dm = DynamicMoisture(grid_d, M, dry_rate=0.1, recovery_rate=0.001)
 ```
 
+**Parameter guidance:**
+
+| Parameter | Default | Typical Range | Effect |
+|-----------|---------|---------------|--------|
+| `dry_rate` | `0.1` | `0.01` – `0.5` | How fast fire dries nearby fuel.  Higher values = stronger pre-heating effect, faster fire acceleration. |
+| `recovery_rate` | `0.001` | `0.0001` – `0.01` | How fast fuel rewets toward ambient.  Higher values = fuel recovers quickly when fire moves away. |
+| `min_d1` | `0.03` | `0.02` – `0.05` | Minimum 1-hr dead fuel moisture (fraction).  Below ~0.03, wildland fuels are essentially oven-dry. |
+
+The `dry_rate` is the most sensitive parameter — it controls the positive feedback loop where fire dries adjacent fuel, increasing spread rate, which dries more fuel.  Start with the default (`0.1`) and adjust based on whether the simulated fire accelerates too quickly or too slowly.
+
 Comparing static vs. dynamic moisture:
 
 ```{julia}
@@ -208,6 +218,23 @@ For dynamic components that respond to fire state, also implement `update!`:
 ```julia
 SpreadModel.update!(w::MyDynamicWind, grid::LevelSetGrid, dt) = ...
 ```
+
+## Simulation Parameters
+
+The `simulate!` function accepts several keyword arguments that control numerical behavior:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `steps` | `100` | Number of time steps to run |
+| `dt` | `nothing` | Time step in minutes.  When `nothing`, computed automatically via the CFL condition each step. |
+| `cfl` | `0.5` | Safety factor for the CFL condition (`dt = cfl * min(dx,dy) / max(F)`).  Only used when `dt=nothing`. |
+| `reinit_every` | `10` | Reinitialization frequency.  Every N steps, the level set is restored to a signed distance function. |
+
+**`cfl`**: The default `0.5` is conservative — it uses half the maximum stable time step.  Values closer to `1.0` are faster but risk instability if the spread rate field changes rapidly.  If you see oscillations or divergence, lower this value.
+
+**`reinit_every`**: Over many steps, `φ` drifts from a true signed distance function, degrading the accuracy of the upwind scheme.  More frequent reinitialization (e.g., `5`) improves accuracy at modest cost; less frequent (e.g., `50`) is faster but may introduce artifacts in long simulations.  For most cases, the default of `10` works well.
+
+**`dt`**: When set to `nothing` (default), `simulate!` calls `spread_rate_field!` first, then computes a CFL-limited time step automatically.  If you pass a fixed `dt`, you are responsible for ensuring it satisfies the CFL condition — violating it causes numerical blowup.
 
 ## Performance: Float64 vs Float32
 

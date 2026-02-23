@@ -170,6 +170,18 @@ fig
 | `max_epochs` | `10000` | Maximum training epochs |
 | `resample_every` | `500` | Resample collocation points every N epochs |
 
+### Tuning Hyperparameters
+
+**Network size (`hidden_dims`)**: Start with `[32, 32]` for quick experiments and scale up to `[64, 64, 64]` or larger for production.  Wider/deeper networks fit complex fire fronts better but train slower.  If the loss plateaus early, try increasing network capacity.
+
+**Collocation points (`n_interior`, `n_boundary`)**: More points improve accuracy but slow each epoch.  A good rule of thumb: use at least 10x the number of grid cells for `n_interior`.  `n_boundary` can be ~10% of `n_interior`.
+
+**Learning rate**: The default `1e-3` works well with Adam for most cases.  If the loss oscillates, reduce to `1e-4`.  If training is very slow, try `3e-3` briefly.
+
+**Loss weights (`lambda_pde`, `lambda_bc`, `lambda_data`)**: The defaults of `1.0` for all terms are a reasonable starting point.  If the fire front bleeds through boundaries, increase `lambda_bc` (e.g., `10.0`).  When using observations, increase `lambda_data` (e.g., `5.0`–`10.0`) to tighten the fit to observed perimeters.
+
+**Resampling (`resample_every`)**: Periodically resampling collocation points prevents overfitting to a fixed set of training locations.  The default of `500` epochs works well; lower values (e.g., `100`) can help if the loss stagnates.
+
 ## Loss Function
 
 The total loss is a weighted sum of three terms:
@@ -198,6 +210,14 @@ obs_phi = zeros(50)  # on the fire front (phi = 0)
 sol = train_pinn(grid, model, (0.0, 20.0);
                  observations=(obs_t, obs_x, obs_y, obs_phi))
 ```
+
+**Observation format details:**
+
+- **`t`**: Time in minutes (same units as the simulation time span)
+- **`x`, `y`**: Spatial coordinates in meters (same coordinate system as the `LevelSetGrid`)
+- **`phi`**: Target level set value.  Use `0.0` for points on the fire front, negative for burned, positive for unburned.
+- Observations at **multiple times** are supported — just vary the `t` values.
+- As few as 20–50 well-placed perimeter points can significantly improve the solution.  Points along the fire front (`phi = 0`) are most informative.
 
 ## References
 

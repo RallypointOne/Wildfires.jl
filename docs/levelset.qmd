@@ -35,11 +35,11 @@ grid = LevelSetGrid(100, 100, dx=30.0)
 
 The `bc` keyword controls how the solver handles grid edges.  Three built-in options are available:
 
-| Type | Behavior |
-|------|----------|
-| `ZeroNeumann()` | Zero-gradient at edges (default).  Missing neighbors contribute zero to finite differences. |
-| `Dirichlet()` | Fixed-value edges.  Edge cells are never updated by `advance!` or `reinitialize!`. |
-| `Periodic()` | Wrap-around.  Edges reference values from the opposite side of the grid. |
+| Type | Behavior | Physical Interpretation |
+|------|----------|------------------------|
+| `ZeroNeumann()` | Zero-gradient at edges (default).  Missing neighbors contribute zero to finite differences. | **Open boundaries** — the fire front can reach and exit the domain naturally.  Most common choice for realistic simulations where the domain is a subset of a larger landscape. |
+| `Dirichlet()` | Fixed-value edges.  Edge cells are never updated by `advance!` or `reinitialize!`. | **Firebreak / barrier** — edge cells retain their initial values (unburned).  Useful for modeling impassable boundaries like rivers, roads, or cleared fire lines. |
+| `Periodic()` | Wrap-around.  Edges reference values from the opposite side of the grid. | **Tiling / infinite landscape** — fire exiting one edge enters from the opposite side.  Useful for studying fire behavior in a homogeneous landscape without edge effects. |
 
 ```{julia}
 grid_d = LevelSetGrid(50, 50, dx=30.0, bc=Dirichlet())
@@ -48,7 +48,26 @@ println("Dirichlet: ", grid_d)
 println("Periodic:  ", grid_p)
 ```
 
-Custom boundary conditions can be defined by subtyping `AbstractBoundaryCondition` and implementing the `_Dxm`, `_Dxp`, `_Dym`, `_Dyp` helper functions (see source for signatures).
+### Custom Boundary Conditions
+
+Define a custom BC by subtyping `AbstractBoundaryCondition` and implementing the four one-sided finite-difference helpers.  Optionally implement `_skip_update` to exclude certain cells from updates.
+
+```julia
+using Wildfires.LevelSet
+
+struct MyBC <: AbstractBoundaryCondition end
+
+# One-sided finite differences at boundaries:
+#   _Dxm(φ, i, j, dx, bc)        → backward x-difference
+#   _Dxp(φ, i, j, nx, dx, bc)    → forward x-difference
+#   _Dym(φ, i, j, dy, bc)        → backward y-difference
+#   _Dyp(φ, i, j, ny, dy, bc)    → forward y-difference
+
+# Optional: skip updating certain cells (default: false)
+#   _skip_update(i, j, ny, nx, bc) → Bool
+```
+
+See the built-in implementations in `src/LevelSet.jl` for reference.
 
 ### Coordinates
 
@@ -132,7 +151,7 @@ cfl_dt(grid, F)           # cfl=0.5 by default
 cfl_dt(grid, F; cfl=1.0)  # less conservative
 ```
 
-The `simulate!` function uses automatic CFL-limited time stepping by default.  Pass an explicit `dt` to override:
+The [`simulate!`](spreadmodel.qmd#simulation-parameters) function uses automatic CFL-limited time stepping by default.  Pass an explicit `dt` to override:
 
 ```julia
 simulate!(grid, model, steps=100)           # auto CFL (recommended)
