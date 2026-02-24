@@ -273,6 +273,11 @@ window.Quarto = {
       <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="./resources/troubleshooting.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Troubleshooting</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="./resources/benchmarks.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Benchmarks</span></a>
   </div>
 </li>
@@ -315,6 +320,7 @@ window.Quarto = {
   <li><a href="#uniformslope" id="toc-uniformslope" class="nav-link" data-scroll-target="#uniformslope"><code>UniformSlope</code></a></li>
   </ul></li>
   <li><a href="#custom-components" id="toc-custom-components" class="nav-link" data-scroll-target="#custom-components">Custom Components</a></li>
+  <li><a href="#simulation-parameters" id="toc-simulation-parameters" class="nav-link" data-scroll-target="#simulation-parameters">Simulation Parameters</a></li>
   <li><a href="#performance-float64-vs-float32" id="toc-performance-float64-vs-float32" class="nav-link" data-scroll-target="#performance-float64-vs-float32">Performance: Float64 vs Float32</a></li>
   <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references">References</a></li>
   </ul>
@@ -462,6 +468,44 @@ simulate!(grid, model) → level set evolution</code></pre>
 <pre><code>DynamicMoisture{Float64, Matrix{Float64}}([0.06 0.06 … 0.06 0.06; 0.06 0.06 … 0.06 0.06; … ; 0.06 0.06 … 0.06 0.06; 0.06 0.06 … 0.06 0.06], FuelClasses{Float64}(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0), 0.06, 0.1, 0.001, 0.03, 30.0, 30.0, 0.0, 0.0)</code></pre>
 </div>
 </div>
+<p><strong>Parameter guidance:</strong></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 20%">
+<col style="width: 34%">
+<col style="width: 18%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Default</th>
+<th>Typical Range</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>dry_rate</code></td>
+<td><code>0.1</code></td>
+<td><code>0.01</code> – <code>0.5</code></td>
+<td>How fast fire dries nearby fuel. Higher values = stronger pre-heating effect, faster fire acceleration.</td>
+</tr>
+<tr class="even">
+<td><code>recovery_rate</code></td>
+<td><code>0.001</code></td>
+<td><code>0.0001</code> – <code>0.01</code></td>
+<td>How fast fuel rewets toward ambient. Higher values = fuel recovers quickly when fire moves away.</td>
+</tr>
+<tr class="odd">
+<td><code>min_d1</code></td>
+<td><code>0.03</code></td>
+<td><code>0.02</code> – <code>0.05</code></td>
+<td>Minimum 1-hr dead fuel moisture (fraction). Below ~0.03, wildland fuels are essentially oven-dry.</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>dry_rate</code> is the most sensitive parameter — it controls the positive feedback loop where fire dries adjacent fuel, increasing spread rate, which dries more fuel. Start with the default (<code>0.1</code>) and adjust based on whether the simulated fire accelerates too quickly or too slowly.</p>
 <p>Comparing static vs.&nbsp;dynamic moisture:</p>
 <div id="14" class="cell" data-execution_count="1">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>M <span class="op">=</span> <span class="fu">FuelClasses</span>(d1<span class="op">=</span><span class="fl">0.06</span>, d10<span class="op">=</span><span class="fl">0.07</span>, d100<span class="op">=</span><span class="fl">0.08</span>, herb<span class="op">=</span><span class="fl">0.0</span>, wood<span class="op">=</span><span class="fl">0.0</span>)</span>
@@ -571,6 +615,49 @@ simulate!(grid, model) → level set evolution</code></pre>
 <p>For dynamic components that respond to fire state, also implement <code>update!</code>:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>SpreadModel.<span class="fu">update!</span>(w<span class="op">::</span><span class="dt">MyDynamicWind</span>, grid<span class="op">::</span><span class="dt">LevelSetGrid</span>, dt) <span class="op">=</span> <span class="op">...</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
+<section id="simulation-parameters" class="level2">
+<h2 class="anchored" data-anchor-id="simulation-parameters">Simulation Parameters</h2>
+<p>The <code>simulate!</code> function accepts several keyword arguments that control numerical behavior:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 27%">
+<col style="width: 39%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>steps</code></td>
+<td><code>100</code></td>
+<td>Number of time steps to run</td>
+</tr>
+<tr class="even">
+<td><code>dt</code></td>
+<td><code>nothing</code></td>
+<td>Time step in minutes. When <code>nothing</code>, computed automatically via the CFL condition each step.</td>
+</tr>
+<tr class="odd">
+<td><code>cfl</code></td>
+<td><code>0.5</code></td>
+<td>Safety factor for the CFL condition (<code>dt = cfl * min(dx,dy) / max(F)</code>). Only used when <code>dt=nothing</code>.</td>
+</tr>
+<tr class="even">
+<td><code>reinit_every</code></td>
+<td><code>10</code></td>
+<td>Reinitialization frequency. Every N steps, the level set is restored to a signed distance function.</td>
+</tr>
+</tbody>
+</table>
+<p><strong><code>cfl</code></strong>: The default <code>0.5</code> is conservative — it uses half the maximum stable time step. Values closer to <code>1.0</code> are faster but risk instability if the spread rate field changes rapidly. If you see oscillations or divergence, lower this value.</p>
+<p><strong><code>reinit_every</code></strong>: Over many steps, <code>φ</code> drifts from a true signed distance function, degrading the accuracy of the upwind scheme. More frequent reinitialization (e.g., <code>5</code>) improves accuracy at modest cost; less frequent (e.g., <code>50</code>) is faster but may introduce artifacts in long simulations. For most cases, the default of <code>10</code> works well.</p>
+<p><strong><code>dt</code></strong>: When set to <code>nothing</code> (default), <code>simulate!</code> calls <code>spread_rate_field!</code> first, then computes a CFL-limited time step automatically. If you pass a fixed <code>dt</code>, you are responsible for ensuring it satisfies the CFL condition — violating it causes numerical blowup.</p>
+</section>
 <section id="performance-float64-vs-float32" class="level2">
 <h2 class="anchored" data-anchor-id="performance-float64-vs-float32">Performance: Float64 vs Float32</h2>
 <p>The level set grid and all simulation operations support <code>Float32</code> for reduced memory and potentially faster computation. To create a <code>Float32</code> simulation, pass <code>Float32</code> values to all constructors:</p>
@@ -610,7 +697,7 @@ Note
 <div class="cell-output cell-output-stdout">
 <pre><code>| Metric | Float64 | Float32 | Ratio |
 |--------|---------|---------|-------|
-| Median time | 30.73 ms | 21.45 ms | 1.43x |
+| Median time | 30.13 ms | 26.19 ms | 1.15x |
 | Memory | 32.7 MiB | 16.3 MiB | 2.00x |</code></pre>
 </div>
 </div>
@@ -1045,7 +1132,7 @@ Note
       &nbsp;
     </div>   
     <div class="nav-footer-center">
-<p>Built on 2026-02-23</p>
+<p>Built on 2026-02-24</p>
 </div>
     <div class="nav-footer-right">
       &nbsp;

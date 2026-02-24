@@ -273,6 +273,11 @@ window.Quarto = {
       <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="./resources/troubleshooting.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Troubleshooting</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="./resources/benchmarks.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Benchmarks</span></a>
   </div>
 </li>
@@ -310,7 +315,10 @@ window.Quarto = {
   </ul></li>
   <li><a href="#pinn-predictions" id="toc-pinn-predictions" class="nav-link" data-scroll-target="#pinn-predictions">PINN Predictions</a></li>
   <li><a href="#comparison-with-finite-differences" id="toc-comparison-with-finite-differences" class="nav-link" data-scroll-target="#comparison-with-finite-differences">Comparison with Finite Differences</a></li>
-  <li><a href="#configuration" id="toc-configuration" class="nav-link" data-scroll-target="#configuration">Configuration</a></li>
+  <li><a href="#configuration" id="toc-configuration" class="nav-link" data-scroll-target="#configuration">Configuration</a>
+  <ul class="collapse">
+  <li><a href="#tuning-hyperparameters" id="toc-tuning-hyperparameters" class="nav-link" data-scroll-target="#tuning-hyperparameters">Tuning Hyperparameters</a></li>
+  </ul></li>
   <li><a href="#loss-function" id="toc-loss-function" class="nav-link" data-scroll-target="#loss-function">Loss Function</a></li>
   <li><a href="#data-assimilation" id="toc-data-assimilation" class="nav-link" data-scroll-target="#data-assimilation">Data Assimilation</a></li>
   <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references">References</a></li>
@@ -420,7 +428,7 @@ window.Quarto = {
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Single point evaluation</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">sol</span>(<span class="fl">5.0</span>, <span class="fl">500.0</span>, <span class="fl">500.0</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display" data-execution_count="1">
-<pre><code>-48.06566849824874</code></pre>
+<pre><code>-48.06566849824875</code></pre>
 </div>
 </div>
 <p>Evaluate on the full grid at a specific time with <code>predict_on_grid</code>:</p>
@@ -550,6 +558,14 @@ window.Quarto = {
 </tr>
 </tbody>
 </table>
+<section id="tuning-hyperparameters" class="level3">
+<h3 class="anchored" data-anchor-id="tuning-hyperparameters">Tuning Hyperparameters</h3>
+<p><strong>Network size (<code>hidden_dims</code>)</strong>: Start with <code>[32, 32]</code> for quick experiments and scale up to <code>[64, 64, 64]</code> or larger for production. Wider/deeper networks fit complex fire fronts better but train slower. If the loss plateaus early, try increasing network capacity.</p>
+<p><strong>Collocation points (<code>n_interior</code>, <code>n_boundary</code>)</strong>: More points improve accuracy but slow each epoch. A good rule of thumb: use at least 10x the number of grid cells for <code>n_interior</code>. <code>n_boundary</code> can be ~10% of <code>n_interior</code>.</p>
+<p><strong>Learning rate</strong>: The default <code>1e-3</code> works well with Adam for most cases. If the loss oscillates, reduce to <code>1e-4</code>. If training is very slow, try <code>3e-3</code> briefly.</p>
+<p><strong>Loss weights (<code>lambda_pde</code>, <code>lambda_bc</code>, <code>lambda_data</code>)</strong>: The defaults of <code>1.0</code> for all terms are a reasonable starting point. If the fire front bleeds through boundaries, increase <code>lambda_bc</code> (e.g., <code>10.0</code>). When using observations, increase <code>lambda_data</code> (e.g., <code>5.0</code>–<code>10.0</code>) to tighten the fit to observed perimeters.</p>
+<p><strong>Resampling (<code>resample_every</code>)</strong>: Periodically resampling collocation points prevents overfitting to a fixed set of training locations. The default of <code>500</code> epochs works well; lower values (e.g., <code>100</code>) can help if the loss stagnates.</p>
+</section>
 </section>
 <section id="loss-function" class="level2">
 <h2 class="anchored" data-anchor-id="loss-function">Loss Function</h2>
@@ -575,6 +591,14 @@ window.Quarto = {
 <span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>sol <span class="op">=</span> <span class="fu">train_pinn</span>(grid, model, (<span class="fl">0.0</span>, <span class="fl">20.0</span>);</span>
 <span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>                 observations<span class="op">=</span>(obs_t, obs_x, obs_y, obs_phi))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Observation format details:</strong></p>
+<ul>
+<li><strong><code>t</code></strong>: Time in minutes (same units as the simulation time span)</li>
+<li><strong><code>x</code>, <code>y</code></strong>: Spatial coordinates in meters (same coordinate system as the <code>LevelSetGrid</code>)</li>
+<li><strong><code>phi</code></strong>: Target level set value. Use <code>0.0</code> for points on the fire front, negative for burned, positive for unburned.</li>
+<li>Observations at <strong>multiple times</strong> are supported — just vary the <code>t</code> values.</li>
+<li>As few as 20–50 well-placed perimeter points can significantly improve the solution. Points along the fire front (<code>phi = 0</code>) are most informative.</li>
+</ul>
 </section>
 <section id="references" class="level2">
 <h2 class="anchored" data-anchor-id="references">References</h2>
@@ -1006,7 +1030,7 @@ window.Quarto = {
       &nbsp;
     </div>   
     <div class="nav-footer-center">
-<p>Built on 2026-02-23</p>
+<p>Built on 2026-02-24</p>
 </div>
     <div class="nav-footer-right">
       &nbsp;
