@@ -1,0 +1,1 @@
+genhtml -t 'on branch (detached from b9dd1a0)' -o /home/runner/work/Wildfires.jl/Wildfires.jl/docs/_site/coverage coverage/lcov.info

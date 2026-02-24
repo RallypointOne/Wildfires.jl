@@ -1,0 +1,574 @@
+[
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Wildfires.jl",
+    "section": "",
+    "text": "Overview\nWelcome to the documentation for Wildfires.jl.\nWildfires.jl is a Julia package for wildfire modeling and simulation, built around three core modules:",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Wildfires.jl</span>"
+    ]
+  },
+  {
+    "objectID": "index.html#overview",
+    "href": "index.html#overview",
+    "title": "Wildfires.jl",
+    "section": "",
+    "text": "Rothermel — The Rothermel (1972) surface fire spread model with the 13 standard NFFL fuel models from Anderson (1982).\nLevel Set — A level set method for simulating 2D fire front propagation driven by spatially varying spread rates.\nSpread Model — Composable, differentiable components (wind, moisture, terrain) that drive level set simulations via FireSpreadModel.\nGPU Acceleration — Backend-agnostic GPU support (CUDA, Metal, ROCm) via KernelAbstractions.jl for large-grid simulations.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Wildfires.jl</span>"
+    ]
+  },
+  {
+    "objectID": "index.html#installation",
+    "href": "index.html#installation",
+    "title": "Wildfires.jl",
+    "section": "Installation",
+    "text": "Installation\nusing Pkg\nPkg.add(\"Wildfires\")",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Wildfires.jl</span>"
+    ]
+  },
+  {
+    "objectID": "index.html#quick-example",
+    "href": "index.html#quick-example",
+    "title": "Wildfires.jl",
+    "section": "Quick Example",
+    "text": "Quick Example\n\nusing Wildfires\nusing Wildfires.Rothermel\nusing Wildfires.LevelSet\nusing Wildfires.SpreadModel\n\n# Build a fire spread model from components\nmoisture = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)\nmodel = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(moisture), FlatTerrain())\n\n# Evaluate spread rate at a point\nros = model(0.0, 100.0, 100.0)\nprintln(\"Rate of spread: $(round(ros, digits=1)) m/min\")\n\nRate of spread: 31.1 m/min\n\n\nSee Getting Started for a full walkthrough.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Wildfires.jl</span>"
+    ]
+  },
+  {
+    "objectID": "getting-started.html",
+    "href": "getting-started.html",
+    "title": "Getting Started",
+    "section": "",
+    "text": "Compute a Rate of Spread\nUse the Rothermel (1972) model with one of the 13 standard NFFL fuel models:\n# Fuel moisture (fraction, 0-1) for each size class\nmoisture = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)\n\n# Rate of spread in m/min\nrate_of_spread(SHORT_GRASS, moisture=moisture, wind=8.0, slope=0.0)\n\n31.119112730486354\nSee the Rothermel page for details on fuel models and parameters.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Getting Started</span>"
+    ]
+  },
+  {
+    "objectID": "getting-started.html#build-a-fire-spread-model",
+    "href": "getting-started.html#build-a-fire-spread-model",
+    "title": "Getting Started",
+    "section": "Build a Fire Spread Model",
+    "text": "Build a Fire Spread Model\nThe SpreadModel module lets you compose a FireSpreadModel from pluggable wind, moisture, and terrain components:\n\nmodel = FireSpreadModel(\n    SHORT_GRASS,                     # fuel model\n    UniformWind(speed=8.0),          # 8 km/h wind\n    UniformMoisture(moisture),       # uniform moisture from above\n    FlatTerrain()                    # no slope\n)\n\n# Evaluate at a point: returns spread rate in m/min\nmodel(0.0, 100.0, 100.0)\n\n31.119112730486354",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Getting Started</span>"
+    ]
+  },
+  {
+    "objectID": "getting-started.html#run-a-fire-spread-simulation",
+    "href": "getting-started.html#run-a-fire-spread-simulation",
+    "title": "Getting Started",
+    "section": "Run a Fire Spread Simulation",
+    "text": "Run a Fire Spread Simulation\nCreate a level set grid, ignite, and simulate:\n\n# 200x200 grid, 30m resolution -&gt; 6km x 6km domain\ngrid = LevelSetGrid(200, 200, dx=30.0)\n\n# Ignite a 50m-radius circle at the center\nignite!(grid, 3000.0, 3000.0, 50.0)\n\n# Simulate 100 steps of 0.5 min each (50 min total)\nsimulate!(grid, model, steps=100, dt=0.5)\n\ngrid\n\nLevelSetGrid{Float64} 200×200 (t=50.0, burned=622/40000)",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Getting Started</span>"
+    ]
+  },
+  {
+    "objectID": "getting-started.html#visualize",
+    "href": "getting-started.html#visualize",
+    "title": "Getting Started",
+    "section": "Visualize",
+    "text": "Visualize\n\nfig = Figure()\nax = Axis(fig[1, 1], title=\"t = $(grid.t) min\", aspect=DataAspect(),\n    xlabel=\"x (m)\", ylabel=\"y (m)\")\nfireplot!(ax, grid)\nfig\n\n\n\n\nSee the Level Set page for more plotting options and the Spread Model page for dynamic moisture, custom components, and more.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Getting Started</span>"
+    ]
+  },
+  {
+    "objectID": "rothermel.html",
+    "href": "rothermel.html",
+    "title": "Rothermel",
+    "section": "",
+    "text": "How It Works\nThe Rothermel module implements the Rothermel (1972) surface fire spread model, the foundational model used by most US wildfire behavior systems (BehavePlus, FARSITE, ELMFIRE, etc.).\nThe model computes the rate of spread (m/min) of a surface fire given:\nThe fuel model is a static landscape property while moisture, wind, and slope are dynamic environmental inputs — matching how operational fire behavior systems separate these concerns.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Rothermel</span>"
+    ]
+  },
+  {
+    "objectID": "rothermel.html#how-it-works",
+    "href": "rothermel.html#how-it-works",
+    "title": "Rothermel",
+    "section": "",
+    "text": "Input\nDescription\nSource\n\n\n\n\nFuel model\nStatic fuel bed properties (loading, SAV ratio, heat content, depth, moisture of extinction)\nRothermel struct\n\n\nMoisture\nFuel moisture content per size class\nFuelClasses (keyword arg)\n\n\nWind\nMidflame wind speed\nScalar (km/h)\n\n\nSlope\nTerrain slope as rise/run\nScalar (fraction)",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Rothermel</span>"
+    ]
+  },
+  {
+    "objectID": "rothermel.html#types",
+    "href": "rothermel.html#types",
+    "title": "Rothermel",
+    "section": "Types",
+    "text": "Types\n\nFuelClasses\nA container for values across the five Rothermel fuel size classes.\nprintdoc(FuelClasses)\nFuelClasses{T}(; d1, d10, d100, herb, wood)\nValues for the five Rothermel fuel size classes.\n\nFields\n\nd1::T - 1-hr dead fuel (&lt; 0.25 in diameter)\nd10::T - 10-hr dead fuel (0.25–1.0 in)\nd100::T - 100-hr dead fuel (1.0–3.0 in)\nherb::T - Live herbaceous\nwood::T - Live woody\n\nSupported operations:\n\nfc = FuelClasses(d1=1.0, d10=2.0, d100=3.0, herb=4.0, wood=5.0)\n\nsum(fc)\n\n15.0\n\n\n\nmap(x -&gt; 2x, fc)\n\nFuelClasses{Float64}(d1=2.0, d10=4.0, d100=6.0, herb=8.0, wood=10.0)\n\n\n\n\n\nRothermel\nThe fuel model struct parameterized by the Rothermel (1972) equations.\nprintdoc(typeof(SHORT_GRASS))\nRothermel{T}(; name, w, σ, h, δ, Mx)\nFuel model for the Rothermel (1972) surface fire spread model.\nParameterized by numeric type T (e.g. Float64, Float32, Unitful quantities).\n\nFields (US customary units, matching original publications)\n\nname::String - Description\nw::FuelClasses{T} - Fuel loading [tons/acre]\nσ::FuelClasses{T} - Surface-area-to-volume ratio [1/ft]\nh::FuelClasses{T} - Heat content [BTU/lb]\nδ::T - Fuel bed depth [ft]\nMx::T - Dead fuel moisture of extinction [fraction]\n\nSee NFFL for the 13 standard fuel models from Anderson (1982).",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Rothermel</span>"
+    ]
+  },
+  {
+    "objectID": "rothermel.html#nffl-fuel-models",
+    "href": "rothermel.html#nffl-fuel-models",
+    "title": "Rothermel",
+    "section": "NFFL Fuel Models",
+    "text": "NFFL Fuel Models\nThe 13 standard fuel models from Anderson (1982) are provided as named constants:\n\n\n\nConstant\nNFFL\nDescription\nDepth (ft)\nMx\n\n\n\n\nSHORT_GRASS\n1\nShort grass (1 ft)\n1.0\n0.12\n\n\nTIMBER_GRASS\n2\nTimber grass/understory\n1.0\n0.15\n\n\nTALL_GRASS\n3\nTall grass (2.5 ft)\n2.5\n0.25\n\n\nCHAPARRAL\n4\nChaparral (6 ft)\n6.0\n0.20\n\n\nBRUSH\n5\nBrush (2 ft)\n2.0\n0.20\n\n\nDORMANT_BRUSH\n6\nDormant brush/hardwood slash\n2.5\n0.25\n\n\nSOUTHERN_ROUGH\n7\nSouthern rough\n2.5\n0.40\n\n\nCLOSED_TIMBER_LITTER\n8\nClosed timber litter\n0.2\n0.30\n\n\nHARDWOOD_LITTER\n9\nHardwood litter\n0.2\n0.25\n\n\nTIMBER_UNDERSTORY\n10\nTimber litter/understory\n1.0\n0.25\n\n\nLIGHT_SLASH\n11\nLight logging slash\n1.0\n0.15\n\n\nMEDIUM_SLASH\n12\nMedium logging slash\n2.3\n0.20\n\n\nHEAVY_SLASH\n13\nHeavy logging slash\n3.0\n0.25\n\n\n\n\nSHORT_GRASS\n\nRothermel{Float64}(\"NFFL 1: Short grass (1 ft)\")",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Rothermel</span>"
+    ]
+  },
+  {
+    "objectID": "rothermel.html#rate-of-spread",
+    "href": "rothermel.html#rate-of-spread",
+    "title": "Rothermel",
+    "section": "Rate of Spread",
+    "text": "Rate of Spread\nprintdoc(rate_of_spread)\nrate_of_spread(fuel::Rothermel; moisture, wind, slope)\nCompute the forward rate of fire spread using the Rothermel (1972) model.\n\nArguments\n\nfuel::Rothermel - Fuel model\nmoisture::FuelClasses - Moisture content per fuel class [fraction, 0–1]. Use 0.0 for unused classes.\nwind - Midflame wind speed [km/h]\nslope - Terrain slope as rise/run [fraction]\n\n\n\nReturns\nForward rate of spread at the fire head [m/min].\n\n\nExample\nM = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)\nR = rate_of_spread(SHORT_GRASS, moisture=M, wind=8.0, slope=0.0)\n\n\nExample\n\nM = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)\nrate_of_spread(SHORT_GRASS, moisture=M, wind=8.0, slope=0.0)\n\n31.119112730486354\n\n\n\n\nEffect of Wind Speed\n\nusing CairoMakie\n\nwinds = 0:2:30\nrates = [\n    rate_of_spread(SHORT_GRASS, moisture=M,\n        wind=w, slope=0.0)\n    for w in winds\n]\n\nfig = Figure()\nax = Axis(fig[1,1],\n    xlabel=\"Wind speed (km/h)\",\n    ylabel=\"Rate of spread (m/min)\",\n    title=\"NFFL 1: Short Grass\")\nlines!(ax, collect(winds), rates)\nfig\n\n\n\n\n\n\nComparing All 13 Fuel Models\nRate of spread at a reference condition (wind = 8 km/h, slope = 0, dead fuel moisture 6–8%):\n\nM_ref = FuelClasses(\n    d1=0.06, d10=0.07, d100=0.08,\n    herb=0.0, wood=0.0)\nM_live = FuelClasses(\n    d1=0.06, d10=0.07, d100=0.08,\n    herb=0.60, wood=0.90)\n\nall_fuels = [\n    SHORT_GRASS, TIMBER_GRASS, TALL_GRASS,\n    CHAPARRAL, BRUSH, DORMANT_BRUSH,\n    SOUTHERN_ROUGH, CLOSED_TIMBER_LITTER,\n    HARDWOOD_LITTER, TIMBER_UNDERSTORY,\n    LIGHT_SLASH, MEDIUM_SLASH, HEAVY_SLASH,\n]\nnffl_labels = string.(1:13)\n\ncat_colors = Dict(\n    \"Grass\" =&gt; :forestgreen,\n    \"Shrub\" =&gt; :goldenrod,\n    \"Timber\" =&gt; :sienna,\n    \"Slash\" =&gt; :slategray,\n)\ncategories = [\n    \"Grass\", \"Grass\", \"Grass\",\n    \"Shrub\", \"Shrub\", \"Shrub\", \"Shrub\",\n    \"Timber\", \"Timber\", \"Timber\",\n    \"Slash\", \"Slash\", \"Slash\",\n]\ncolors = [cat_colors[c] for c in categories]\n\nfunction has_live_fuel(f)\n    sum(f.w) &gt; f.w.d1 + f.w.d10 + f.w.d100\nend\n\nros = [\n    rate_of_spread(f,\n        moisture=has_live_fuel(f) ? M_live : M_ref,\n        wind=8.0, slope=0.0)\n    for f in all_fuels\n]\n\nfig = Figure(size=(700, 350))\nax = Axis(fig[1,1],\n    xlabel=\"NFFL Model\",\n    ylabel=\"Rate of spread (m/min)\",\n    title=\"Rate of Spread at 8 km/h Wind\",\n    xticks=(1:13, nffl_labels))\nbarplot!(ax, 1:13, ros, color=colors)\n\ncat_names = [\"Grass\", \"Shrub\", \"Timber\", \"Slash\"]\nelems = [PolyElement(color=cat_colors[c])\n    for c in cat_names]\nLegend(fig[1,2], elems, cat_names,\n    framevisible=false)\n\nfig\n\n\n\n\n\n\nWind Sensitivity by Fuel Category\n\ngroups = [\n    \"Grass\" =&gt; [\n        (\"1: Short\", SHORT_GRASS),\n        (\"2: Timber\", TIMBER_GRASS),\n        (\"3: Tall\", TALL_GRASS),\n    ],\n    \"Shrub\" =&gt; [\n        (\"4: Chaparral\", CHAPARRAL),\n        (\"5: Brush\", BRUSH),\n        (\"6: Dormant\", DORMANT_BRUSH),\n        (\"7: Southern\", SOUTHERN_ROUGH),\n    ],\n    \"Timber\" =&gt; [\n        (\"8: Closed\", CLOSED_TIMBER_LITTER),\n        (\"9: Hardwood\", HARDWOOD_LITTER),\n        (\"10: Understory\", TIMBER_UNDERSTORY),\n    ],\n    \"Slash\" =&gt; [\n        (\"11: Light\", LIGHT_SLASH),\n        (\"12: Medium\", MEDIUM_SLASH),\n        (\"13: Heavy\", HEAVY_SLASH),\n    ],\n]\n\nmph = 0:1:15\nmph_to_kmh = 1.60934\n\nfig = Figure(size=(700, 500))\naxes = []\nfor (col, (title, fuels)) in enumerate(groups)\n    row = col &lt;= 2 ? 1 : 2\n    c   = col &lt;= 2 ? col : col - 2\n    ax = Axis(fig[row, c],\n        xlabel=\"Wind (mph)\",\n        ylabel=\"ROS (m/min)\",\n        title=title)\n    push!(axes, ax)\n    for (label, fuel) in fuels\n        m = has_live_fuel(fuel) ? M_live : M_ref\n        r = [\n            rate_of_spread(fuel,\n                moisture=m,\n                wind=w * mph_to_kmh,\n                slope=0.0)\n            for w in mph\n        ]\n        lines!(ax, collect(mph), r, label=label)\n    end\n    axislegend(ax, position=:lt, labelsize=10)\nend\nlinkyaxes!(axes...)\nfig\n\n\n\n\n\n\nFuel Loading by Size Class\n\nfig = Figure(size=(700, 350))\nax = Axis(fig[1,1],\n    xlabel=\"NFFL Model\",\n    ylabel=\"Fuel loading (tons/acre)\",\n    title=\"Fuel Loading Breakdown\",\n    xticks=(1:13, nffl_labels))\n\nxs = repeat(1:13, 5)\nvals = vcat(\n    [f.w.d1 for f in all_fuels],\n    [f.w.d10 for f in all_fuels],\n    [f.w.d100 for f in all_fuels],\n    [f.w.herb for f in all_fuels],\n    [f.w.wood for f in all_fuels],\n)\ngrp = vcat(\n    fill(1, 13), fill(2, 13), fill(3, 13),\n    fill(4, 13), fill(5, 13),\n)\nbar_colors = [\n    :tomato, :sandybrown, :tan,\n    :limegreen, :forestgreen,\n]\n\nbarplot!(ax, xs, vals,\n    stack=grp,\n    color=[bar_colors[g] for g in grp])\n\nbar_labels = [\n    \"1-hr dead\", \"10-hr dead\", \"100-hr dead\",\n    \"Herb\", \"Wood\",\n]\nelems = [PolyElement(color=c) for c in bar_colors]\nLegend(fig[1,2], elems, bar_labels,\n    framevisible=false)\nfig",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Rothermel</span>"
+    ]
+  },
+  {
+    "objectID": "rothermel.html#references",
+    "href": "rothermel.html#references",
+    "title": "Rothermel",
+    "section": "References",
+    "text": "References\n\nRothermel, R.C. (1972). A Mathematical Model for Predicting Fire Spread in Wildland Fuels. Res. Paper INT-115, USDA Forest Service.\nAnderson, H.E. (1982). Aids to Determining Fuel Models for Estimating Fire Behavior. Gen. Tech. Rep. INT-122, USDA Forest Service.\nAndrews, P.L. (2018). The Rothermel Surface Fire Spread Model and Associated Developments. Gen. Tech. Rep. RMRS-GTR-371, USDA Forest Service.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Rothermel</span>"
+    ]
+  },
+  {
+    "objectID": "levelset.html",
+    "href": "levelset.html",
+    "title": "Level Set",
+    "section": "",
+    "text": "LevelSetGrid\nThe LevelSet module implements a fire spread simulator using the level set method. A signed distance function φ(x, y, t) implicitly tracks the fire front:\nThe front evolves according to the Hamilton-Jacobi equation:\n\\[\\frac{\\partial \\phi}{\\partial t} + F |\\nabla \\phi| = 0\\]\nwhere \\(F(x, y, t) \\geq 0\\) is the local spread rate (e.g. from the Rothermel model).\ngrid = LevelSetGrid(100, 100, dx=30.0)\n\nLevelSetGrid{Float64} 100×100 (t=0.0, burned=0/10000)",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Level Set</span>"
+    ]
+  },
+  {
+    "objectID": "levelset.html#levelsetgrid",
+    "href": "levelset.html#levelsetgrid",
+    "title": "Level Set",
+    "section": "",
+    "text": "Coordinates\n\nxs = xcoords(grid)\nprintln(\"x: $(first(xs)) to $(last(xs)) m  ($(length(xs)) cells)\")\n\nys = ycoords(grid)\nprintln(\"y: $(first(ys)) to $(last(ys)) m  ($(length(ys)) cells)\")\n\nx: 15.0 to 2985.0 m  (100 cells)\ny: 15.0 to 2985.0 m  (100 cells)",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Level Set</span>"
+    ]
+  },
+  {
+    "objectID": "levelset.html#ignition",
+    "href": "levelset.html#ignition",
+    "title": "Level Set",
+    "section": "Ignition",
+    "text": "Ignition\n\nignite!(grid, 1500.0, 1500.0, 100.0)\ngrid\n\nLevelSetGrid{Float64} 100×100 (t=0.0, burned=32/10000)",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Level Set</span>"
+    ]
+  },
+  {
+    "objectID": "levelset.html#queries",
+    "href": "levelset.html#queries",
+    "title": "Level Set",
+    "section": "Queries",
+    "text": "Queries\n\nburn_area(grid)  # m²\n\n28800.0\n\n\n\nsum(burned(grid))  # number of burned cells\n\n32",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Level Set</span>"
+    ]
+  },
+  {
+    "objectID": "levelset.html#advancing-the-front",
+    "href": "levelset.html#advancing-the-front",
+    "title": "Level Set",
+    "section": "Advancing the Front",
+    "text": "Advancing the Front\nThe spread rate field F has the same dimensions as the grid. Each cell specifies the local spread rate in m/min.\n\nF = fill(10.0, size(grid))  # uniform 10 m/min everywhere\n\nfor _ in 1:20\n    advance!(grid, F, 0.5)\nend\n\ngrid\n\nLevelSetGrid{Float64} 100×100 (t=10.0, burned=264/10000)\n\n\n\nCFL Condition\nThe time step dt must satisfy the Courant–Friedrichs–Lewy (CFL) condition for numerical stability:\n\\[\\text{dt} &lt; \\frac{\\text{dx}}{\\max(F)}\\]\nIf dt is too large relative to dx and the maximum spread rate, the upwind scheme becomes unstable and φ values will diverge. For example, with dx = 30 m and max(F) = 31 m/min, you need dt &lt; 0.97 min.\nThe simulate! function in the SpreadModel module does not automatically enforce the CFL condition — you are responsible for choosing a safe dt.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Level Set</span>"
+    ]
+  },
+  {
+    "objectID": "levelset.html#reinitialization",
+    "href": "levelset.html#reinitialization",
+    "title": "Level Set",
+    "section": "Reinitialization",
+    "text": "Reinitialization\nOver many time steps, φ can drift away from a true signed distance function (gradients become too flat or too steep). Periodic reinitialization restores |∇φ| ≈ 1, which keeps the upwind scheme accurate.\n\nreinitialize!(grid)\ngrid\n\nLevelSetGrid{Float64} 100×100 (t=10.0, burned=264/10000)",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Level Set</span>"
+    ]
+  },
+  {
+    "objectID": "levelset.html#plotting",
+    "href": "levelset.html#plotting",
+    "title": "Level Set",
+    "section": "Plotting",
+    "text": "Plotting\n\nStandard Makie Plots\nThe LevelSetGrid integrates with Makie’s heatmap, contour, contourf, and surface via convert_arguments:\n\nfig = Figure(size=(700, 300))\nax1 = Axis(fig[1, 1], title=\"heatmap\", aspect=DataAspect())\nheatmap!(ax1, grid, colormap=:RdYlGn)\n\nax2 = Axis(fig[1, 2], title=\"contourf\", aspect=DataAspect())\ncontourf!(ax2, grid, colormap=:RdYlGn)\nfig\n\n\n\n\n\n\nfireplot\nThe fireplot recipe combines a heatmap of φ with a contour line at the fire front:\n\nfig = Figure()\nax = Axis(fig[1, 1], title=\"t = $(grid.t) min\", aspect=DataAspect(),\n    xlabel=\"x (m)\", ylabel=\"y (m)\")\nfireplot!(ax, grid)\nfig",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Level Set</span>"
+    ]
+  },
+  {
+    "objectID": "levelset.html#full-example",
+    "href": "levelset.html#full-example",
+    "title": "Level Set",
+    "section": "Full Example",
+    "text": "Full Example\nSimulate fire spread with a spatially varying spread rate and visualize snapshots:\n\n# Fresh grid with ignition\ng = LevelSetGrid(200, 200, dx=15.0)\nignite!(g, 1500.0, 1500.0, 50.0)\n\n# Spread rate: faster on the right side\nF = [5.0 + 10.0 * (j / 200)\n    for i in 1:200, j in 1:200]\n\nfig = Figure(size=(700, 250))\ntimes = [0, 50, 100]\nfor (col, target_t) in enumerate(times)\n    while g.t &lt; target_t\n        advance!(g, F, 0.25)\n    end\n    col &gt; 1 && reinitialize!(g)\n    t = round(g.t, digits=1)\n    ax = Axis(fig[1, col],\n        title=\"t = $t min\",\n        aspect=DataAspect())\n    fireplot!(ax, g)\n    hidedecorations!(ax)\nend\nfig",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Level Set</span>"
+    ]
+  },
+  {
+    "objectID": "levelset.html#references",
+    "href": "levelset.html#references",
+    "title": "Level Set",
+    "section": "References",
+    "text": "References\n\nOsher, S. & Sethian, J.A. (1988). Fronts propagating with curvature-dependent speed. J. Computational Physics, 79(1), 12–49.\nMallet, V., Keyes, D.E., & Fendell, F.E. (2009). Modeling wildland fire propagation with level set methods. Computers & Mathematics with Applications.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Level Set</span>"
+    ]
+  },
+  {
+    "objectID": "spreadmodel.html",
+    "href": "spreadmodel.html",
+    "title": "Spread Model",
+    "section": "",
+    "text": "Architecture\nThe SpreadModel module provides composable, differentiable components for driving level set fire simulations. Instead of manually constructing a spread rate matrix F, you build a FireSpreadModel from pluggable wind, moisture, and terrain components — each a callable (t, x, y) struct.\nEach component is a callable struct with signature (t, x, y):",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Spread Model</span>"
+    ]
+  },
+  {
+    "objectID": "spreadmodel.html#architecture",
+    "href": "spreadmodel.html#architecture",
+    "title": "Spread Model",
+    "section": "",
+    "text": "FireSpreadModel(fuel, wind, moisture, terrain)\n       │\n       ▼\nmodel(t, x, y) → rate_of_spread(fuel; moisture, wind, slope)\n       │\n       ▼\nsimulate!(grid, model) → level set evolution\n\n\n\n\n\n\n\n\n\nComponent\nReturns\nExample\n\n\n\n\nwind::AbstractWind\n(speed, direction) — speed [km/h], direction [radians]\nUniformWind(speed=8.0)\n\n\nmoisture::AbstractMoisture\nFuelClasses — moisture fractions\nUniformMoisture(...)\n\n\nterrain::AbstractTerrain\n(slope, aspect) — slope [fraction], aspect [radians]\nFlatTerrain()",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Spread Model</span>"
+    ]
+  },
+  {
+    "objectID": "spreadmodel.html#quick-example",
+    "href": "spreadmodel.html#quick-example",
+    "title": "Spread Model",
+    "section": "Quick Example",
+    "text": "Quick Example\n\nM = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)\n\nmodel = FireSpreadModel(\n    SHORT_GRASS,\n    UniformWind(speed=8.0),\n    UniformMoisture(M),\n    FlatTerrain()\n)\n\n# Evaluate spread rate at a single point\nmodel(0.0, 100.0, 100.0)\n\n31.119112730486354\n\n\n\n# Full simulation\ngrid = LevelSetGrid(200, 200, dx=30.0)\nignite!(grid, 3000.0, 3000.0, 50.0)\nsimulate!(grid, model, steps=100, dt=0.5)\n\nfig = Figure()\nax = Axis(fig[1, 1], title=\"t = $(grid.t) min\", aspect=DataAspect(),\n    xlabel=\"x (m)\", ylabel=\"y (m)\")\nfireplot!(ax, grid)\nfig",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Spread Model</span>"
+    ]
+  },
+  {
+    "objectID": "spreadmodel.html#wind",
+    "href": "spreadmodel.html#wind",
+    "title": "Spread Model",
+    "section": "Wind",
+    "text": "Wind\n\nUniformWind\nSpatially and temporally constant wind field.\n\nwind = UniformWind(speed=10.0, direction=π/4)\nwind(0.0, 0.0, 0.0)  # (speed, direction)\n\n(10.0, 0.7853981633974483)",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Spread Model</span>"
+    ]
+  },
+  {
+    "objectID": "spreadmodel.html#moisture",
+    "href": "spreadmodel.html#moisture",
+    "title": "Spread Model",
+    "section": "Moisture",
+    "text": "Moisture\n\nUniformMoisture\nSpatially and temporally constant fuel moisture.\n\nmoist = UniformMoisture(FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0))\nmoist(0.0, 0.0, 0.0)\n\nFuelClasses{Float64}(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)\n\n\n\n\nDynamicMoisture\nSpatially varying fuel moisture that responds to fire-induced drying. As the fire front approaches, radiative heat dries unburned fuel ahead of the front. The 1-hr dead fuel moisture (d1) varies spatially while other size classes remain constant.\nThe drying model at each unburned cell:\n\\[\\frac{dM}{dt} = -\\frac{\\text{dry\\_rate}}{\\phi^2 + 1} + \\text{recovery\\_rate} \\cdot (M_{\\text{ambient}} - M)\\]\nwhere \\(\\phi\\) is the level set value (approximate distance to the fire front in meters).\n\ngrid_d = LevelSetGrid(100, 100, dx=30.0)\nignite!(grid_d, 1500.0, 1500.0, 100.0)\n\nM = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)\ndm = DynamicMoisture(grid_d, M, dry_rate=0.1, recovery_rate=0.001)\n\nDynamicMoisture{Float64, Matrix{Float64}}([0.06 0.06 … 0.06 0.06; 0.06 0.06 … 0.06 0.06; … ; 0.06 0.06 … 0.06 0.06; 0.06 0.06 … 0.06 0.06], FuelClasses{Float64}(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0), 0.06, 0.1, 0.001, 0.03, 30.0, 30.0, 0.0, 0.0)\n\n\nComparing static vs. dynamic moisture:\n\nM = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)\n\n# Static\ngrid_s = LevelSetGrid(150, 150, dx=20.0)\nignite!(grid_s, 1500.0, 1500.0, 50.0)\nmodel_s = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())\nsimulate!(grid_s, model_s, steps=150, dt=0.5)\n\n# Dynamic\ngrid_d = LevelSetGrid(150, 150, dx=20.0)\nignite!(grid_d, 1500.0, 1500.0, 50.0)\nmodel_d = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), DynamicMoisture(grid_d, M), FlatTerrain())\nsimulate!(grid_d, model_d, steps=150, dt=0.5)\n\nfig = Figure(size=(700, 300))\nax1 = Axis(fig[1, 1], title=\"Static Moisture\\n$(count(&lt;(0), grid_s.φ)) cells burned\",\n    aspect=DataAspect())\nfireplot!(ax1, grid_s)\nhidedecorations!(ax1)\n\nax2 = Axis(fig[1, 2], title=\"Dynamic Moisture\\n$(count(&lt;(0), grid_d.φ)) cells burned\",\n    aspect=DataAspect())\nfireplot!(ax2, grid_d)\nhidedecorations!(ax2)\nfig",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Spread Model</span>"
+    ]
+  },
+  {
+    "objectID": "spreadmodel.html#terrain",
+    "href": "spreadmodel.html#terrain",
+    "title": "Spread Model",
+    "section": "Terrain",
+    "text": "Terrain\n\nFlatTerrain\nZero slope everywhere.\n\nFlatTerrain()(0.0, 0.0, 0.0)  # (slope, aspect)\n\n(0.0, 0.0)\n\n\n\n\nUniformSlope\nSpatially constant terrain slope.\n\nslope = UniformSlope(slope=0.3, aspect=0.0)\nslope(0.0, 0.0, 0.0)\n\n(0.3, 0.0)\n\n\nEffect of slope on fire spread:\n\nM = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)\n\nfig = Figure(size=(800, 250))\nfor (col, s) in enumerate([0.0, 0.3, 0.6])\n    g = LevelSetGrid(150, 150, dx=20.0)\n    ignite!(g, 1500.0, 1500.0, 50.0)\n    m = FireSpreadModel(SHORT_GRASS, UniformWind(speed=5.0), UniformMoisture(M), UniformSlope(slope=s))\n    simulate!(g, m, steps=150, dt=0.5)\n    ax = Axis(fig[1, col], title=\"slope = $s\", aspect=DataAspect())\n    fireplot!(ax, g)\n    hidedecorations!(ax)\nend\nfig",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Spread Model</span>"
+    ]
+  },
+  {
+    "objectID": "spreadmodel.html#custom-components",
+    "href": "spreadmodel.html#custom-components",
+    "title": "Spread Model",
+    "section": "Custom Components",
+    "text": "Custom Components\nTo create a custom component, define a callable struct that subtypes AbstractWind, AbstractMoisture, or AbstractTerrain.\nFor example, a wind field that varies in space:\n\nstruct GradientWind &lt;: AbstractWind\n    base_speed::Float64\n    gradient::Float64   # speed increase per meter in x\nend\n\nfunction (w::GradientWind)(t, x, y)\n    speed = w.base_speed + w.gradient * x\n    direction = 0.0  # wind from the west\n    (speed, direction)\nend\n\nM = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)\ng = LevelSetGrid(150, 150, dx=20.0)\nignite!(g, 1500.0, 1500.0, 50.0)\nm = FireSpreadModel(SHORT_GRASS, GradientWind(5.0, 0.003), UniformMoisture(M), FlatTerrain())\nsimulate!(g, m, steps=150, dt=0.5)\n\nfig = Figure()\nax = Axis(fig[1, 1], title=\"Gradient Wind\", aspect=DataAspect(), xlabel=\"x (m)\", ylabel=\"y (m)\")\nfireplot!(ax, g)\nfig\n\n\n\n\nFor dynamic components that respond to fire state, also implement update!:\nSpreadModel.update!(w::MyDynamicWind, grid::LevelSetGrid, dt) = ...",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Spread Model</span>"
+    ]
+  },
+  {
+    "objectID": "spreadmodel.html#performance-float64-vs-float32",
+    "href": "spreadmodel.html#performance-float64-vs-float32",
+    "title": "Spread Model",
+    "section": "Performance: Float64 vs Float32",
+    "text": "Performance: Float64 vs Float32\nThe level set grid and all simulation operations support Float32 for reduced memory and potentially faster computation. To create a Float32 simulation, pass Float32 values to all constructors:\n\n\n\n\n\n\nNote\n\n\n\nThe LevelSetGrid constructor determines its element type via promote_type on all keyword arguments (dx, dy, x0, y0). The defaults are Float64, so you must pass Float32 values for all of them — e.g. LevelSetGrid(200, 200, dx=30f0, x0=0f0, y0=0f0).\n\n\n\nusing BenchmarkTools\n\nfunction run_simulation(::Type{T}, n=200) where T\n    grid = LevelSetGrid(n, n,\n        dx=T(30), x0=zero(T), y0=zero(T))\n    ignite!(grid, T(3000), T(3000), T(50))\n    F = fill(T(10), size(grid))\n    for _ in 1:100\n        advance!(grid, F, T(0.5))\n    end\n    reinitialize!(grid)\n    grid\nend\n\nb64 = @benchmark run_simulation(Float64)\nb32 = @benchmark run_simulation(Float32)\nnothing\n\n\n\n| Metric | Float64 | Float32 | Ratio |\n|--------|---------|---------|-------|\n| Median time | 32.58 ms | 23.39 ms | 1.39x |\n| Memory | 32.7 MiB | 16.3 MiB | 2.00x |",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Spread Model</span>"
+    ]
+  },
+  {
+    "objectID": "spreadmodel.html#references",
+    "href": "spreadmodel.html#references",
+    "title": "Spread Model",
+    "section": "References",
+    "text": "References\n\nRothermel, R.C. (1972). A Mathematical Model for Predicting Fire Spread in Wildland Fuels. Res. Paper INT-115, USDA Forest Service.\nOsher, S. & Sethian, J.A. (1988). Fronts propagating with curvature-dependent speed. J. Computational Physics, 79(1), 12-49.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Spread Model</span>"
+    ]
+  },
+  {
+    "objectID": "gpu.html",
+    "href": "gpu.html",
+    "title": "GPU Acceleration",
+    "section": "",
+    "text": "Setup\nWildfires.jl supports GPU acceleration via a package extension backed by KernelAbstractions.jl. This enables backend-agnostic GPU execution on CUDA (NVIDIA), ROCm (AMD), Metal (Apple), and oneAPI (Intel) devices.\nThe GPU extension accelerates the compute-heavy stencil operations (advance!, reinitialize!) while spread rate computation stays on the CPU.\nLoad a GPU backend alongside KernelAbstractions and GPUArraysCore to activate the extension:\nThen load Wildfires as usual:",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>GPU Acceleration</span>"
+    ]
+  },
+  {
+    "objectID": "gpu.html#setup",
+    "href": "gpu.html#setup",
+    "title": "GPU Acceleration",
+    "section": "",
+    "text": "# NVIDIA\nusing CUDA, KernelAbstractions, GPUArraysCore\n\n# Apple Silicon\nusing Metal, KernelAbstractions, GPUArraysCore\n\n# AMD\nusing AMDGPU, KernelAbstractions, GPUArraysCore\n\nusing Wildfires\nusing Wildfires.LevelSet\nusing Wildfires.SpreadModel\nusing Wildfires.Rothermel",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>GPU Acceleration</span>"
+    ]
+  },
+  {
+    "objectID": "gpu.html#usage",
+    "href": "gpu.html#usage",
+    "title": "GPU Acceleration",
+    "section": "Usage",
+    "text": "Usage\nThe workflow is: build your grid and model on the CPU, move to GPU with Adapt.adapt, simulate, then move back to CPU for plotting.\nusing Adapt\n\n# 1. Build on CPU\ngrid = LevelSetGrid(500, 500, dx=30.0)\nignite!(grid, 7500.0, 7500.0, 200.0)\n\nM = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)\nmodel = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())\n\n# 2. Move grid to GPU\ngpu_grid = Adapt.adapt(CuArray, grid)   # CuArray for CUDA, MtlArray for Metal, etc.\n\n# 3. Simulate (uses GPU kernels automatically)\nsimulate!(gpu_grid, model, steps=1000, dt=0.5)\n\n# 4. Move back to CPU for plotting\ncpu_grid = Adapt.adapt(Array, gpu_grid)\nfireplot(cpu_grid)\nThe Adapt.adapt call converts the φ array inside LevelSetGrid to the target array type. All other fields (scalars like dx, dy, t) remain on the CPU.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>GPU Acceleration</span>"
+    ]
+  },
+  {
+    "objectID": "gpu.html#what-runs-on-the-gpu",
+    "href": "gpu.html#what-runs-on-the-gpu",
+    "title": "GPU Acceleration",
+    "section": "What Runs on the GPU",
+    "text": "What Runs on the GPU\n\n\n\n\n\n\n\n\nOperation\nGPU?\nNotes\n\n\n\n\nadvance!\nYes\nGodunov upwind stencil — one thread per cell\n\n\nreinitialize!\nYes\nReinitialization stencil — 5 iterations, parallel within each\n\n\nDynamicMoisture update!\nYes\nElement-wise moisture update kernel\n\n\nspread_rate_field!\nNo\nComputed on CPU, uploaded to GPU (calls Rothermel model)\n\n\nignite!\nYes\nUses broadcasting — works on any array type\n\n\n\nThe spread_rate_field! function evaluates the FireSpreadModel at each cell, which involves branching logic in the Rothermel model that isn’t GPU-friendly. The extension handles this transparently: it copies φ to the CPU, computes F, and uploads the result back to the GPU.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>GPU Acceleration</span>"
+    ]
+  },
+  {
+    "objectID": "gpu.html#type-parameterization",
+    "href": "gpu.html#type-parameterization",
+    "title": "GPU Acceleration",
+    "section": "Type Parameterization",
+    "text": "Type Parameterization\nLevelSetGrid and DynamicMoisture are parameterized on their array type:\n\ngrid = LevelSetGrid(20, 20, dx=30.0)\ntypeof(grid)\n\nLevelSetGrid{Float64, Matrix{Float64}}\n\n\nOn the GPU this becomes LevelSetGrid{Float64, CuMatrix{Float64}} (or MtlMatrix, etc.). The GPU extension methods dispatch on LevelSetGrid{T, &lt;:AbstractGPUArray}, so CPU code paths are completely unaffected.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>GPU Acceleration</span>"
+    ]
+  },
+  {
+    "objectID": "gpu.html#dynamicmoisture-on-gpu",
+    "href": "gpu.html#dynamicmoisture-on-gpu",
+    "title": "GPU Acceleration",
+    "section": "DynamicMoisture on GPU",
+    "text": "DynamicMoisture on GPU\nIf your model uses DynamicMoisture, the d1 moisture array also lives on the GPU. The extension provides a GPU kernel for update! that runs the drying/recovery computation in parallel.\nFor spread rate computation, the extension temporarily copies d1 back to the CPU (since the Rothermel model requires scalar indexing).\ndm = DynamicMoisture(grid, M)\ngpu_dm = Adapt.adapt(CuArray, dm)  # d1 array moves to GPU",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>GPU Acceleration</span>"
+    ]
+  },
+  {
+    "objectID": "gpu.html#tips",
+    "href": "gpu.html#tips",
+    "title": "GPU Acceleration",
+    "section": "Tips",
+    "text": "Tips\n\nFloat32 for extra speed: GPU hardware is typically much faster with Float32. Create a Float32 grid with LevelSetGrid(n, n, dx=30f0, x0=0f0, y0=0f0) and ensure your FuelClasses and model parameters match.\nCFL condition: The same CFL stability requirement applies on GPU — dt &lt; dx / max(F).\nPlotting: Makie requires CPU arrays. The fireplot and convert_arguments recipes automatically call collect() on φ, but it’s more efficient to Adapt.adapt(Array, gpu_grid) once rather than repeatedly plotting a GPU grid.\nMemory: Each advance! call allocates a copy of φ for the stencil read buffer. For very large grids, monitor GPU memory usage.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>GPU Acceleration</span>"
+    ]
+  },
+  {
+    "objectID": "gpu.html#dependencies",
+    "href": "gpu.html#dependencies",
+    "title": "GPU Acceleration",
+    "section": "Dependencies",
+    "text": "Dependencies\nThe GPU extension is triggered by two weak dependencies:\n\n\n\n\n\n\n\nPackage\nPurpose\n\n\n\n\nKernelAbstractions\nBackend-agnostic @kernel macro for GPU compute\n\n\nGPUArraysCore\nProvides AbstractGPUArray for dispatch\n\n\n\nThese are not installed by default. Install your GPU backend package (e.g. CUDA.jl) which brings in both as transitive dependencies.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>GPU Acceleration</span>"
+    ]
+  },
+  {
+    "objectID": "pinn.html",
+    "href": "pinn.html",
+    "title": "PINN Solver",
+    "section": "",
+    "text": "Overview\nThe PINN (Physics-Informed Neural Network) solver provides an alternative to the finite-difference level set method. Instead of discretizing the PDE on a grid, a neural network \\(\\varphi_\\theta(x, y, t)\\) is trained to satisfy the Hamilton-Jacobi fire spread equation:\n\\[\n\\frac{\\partial \\varphi}{\\partial t} + F(x,y,t)\\lvert\\nabla \\varphi\\rvert = 0\n\\]\nwhere \\(F\\) is the spread rate from a FireSpreadModel or any callable \\((t, x, y) \\to R\\).",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>PINN Solver</span>"
+    ]
+  },
+  {
+    "objectID": "pinn.html#overview",
+    "href": "pinn.html#overview",
+    "title": "PINN Solver",
+    "section": "",
+    "text": "Hard Initial Condition Constraint\nThe PINN uses a solution decomposition that exactly satisfies the initial condition:\n\\[\n\\tilde\\varphi(x,y,t) = \\frac{\\text{IC}(x,y)}{L} + \\tau(t) \\cdot \\text{NN}_\\theta(x_n, y_n, t_n)\n\\]\nwhere \\(\\tau(t) = (t - t_{\\min}) / (t_{\\max} - t_{\\min})\\) is zero at \\(t = t_{\\min}\\), ensuring \\(\\tilde\\varphi(x,y,t_{\\min}) = \\text{IC}(x,y)/L\\) exactly. This eliminates the need for an IC loss term and lets all training focus on learning the PDE dynamics.\n\n\nAdvantages\n\nMesh-free: Evaluate \\(\\varphi\\) at any continuous \\((x, y, t)\\) – no grid interpolation needed\nContinuous in time: Query the fire state at any \\(t\\) without stepping through intermediate time steps\nExact initial condition: Hard constraint guarantees perfect IC fit\nData assimilation ready: Optional observation loss term for incorporating satellite/sensor data\n\n\n\nRequirements\nThe PINN solver is a package extension – it only loads when the ML dependencies are available:\nusing Wildfires\nusing Lux, ComponentArrays, ForwardDiff, Zygote, Optimization, OptimizationOptimisers",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>PINN Solver</span>"
+    ]
+  },
+  {
+    "objectID": "pinn.html#quick-start",
+    "href": "pinn.html#quick-start",
+    "title": "PINN Solver",
+    "section": "Quick Start",
+    "text": "Quick Start\n\n# Set up a fire scenario\ngrid = LevelSetGrid(20, 20, dx=50.0)\nignite!(grid, 500.0, 500.0, 80.0)\n\n# Simple constant spread model for fast training\nconst_spread = (t, x, y) -&gt; 5.0\n\n# Configure PINN\nconfig = PINNConfig(\n    hidden_dims = [32, 32],\n    n_interior = 500,\n    n_boundary = 100,\n    max_epochs = 3000,\n    learning_rate = 1e-3,\n    resample_every = 500,\n)\n\n# Train\nsol = train_pinn(grid, const_spread, (0.0, 10.0);\n                 config=config, rng=MersenneTwister(123), verbose=false)\n\nsol\n\nPINNSolution(epochs=3001, final_loss=0.0001157)\n\n\n\nTraining Loss\n\nfig = Figure(size=(600, 300))\nax = Axis(fig[1, 1], xlabel=\"Epoch\", ylabel=\"Loss\", yscale=log10,\n    title=\"PINN Training Loss\")\nlines!(ax, sol.loss_history, color=:steelblue)\nfig",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>PINN Solver</span>"
+    ]
+  },
+  {
+    "objectID": "pinn.html#pinn-predictions",
+    "href": "pinn.html#pinn-predictions",
+    "title": "PINN Solver",
+    "section": "PINN Predictions",
+    "text": "PINN Predictions\nThe PINNSolution is callable – query \\(\\varphi\\) at any point:\n\n# Single point evaluation\nsol(5.0, 500.0, 500.0)\n\n-48.06566849824874\n\n\nEvaluate on the full grid at a specific time with predict_on_grid:\n\nfig = Figure(size=(800, 300))\nfor (col, t) in enumerate([0.0, 5.0, 10.0])\n    φ = predict_on_grid(sol, grid, t)\n    ax = Axis(fig[1, col], title=\"PINN t = $t min\", aspect=DataAspect())\n    heatmap!(ax, collect(xcoords(grid)), collect(ycoords(grid)), φ, colormap=:RdYlGn)\n    contour!(ax, collect(xcoords(grid)), collect(ycoords(grid)), φ, levels=[0.0],\n        color=:black, linewidth=2)\n    hidedecorations!(ax)\nend\nfig\n\n\n\n\nOr update a LevelSetGrid in place with predict_on_grid!:\n\ngrid_pinn = LevelSetGrid(20, 20, dx=50.0)\npredict_on_grid!(grid_pinn, sol, 5.0)\ngrid_pinn\n\nLevelSetGrid{Float64} 20×20 (t=5.0, burned=68/400)",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>PINN Solver</span>"
+    ]
+  },
+  {
+    "objectID": "pinn.html#comparison-with-finite-differences",
+    "href": "pinn.html#comparison-with-finite-differences",
+    "title": "PINN Solver",
+    "section": "Comparison with Finite Differences",
+    "text": "Comparison with Finite Differences\nThe PINN solution can be compared against the standard finite-difference solver. Note that PINNs are an approximate method – accuracy improves with larger networks, more collocation points, and longer training:\n\n# Finite-difference reference with constant F = 5.0 m/min\ngrid_fd = LevelSetGrid(20, 20, dx=50.0)\nignite!(grid_fd, 500.0, 500.0, 80.0)\nF = fill(5.0, size(grid_fd))\nfor _ in 1:20\n    advance!(grid_fd, F, 0.5)\nend\n\n# PINN prediction at the same time\ngrid_pinn = LevelSetGrid(20, 20, dx=50.0)\npredict_on_grid!(grid_pinn, sol, 10.0)\n\nfig = Figure(size=(700, 300))\n\nax1 = Axis(fig[1, 1], title=\"Finite Differences (t=10)\", aspect=DataAspect())\nfireplot!(ax1, grid_fd)\nhidedecorations!(ax1)\n\nax2 = Axis(fig[1, 2], title=\"PINN (t=10)\", aspect=DataAspect())\nfireplot!(ax2, grid_pinn)\nhidedecorations!(ax2)\n\nfig",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>PINN Solver</span>"
+    ]
+  },
+  {
+    "objectID": "pinn.html#configuration",
+    "href": "pinn.html#configuration",
+    "title": "PINN Solver",
+    "section": "Configuration",
+    "text": "Configuration\nPINNConfig controls all training hyperparameters:\n\n\n\n\n\n\n\n\nParameter\nDefault\nDescription\n\n\n\n\nhidden_dims\n[64, 64, 64]\nHidden layer sizes\n\n\nactivation\n:tanh\nActivation function\n\n\nn_interior\n5000\nPDE collocation points\n\n\nn_boundary\n500\nBoundary condition points\n\n\nlambda_pde\n1.0\nPDE loss weight\n\n\nlambda_bc\n1.0\nBC loss weight\n\n\nlambda_data\n1.0\nData loss weight\n\n\nlearning_rate\n1e-3\nAdam learning rate\n\n\nmax_epochs\n10000\nMaximum training epochs\n\n\nresample_every\n500\nResample collocation points every N epochs",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>PINN Solver</span>"
+    ]
+  },
+  {
+    "objectID": "pinn.html#loss-function",
+    "href": "pinn.html#loss-function",
+    "title": "PINN Solver",
+    "section": "Loss Function",
+    "text": "Loss Function\nThe total loss is a weighted sum of three terms:\n\\[\n\\mathcal{L} = \\lambda_{\\text{pde}} \\mathcal{L}_{\\text{pde}} + \\lambda_{\\text{bc}} \\mathcal{L}_{\\text{bc}} + \\lambda_{\\text{data}} \\mathcal{L}_{\\text{data}}\n\\]\n\nPDE residual (\\(\\mathcal{L}_{\\text{pde}}\\)): Enforces the Hamilton-Jacobi equation at random interior points\nBoundary condition (\\(\\mathcal{L}_{\\text{bc}}\\)): Penalizes burned regions (\\(\\varphi &lt; 0\\)) at the domain boundary\nData loss (\\(\\mathcal{L}_{\\text{data}}\\)): Optional – fits to observed fire perimeter data\n\nThe initial condition is enforced exactly through the hard constraint decomposition (no IC loss term needed).",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>PINN Solver</span>"
+    ]
+  },
+  {
+    "objectID": "pinn.html#data-assimilation",
+    "href": "pinn.html#data-assimilation",
+    "title": "PINN Solver",
+    "section": "Data Assimilation",
+    "text": "Data Assimilation\nPass observations as a tuple of vectors (t, x, y, phi) to incorporate fire perimeter data:\n# Example: observations at t=10 along a known fire boundary\nobs_t = fill(10.0, 50)\nobs_x = rand(400.0:800.0, 50)\nobs_y = rand(400.0:800.0, 50)\nobs_phi = zeros(50)  # on the fire front (phi = 0)\n\nsol = train_pinn(grid, model, (0.0, 20.0);\n                 observations=(obs_t, obs_x, obs_y, obs_phi))",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>PINN Solver</span>"
+    ]
+  },
+  {
+    "objectID": "pinn.html#references",
+    "href": "pinn.html#references",
+    "title": "PINN Solver",
+    "section": "References",
+    "text": "References\n\nRaissi, M., Perdikaris, P., & Karniadakis, G. E. (2019). Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations. Journal of Computational Physics, 378, 686-707.\nOsher, S. & Sethian, J.A. (1988). Fronts propagating with curvature-dependent speed. J. Computational Physics, 79(1), 12-49.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>PINN Solver</span>"
+    ]
+  },
+  {
+    "objectID": "api.html",
+    "href": "api.html",
+    "title": "API",
+    "section": "",
+    "text": "Expand All\n\n\n\nPINNConfig (type)\nPINNSolution (type)\npredict_on_grid (function)\npredict_on_grid! (function)\ntrain_pinn (function)\n\n\n\n\n\n\n\nNotePINNConfig (type)\n\n\n\n\n\nPINNConfig(; kwargs...)\nTraining hyperparameters for the Physics-Informed Neural Network solver.\nThe initial condition is enforced exactly via a hard constraint decomposition (no IC loss term or IC collocation points needed).\n\nKeyword Arguments\n\nhidden_dims::Vector{Int} - Hidden layer sizes (default [64, 64, 64])\nactivation::Symbol - Activation function (default :tanh)\nn_interior::Int - PDE collocation points (default 5000)\nn_boundary::Int - Boundary condition points (default 500)\nlambda_pde::Float64 - PDE loss weight (default 1.0)\nlambda_bc::Float64 - BC loss weight (default 1.0)\nlambda_data::Float64 - Data loss weight (default 1.0)\nlearning_rate::Float64 - Adam learning rate (default 1e-3)\nmax_epochs::Int - Maximum training epochs (default 10000)\nresample_every::Int - Resample collocation points every N epochs (default 500)\n\n\nExamples\nconfig = PINNConfig(hidden_dims=[128, 128], max_epochs=10000)\n\n\n\n\n\n\n\n\n\n\n\nNotePINNSolution (type)\n\n\n\n\n\nPINNSolution\nTrained PINN model. Callable as sol(t, x, y) to evaluate the level set function.\n\nFields\n\nmodel - Lux neural network chain\nparameters - Trained parameters (ComponentArray)\nstate - Lux model state\nconfig::PINNConfig - Training configuration\nloss_history::Vector{Float64} - Loss at each epoch\ndomain::NamedTuple - (tspan, xspan, yspan, phi_scale) for input normalization\ngrid_ic - Initial condition grid (for hard IC constraint decomposition)\n\n\nExamples\nphi = sol(10.0, 500.0, 500.0)  # evaluate at t=10, x=500, y=500\n\n\n\n\n\n\n\n\n\n\n\nNotepredict_on_grid (function)\n\n\n\n\n\npredict_on_grid(sol::PINNSolution, grid::LevelSet.LevelSetGrid, t)\nEvaluate the trained PINN on every cell center of grid at time t. Returns a matrix of phi values with the same dimensions as grid.\nRequires Lux to be loaded (triggers package extension).\n\n\n\n\n\n\n\n\n\nNotepredict_on_grid! (function) {#predict_on_grid!}\n\n\n\n\n\npredict_on_grid!(grid::LevelSet.LevelSetGrid, sol::PINNSolution, t)\nIn-place version of predict_on_grid: updates grid.phi and grid.t.\nRequires Lux to be loaded (triggers package extension).\n\n\n\n\n\n\n\n\n\nNotetrain_pinn (function)\n\n\n\n\n\ntrain_pinn(grid::LevelSet.LevelSetGrid, model, tspan; config=PINNConfig(), observations=nothing)\nTrain a Physics-Informed Neural Network to solve the fire spread level set PDE.\nThe PINN learns a function phi_theta(x, y, t) satisfying:\ndphi/dt + F(x,y,t)|nabla phi| = 0\nwhere F is the spread rate from the FireSpreadModel.\nRequires Lux to be loaded (triggers package extension).\n\nArguments\n\ngrid - LevelSetGrid providing domain geometry and initial condition\nmodel - Callable model(t, x, y) -&gt; spread_rate (e.g. FireSpreadModel)\ntspan - Time interval (t_start, t_end)\nconfig - PINNConfig with training hyperparameters\nobservations - Optional (t, x, y, phi) tuple of observation data\n\n\n\nReturns\nA PINNSolution callable as sol(t, x, y).\n\nExamples\nsol = train_pinn(grid, model, (0.0, 50.0))\nsol(25.0, 500.0, 500.0)  # evaluate at any point",
+    "crumbs": [
+      "Reference",
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>API</span>"
+    ]
+  },
+  {
+    "objectID": "changelog.html",
+    "href": "changelog.html",
+    "title": "Changelog",
+    "section": "",
+    "text": "Changelog",
+    "crumbs": [
+      "Reference",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Changelog</span>"
+    ]
+  },
+  {
+    "objectID": "changelog.html#v0.1.0",
+    "href": "changelog.html#v0.1.0",
+    "title": "Changelog",
+    "section": "v0.1.0",
+    "text": "v0.1.0\nInitial release of Wildfires.jl.\n\nFeatures\n\nRothermel model: Full implementation of the Rothermel (1972) surface fire spread model with all 13 NFFL fuel models from Anderson (1982)\nLevel set method: 2D fire front propagation using a level set approach with Godunov upwind scheme and reinitialization\nComposable spread model: FireSpreadModel with pluggable components (UniformWind, UniformMoisture, DynamicMoisture, FlatTerrain, GriddedTerrain)\nGPU acceleration: Backend-agnostic GPU support (CUDA, Metal, ROCm) via KernelAbstractions.jl package extension for advance!, reinitialize!, and moisture update kernels\nPINN solver: Physics-informed neural network extension for level set equation solving with hard IC constraints (via Lux.jl)\nMakie integration: fireplot recipe and convert_arguments for direct plotting of LevelSetGrid\nQuarto documentation: Full documentation site with getting started guide, API reference, and GPU/PINN pages",
+    "crumbs": [
+      "Reference",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Changelog</span>"
+    ]
+  }
+]

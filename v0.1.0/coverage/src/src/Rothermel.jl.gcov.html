@@ -1,0 +1,379 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - on branch (detached from b9dd1a0) - src/src/Rothermel.jl</title>
+  <link rel="stylesheet" type="text/css" href="../../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../../index.html">top level</a> - <a href="index.html">src/src</a> - Rothermel.jl<span style="font-size: 80%;"> (source / <a href="Rothermel.jl.func-c.html">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">on branch (detached from b9dd1a0)</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryHi">96.1&nbsp;%</td>
+            <td class="headerCovTableEntry">77</td>
+            <td class="headerCovTableEntry">74</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2026-02-24 04:56:16</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryHi">-</td>
+            <td class="headerCovTableEntry">0</td>
+            <td class="headerCovTableEntry">0</td>
+          </tr>
+                  <tr><td><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : module Rothermel</span>
+<span id="L2"><span class="lineNum">       2</span>              : </span>
+<span id="L3"><span class="lineNum">       3</span>              : export FuelClasses, Rothermel, rate_of_spread</span>
+<span id="L4"><span class="lineNum">       4</span>              : export SHORT_GRASS, TIMBER_GRASS, TALL_GRASS, CHAPARRAL, BRUSH, DORMANT_BRUSH,</span>
+<span id="L5"><span class="lineNum">       5</span>              :     SOUTHERN_ROUGH, CLOSED_TIMBER_LITTER, HARDWOOD_LITTER, TIMBER_UNDERSTORY,</span>
+<span id="L6"><span class="lineNum">       6</span>              :     LIGHT_SLASH, MEDIUM_SLASH, HEAVY_SLASH</span>
+<span id="L7"><span class="lineNum">       7</span>              : </span>
+<span id="L8"><span class="lineNum">       8</span>              : #=</span>
+<span id="L9"><span class="lineNum">       9</span>              :     Rothermel (1972) Surface Fire Spread Model</span>
+<span id="L10"><span class="lineNum">      10</span>              : </span>
+<span id="L11"><span class="lineNum">      11</span>              :     References:</span>
+<span id="L12"><span class="lineNum">      12</span>              :     - Rothermel, R.C. (1972). A Mathematical Model for Predicting Fire Spread in</span>
+<span id="L13"><span class="lineNum">      13</span>              :       Wildland Fuels. Res. Paper INT-115, USDA Forest Service.</span>
+<span id="L14"><span class="lineNum">      14</span>              :     - Anderson, H.E. (1982). Aids to Determining Fuel Models for Estimating Fire</span>
+<span id="L15"><span class="lineNum">      15</span>              :       Behavior. Gen. Tech. Rep. INT-122, USDA Forest Service.</span>
+<span id="L16"><span class="lineNum">      16</span>              :     - Andrews, P.L. (2018). The Rothermel Surface Fire Spread Model and Associated</span>
+<span id="L17"><span class="lineNum">      17</span>              :       Developments. Gen. Tech. Rep. RMRS-GTR-371, USDA Forest Service.</span>
+<span id="L18"><span class="lineNum">      18</span>              : =#</span>
+<span id="L19"><span class="lineNum">      19</span>              : </span>
+<span id="L20"><span class="lineNum">      20</span>              : #-----------------------------------------------------------------------------# FuelClasses</span>
+<span id="L21"><span class="lineNum">      21</span>              : &quot;&quot;&quot;</span>
+<span id="L22"><span class="lineNum">      22</span>              :     FuelClasses{T}(; d1, d10, d100, herb, wood)</span>
+<span id="L23"><span class="lineNum">      23</span>              : </span>
+<span id="L24"><span class="lineNum">      24</span>              : Values for the five Rothermel fuel size classes.</span>
+<span id="L25"><span class="lineNum">      25</span>              : </span>
+<span id="L26"><span class="lineNum">      26</span>              : # Fields</span>
+<span id="L27"><span class="lineNum">      27</span>              : - `d1::T`   - 1-hr dead fuel (&lt; 0.25 in diameter)</span>
+<span id="L28"><span class="lineNum">      28</span>              : - `d10::T`  - 10-hr dead fuel (0.25–1.0 in)</span>
+<span id="L29"><span class="lineNum">      29</span>              : - `d100::T` - 100-hr dead fuel (1.0–3.0 in)</span>
+<span id="L30"><span class="lineNum">      30</span>              : - `herb::T` - Live herbaceous</span>
+<span id="L31"><span class="lineNum">      31</span>              : - `wood::T` - Live woody</span>
+<span id="L32"><span class="lineNum">      32</span>              : &quot;&quot;&quot;</span>
+<span id="L33"><span class="lineNum">      33</span> <span class="tlaGNC tlaBgGNC">          16 : Base.@kwdef struct FuelClasses{T}</span></span>
+<span id="L34"><span class="lineNum">      34</span> <span class="tlaGNC">      219621 :     d1::T</span></span>
+<span id="L35"><span class="lineNum">      35</span>              :     d10::T</span>
+<span id="L36"><span class="lineNum">      36</span>              :     d100::T</span>
+<span id="L37"><span class="lineNum">      37</span>              :     herb::T</span>
+<span id="L38"><span class="lineNum">      38</span>              :     wood::T</span>
+<span id="L39"><span class="lineNum">      39</span>              : end</span>
+<span id="L40"><span class="lineNum">      40</span>              : </span>
+<span id="L41"><span class="lineNum">      41</span> <span class="tlaGNC">           1 : FuelClasses(a, b, c, d, e) = FuelClasses(promote(a, b, c, d, e)...)</span></span>
+<span id="L42"><span class="lineNum">      42</span>              : </span>
+<span id="L43"><span class="lineNum">      43</span>              : function Base.show(io::IO, fc::FuelClasses{T}) where {T}</span>
+<span id="L44"><span class="lineNum">      44</span> <span class="tlaGNC">           1 :     print(io, &quot;FuelClasses{$T}(d1=$(fc.d1), d10=$(fc.d10), d100=$(fc.d100), herb=$(fc.herb), wood=$(fc.wood))&quot;)</span></span>
+<span id="L45"><span class="lineNum">      45</span>              : end</span>
+<span id="L46"><span class="lineNum">      46</span>              : </span>
+<span id="L47"><span class="lineNum">      47</span> <span class="tlaGNC">           1 : Base.eltype(::Type{FuelClasses{T}}) where {T} = T</span></span>
+<span id="L48"><span class="lineNum">      48</span> <span class="tlaGNC">      131767 : Base.map(f, a::FuelClasses) = FuelClasses(f(a.d1), f(a.d10), f(a.d100), f(a.herb), f(a.wood))</span></span>
+<span id="L49"><span class="lineNum">      49</span> <span class="tlaGNC">       43923 : Base.map(f, a::FuelClasses, b::FuelClasses) = FuelClasses(f(a.d1, b.d1), f(a.d10, b.d10), f(a.d100, b.d100), f(a.herb, b.herb), f(a.wood, b.wood))</span></span>
+<span id="L50"><span class="lineNum">      50</span> <span class="tlaGNC">       43936 : Base.sum(fc::FuelClasses) = fc.d1 + fc.d10 + fc.d100 + fc.herb + fc.wood</span></span>
+<span id="L51"><span class="lineNum">      51</span> <span class="tlaGNC">       43923 : Base.sum(f::Function, fc::FuelClasses) = f(fc.d1) + f(fc.d10) + f(fc.d100) + f(fc.herb) + f(fc.wood)</span></span>
+<span id="L52"><span class="lineNum">      52</span>              : </span>
+<span id="L53"><span class="lineNum">      53</span>              : #-----------------------------------------------------------------------------# Rothermel</span>
+<span id="L54"><span class="lineNum">      54</span>              : &quot;&quot;&quot;</span>
+<span id="L55"><span class="lineNum">      55</span>              :     Rothermel{T}(; name, w, σ, h, δ, Mx)</span>
+<span id="L56"><span class="lineNum">      56</span>              : </span>
+<span id="L57"><span class="lineNum">      57</span>              : Fuel model for the Rothermel (1972) surface fire spread model.</span>
+<span id="L58"><span class="lineNum">      58</span>              : </span>
+<span id="L59"><span class="lineNum">      59</span>              : Parameterized by numeric type `T` (e.g. `Float64`, `Float32`, Unitful quantities).</span>
+<span id="L60"><span class="lineNum">      60</span>              : </span>
+<span id="L61"><span class="lineNum">      61</span>              : # Fields (US customary units, matching original publications)</span>
+<span id="L62"><span class="lineNum">      62</span>              : - `name::String` - Description</span>
+<span id="L63"><span class="lineNum">      63</span>              : - `w::FuelClasses{T}` - Fuel loading [tons/acre]</span>
+<span id="L64"><span class="lineNum">      64</span>              : - `σ::FuelClasses{T}` - Surface-area-to-volume ratio [1/ft]</span>
+<span id="L65"><span class="lineNum">      65</span>              : - `h::FuelClasses{T}` - Heat content [BTU/lb]</span>
+<span id="L66"><span class="lineNum">      66</span>              : - `δ::T` - Fuel bed depth [ft]</span>
+<span id="L67"><span class="lineNum">      67</span>              : - `Mx::T` - Dead fuel moisture of extinction [fraction]</span>
+<span id="L68"><span class="lineNum">      68</span>              : </span>
+<span id="L69"><span class="lineNum">      69</span>              : See [`NFFL`](@ref) for the 13 standard fuel models from Anderson (1982).</span>
+<span id="L70"><span class="lineNum">      70</span>              : &quot;&quot;&quot;</span>
+<span id="L71"><span class="lineNum">      71</span> <span class="tlaGNC">           4 : Base.@kwdef struct Rothermel{T}</span></span>
+<span id="L72"><span class="lineNum">      72</span> <span class="tlaGNC">           2 :     name::String = &quot;Custom&quot;</span></span>
+<span id="L73"><span class="lineNum">      73</span>              :     w::FuelClasses{T}</span>
+<span id="L74"><span class="lineNum">      74</span>              :     σ::FuelClasses{T}</span>
+<span id="L75"><span class="lineNum">      75</span>              :     h::FuelClasses{T}</span>
+<span id="L76"><span class="lineNum">      76</span>              :     δ::T</span>
+<span id="L77"><span class="lineNum">      77</span>              :     Mx::T</span>
+<span id="L78"><span class="lineNum">      78</span>              : end</span>
+<span id="L79"><span class="lineNum">      79</span>              : </span>
+<span id="L80"><span class="lineNum">      80</span> <span class="tlaUNC tlaBgUNC">           0 : function Rothermel(name::AbstractString, w, σ, h, δ, Mx)</span></span>
+<span id="L81"><span class="lineNum">      81</span> <span class="tlaUNC">           0 :     T = promote_type(eltype(FuelClasses(w)), eltype(FuelClasses(σ)), eltype(FuelClasses(h)), typeof(δ), typeof(Mx))</span></span>
+<span id="L82"><span class="lineNum">      82</span> <span class="tlaUNC">           0 :     Rothermel{T}(String(name), FuelClasses(w), FuelClasses(σ), FuelClasses(h), T(δ), T(Mx))</span></span>
+<span id="L83"><span class="lineNum">      83</span>              : end</span>
+<span id="L84"><span class="lineNum">      84</span>              : </span>
+<span id="L85"><span class="lineNum">      85</span>              : function Base.show(io::IO, r::Rothermel)</span>
+<span id="L86"><span class="lineNum">      86</span> <span class="tlaGNC tlaBgGNC">           1 :     print(io, &quot;Rothermel{&quot;, eltype(r.w), &quot;}(\&quot;&quot;, r.name, &quot;\&quot;)&quot;)</span></span>
+<span id="L87"><span class="lineNum">      87</span>              : end</span>
+<span id="L88"><span class="lineNum">      88</span>              : </span>
+<span id="L89"><span class="lineNum">      89</span>              : #-----------------------------------------------------------------------------# Constants</span>
+<span id="L90"><span class="lineNum">      90</span>              : const _ρ_P = 32.0                       # Oven-dry particle density [lb/ft³]</span>
+<span id="L91"><span class="lineNum">      91</span>              : const _S_T = 0.0555                     # Total mineral content [fraction]</span>
+<span id="L92"><span class="lineNum">      92</span>              : const _S_E = 0.01                       # Effective mineral content [fraction]</span>
+<span id="L93"><span class="lineNum">      93</span>              : const _TONS_ACRE_TO_LB_FT2 = 2000.0 / 43560.0</span>
+<span id="L94"><span class="lineNum">      94</span>              : const _KMH_TO_FT_MIN = 3280.84 / 60.0  # km/h → ft/min</span>
+<span id="L95"><span class="lineNum">      95</span>              : const _FT_TO_M = 0.3048                 # ft → m</span>
+<span id="L96"><span class="lineNum">      96</span>              : </span>
+<span id="L97"><span class="lineNum">      97</span>              : #-----------------------------------------------------------------------------# rate_of_spread</span>
+<span id="L98"><span class="lineNum">      98</span>              : &quot;&quot;&quot;</span>
+<span id="L99"><span class="lineNum">      99</span>              :     rate_of_spread(fuel::Rothermel; moisture, wind, slope)</span>
+<span id="L100"><span class="lineNum">     100</span>              : </span>
+<span id="L101"><span class="lineNum">     101</span>              : Compute the forward rate of fire spread using the Rothermel (1972) model.</span>
+<span id="L102"><span class="lineNum">     102</span>              : </span>
+<span id="L103"><span class="lineNum">     103</span>              : # Arguments</span>
+<span id="L104"><span class="lineNum">     104</span>              : - `fuel::Rothermel` - Fuel model</span>
+<span id="L105"><span class="lineNum">     105</span>              : - `moisture::FuelClasses` - Moisture content per fuel class [fraction, 0–1].</span>
+<span id="L106"><span class="lineNum">     106</span>              :   Use 0.0 for unused classes.</span>
+<span id="L107"><span class="lineNum">     107</span>              : - `wind` - Midflame wind speed [km/h]</span>
+<span id="L108"><span class="lineNum">     108</span>              : - `slope` - Terrain slope as rise/run [fraction]</span>
+<span id="L109"><span class="lineNum">     109</span>              : </span>
+<span id="L110"><span class="lineNum">     110</span>              : # Returns</span>
+<span id="L111"><span class="lineNum">     111</span>              : Forward rate of spread at the fire head [m/min].</span>
+<span id="L112"><span class="lineNum">     112</span>              : </span>
+<span id="L113"><span class="lineNum">     113</span>              : # Example</span>
+<span id="L114"><span class="lineNum">     114</span>              : ```julia</span>
+<span id="L115"><span class="lineNum">     115</span>              : M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)</span>
+<span id="L116"><span class="lineNum">     116</span>              : R = rate_of_spread(SHORT_GRASS, moisture=M, wind=8.0, slope=0.0)</span>
+<span id="L117"><span class="lineNum">     117</span>              : ```</span>
+<span id="L118"><span class="lineNum">     118</span>              : &quot;&quot;&quot;</span>
+<span id="L119"><span class="lineNum">     119</span> <span class="tlaGNC">       87846 : function rate_of_spread(fuel::Rothermel{T}; moisture::FuelClasses, wind, slope) where {T}</span></span>
+<span id="L120"><span class="lineNum">     120</span> <span class="tlaGNC">       43923 :     (; w, σ, h, δ, Mx) = fuel</span></span>
+<span id="L121"><span class="lineNum">     121</span> <span class="tlaGNC">       43923 :     M = moisture</span></span>
+<span id="L122"><span class="lineNum">     122</span> <span class="tlaGNC">       43923 :     z = zero(T)</span></span>
+<span id="L123"><span class="lineNum">     123</span> <span class="tlaGNC">       43924 :     δ &gt; z || return z</span></span>
+<span id="L124"><span class="lineNum">     124</span>              : </span>
+<span id="L125"><span class="lineNum">     125</span>              :     # --- Convert to internal units (US customary) ---</span>
+<span id="L126"><span class="lineNum">     126</span> <span class="tlaGNC">      263532 :     w_i = map(x -&gt; x * _TONS_ACRE_TO_LB_FT2, w)   # lb/ft²</span></span>
+<span id="L127"><span class="lineNum">     127</span> <span class="tlaGNC">       43922 :     U   = wind * _KMH_TO_FT_MIN                     # ft/min</span></span>
+<span id="L128"><span class="lineNum">     128</span>              : </span>
+<span id="L129"><span class="lineNum">     129</span>              :     # --- Surface area fractions ---</span>
+<span id="L130"><span class="lineNum">     130</span> <span class="tlaGNC">       43922 :     a = map(*, σ, w_i)</span></span>
+<span id="L131"><span class="lineNum">     131</span> <span class="tlaGNC">       87844 :     a = map(x -&gt; x / _ρ_P, a)</span></span>
+<span id="L132"><span class="lineNum">     132</span> <span class="tlaGNC">       43922 :     a_dead = a.d1 + a.d10 + a.d100</span></span>
+<span id="L133"><span class="lineNum">     133</span> <span class="tlaGNC">       43922 :     a_live = a.herb + a.wood</span></span>
+<span id="L134"><span class="lineNum">     134</span> <span class="tlaGNC">       43922 :     a_tot  = a_dead + a_live</span></span>
+<span id="L135"><span class="lineNum">     135</span> <span class="tlaGNC">       43922 :     a_tot == z &amp;&amp; return z</span></span>
+<span id="L136"><span class="lineNum">     136</span>              : </span>
+<span id="L137"><span class="lineNum">     137</span> <span class="tlaGNC">       43922 :     f = FuelClasses(</span></span>
+<span id="L138"><span class="lineNum">     138</span>              :         a_dead &gt; z ? a.d1   / a_dead : z,</span>
+<span id="L139"><span class="lineNum">     139</span>              :         a_dead &gt; z ? a.d10  / a_dead : z,</span>
+<span id="L140"><span class="lineNum">     140</span>              :         a_dead &gt; z ? a.d100 / a_dead : z,</span>
+<span id="L141"><span class="lineNum">     141</span>              :         a_live &gt; z ? a.herb  / a_live : z,</span>
+<span id="L142"><span class="lineNum">     142</span>              :         a_live &gt; z ? a.wood  / a_live : z,</span>
+<span id="L143"><span class="lineNum">     143</span>              :     )</span>
+<span id="L144"><span class="lineNum">     144</span> <span class="tlaGNC">       43922 :     f_dead = a_dead / a_tot</span></span>
+<span id="L145"><span class="lineNum">     145</span> <span class="tlaGNC">       43922 :     f_live = a_live / a_tot</span></span>
+<span id="L146"><span class="lineNum">     146</span>              : </span>
+<span id="L147"><span class="lineNum">     147</span>              :     # --- Net fuel loading ---</span>
+<span id="L148"><span class="lineNum">     148</span> <span class="tlaGNC">       87844 :     wn = map(x -&gt; x * (1.0 - _S_T), w_i)</span></span>
+<span id="L149"><span class="lineNum">     149</span> <span class="tlaGNC">       43922 :     wn_dead = f.d1*wn.d1 + f.d10*wn.d10 + f.d100*wn.d100</span></span>
+<span id="L150"><span class="lineNum">     150</span> <span class="tlaGNC">       43922 :     wn_live = wn.herb + wn.wood</span></span>
+<span id="L151"><span class="lineNum">     151</span>              : </span>
+<span id="L152"><span class="lineNum">     152</span>              :     # --- Characteristic fuel properties (area-weighted) ---</span>
+<span id="L153"><span class="lineNum">     153</span> <span class="tlaGNC">       43922 :     mf_dead = f.d1*M.d1 + f.d10*M.d10 + f.d100*M.d100</span></span>
+<span id="L154"><span class="lineNum">     154</span> <span class="tlaGNC">       43922 :     mf_live = f.herb*M.herb + f.wood*M.wood</span></span>
+<span id="L155"><span class="lineNum">     155</span>              : </span>
+<span id="L156"><span class="lineNum">     156</span> <span class="tlaGNC">       43922 :     σ_dead = f.d1*σ.d1 + f.d10*σ.d10 + f.d100*σ.d100</span></span>
+<span id="L157"><span class="lineNum">     157</span> <span class="tlaGNC">       43922 :     σ_live = f.herb*σ.herb + f.wood*σ.wood</span></span>
+<span id="L158"><span class="lineNum">     158</span> <span class="tlaGNC">       43922 :     σ_tot  = f_dead * σ_dead + f_live * σ_live</span></span>
+<span id="L159"><span class="lineNum">     159</span>              : </span>
+<span id="L160"><span class="lineNum">     160</span> <span class="tlaGNC">       43922 :     h_dead = f.d1*h.d1 + f.d10*h.d10 + f.d100*h.d100</span></span>
+<span id="L161"><span class="lineNum">     161</span> <span class="tlaGNC">       43922 :     h_live = f.herb*h.herb + f.wood*h.wood</span></span>
+<span id="L162"><span class="lineNum">     162</span>              : </span>
+<span id="L163"><span class="lineNum">     163</span>              :     # --- Packing ratio ---</span>
+<span id="L164"><span class="lineNum">     164</span> <span class="tlaGNC">       87844 :     w_total = sum(x -&gt; x / _ρ_P, w_i)</span></span>
+<span id="L165"><span class="lineNum">     165</span> <span class="tlaGNC">       43922 :     β    = w_total / δ</span></span>
+<span id="L166"><span class="lineNum">     166</span> <span class="tlaGNC">       87844 :     β_op = 3.348 * σ_tot^(-0.8189)</span></span>
+<span id="L167"><span class="lineNum">     167</span> <span class="tlaGNC">       43922 :     rpr  = β / β_op   # relative packing ratio</span></span>
+<span id="L168"><span class="lineNum">     168</span>              : </span>
+<span id="L169"><span class="lineNum">     169</span>              :     # --- Live fuel moisture of extinction (Albini 1976) ---</span>
+<span id="L170"><span class="lineNum">     170</span> <span class="tlaGNC">       43922 :     if a_live &gt; 0</span></span>
+<span id="L171"><span class="lineNum">     171</span> <span class="tlaGNC">           7 :         W_num = w_i.d1*exp(-138.0/σ.d1) + w_i.d10*exp(-138.0/σ.d10) + w_i.d100*exp(-138.0/σ.d100)</span></span>
+<span id="L172"><span class="lineNum">     172</span> <span class="tlaGNC">           7 :         W_den = w_i.herb*exp(-500.0/σ.herb) + w_i.wood*exp(-500.0/σ.wood)</span></span>
+<span id="L173"><span class="lineNum">     173</span> <span class="tlaGNC">           7 :         W = W_den &gt; z ? W_num / W_den : z</span></span>
+<span id="L174"><span class="lineNum">     174</span>              : </span>
+<span id="L175"><span class="lineNum">     175</span> <span class="tlaGNC">           7 :         mfpd_num = w_i.d1*M.d1*exp(-138.0/σ.d1) + w_i.d10*M.d10*exp(-138.0/σ.d10) + w_i.d100*M.d100*exp(-138.0/σ.d100)</span></span>
+<span id="L176"><span class="lineNum">     176</span> <span class="tlaGNC">           7 :         mfpd = W_num &gt; z ? mfpd_num / W_num : z</span></span>
+<span id="L177"><span class="lineNum">     177</span>              : </span>
+<span id="L178"><span class="lineNum">     178</span> <span class="tlaGNC">           7 :         mx_live = 2.9 * W * (1.0 - mfpd / Mx) - 0.226</span></span>
+<span id="L179"><span class="lineNum">     179</span> <span class="tlaGNC">           7 :         mx_live = max(mx_live, Mx)</span></span>
+<span id="L180"><span class="lineNum">     180</span>              :     else</span>
+<span id="L181"><span class="lineNum">     181</span> <span class="tlaGNC">       43915 :         mx_live = Mx</span></span>
+<span id="L182"><span class="lineNum">     182</span>              :     end</span>
+<span id="L183"><span class="lineNum">     183</span>              : </span>
+<span id="L184"><span class="lineNum">     184</span>              :     # --- Damping coefficients ---</span>
+<span id="L185"><span class="lineNum">     185</span> <span class="tlaGNC">       43922 :     η_s = 0.174 * _S_E^(-0.19)   # mineral damping</span></span>
+<span id="L186"><span class="lineNum">     186</span>              : </span>
+<span id="L187"><span class="lineNum">     187</span> <span class="tlaGNC">       43922 :     rm_dead  = Mx &gt; z ? mf_dead / Mx : z</span></span>
+<span id="L188"><span class="lineNum">     188</span> <span class="tlaGNC">       87843 :     η_M_dead = mf_dead &gt;= Mx ? z : 1.0 - 2.59*rm_dead + 5.11*rm_dead^2 - 3.52*rm_dead^3</span></span>
+<span id="L189"><span class="lineNum">     189</span>              : </span>
+<span id="L190"><span class="lineNum">     190</span> <span class="tlaGNC">       43922 :     if a_live &gt; z &amp;&amp; mx_live &gt; z</span></span>
+<span id="L191"><span class="lineNum">     191</span> <span class="tlaGNC">           7 :         rm_live  = mf_live / mx_live</span></span>
+<span id="L192"><span class="lineNum">     192</span> <span class="tlaGNC">          14 :         η_M_live = mf_live &gt;= mx_live ? z : 1.0 - 2.59*rm_live + 5.11*rm_live^2 - 3.52*rm_live^3</span></span>
+<span id="L193"><span class="lineNum">     193</span>              :     else</span>
+<span id="L194"><span class="lineNum">     194</span> <span class="tlaGNC">       43915 :         η_M_live = z</span></span>
+<span id="L195"><span class="lineNum">     195</span>              :     end</span>
+<span id="L196"><span class="lineNum">     196</span>              : </span>
+<span id="L197"><span class="lineNum">     197</span>              :     # --- Reaction intensity [BTU/ft²/min] ---</span>
+<span id="L198"><span class="lineNum">     198</span> <span class="tlaGNC">       87844 :     A     = 133.0 * σ_tot^(-0.7913)</span></span>
+<span id="L199"><span class="lineNum">     199</span> <span class="tlaGNC">       87844 :     Γ_max = σ_tot^1.5 / (495.0 + 0.0594 * σ_tot^1.5)</span></span>
+<span id="L200"><span class="lineNum">     200</span> <span class="tlaGNC">       43922 :     Γ     = Γ_max * (rpr * exp(1.0 - rpr))^A</span></span>
+<span id="L201"><span class="lineNum">     201</span> <span class="tlaGNC">       43922 :     I_R   = Γ * (wn_dead * h_dead * η_M_dead + wn_live * h_live * η_M_live) * η_s</span></span>
+<span id="L202"><span class="lineNum">     202</span>              : </span>
+<span id="L203"><span class="lineNum">     203</span>              :     # --- Propagating flux ratio ---</span>
+<span id="L204"><span class="lineNum">     204</span> <span class="tlaGNC">       43922 :     ξ = (192.0 + 0.2595 * σ_tot)^(-1) * exp((0.792 + 0.681 * sqrt(σ_tot)) * (β + 0.1))</span></span>
+<span id="L205"><span class="lineNum">     205</span>              : </span>
+<span id="L206"><span class="lineNum">     206</span>              :     # --- Wind coefficient ---</span>
+<span id="L207"><span class="lineNum">     207</span> <span class="tlaGNC">       87844 :     C   = 7.47 * exp(-0.133 * σ_tot^0.55)</span></span>
+<span id="L208"><span class="lineNum">     208</span> <span class="tlaGNC">       87844 :     B   = 0.02526 * σ_tot^0.54</span></span>
+<span id="L209"><span class="lineNum">     209</span> <span class="tlaGNC">       43922 :     E   = 0.715 * exp(-3.59e-4 * σ_tot)</span></span>
+<span id="L210"><span class="lineNum">     210</span> <span class="tlaGNC">       43922 :     φ_w = U &gt; z ? C * U^B * rpr^(-E) : z</span></span>
+<span id="L211"><span class="lineNum">     211</span>              : </span>
+<span id="L212"><span class="lineNum">     212</span>              :     # --- Slope coefficient ---</span>
+<span id="L213"><span class="lineNum">     213</span> <span class="tlaGNC">       87844 :     φ_s = 5.275 * β^(-0.3) * slope^2</span></span>
+<span id="L214"><span class="lineNum">     214</span>              : </span>
+<span id="L215"><span class="lineNum">     215</span>              :     # --- Heat sink [BTU/ft³] ---</span>
+<span id="L216"><span class="lineNum">     216</span> <span class="tlaGNC">       43922 :     ρ_b = sum(w_i) / δ   # bulk density [lb/ft³]</span></span>
+<span id="L217"><span class="lineNum">     217</span>              : </span>
+<span id="L218"><span class="lineNum">     218</span> <span class="tlaGNC">       43922 :     eps = f_dead * (</span></span>
+<span id="L219"><span class="lineNum">     219</span>              :             f.d1   * (250.0 + 1116.0*M.d1)   * exp(-138.0/σ.d1)   +</span>
+<span id="L220"><span class="lineNum">     220</span>              :             f.d10  * (250.0 + 1116.0*M.d10)  * exp(-138.0/σ.d10)  +</span>
+<span id="L221"><span class="lineNum">     221</span>              :             f.d100 * (250.0 + 1116.0*M.d100) * exp(-138.0/σ.d100)</span>
+<span id="L222"><span class="lineNum">     222</span>              :           ) +</span>
+<span id="L223"><span class="lineNum">     223</span>              :           f_live * (</span>
+<span id="L224"><span class="lineNum">     224</span>              :             f.herb * (250.0 + 1116.0*M.herb) * exp(-138.0/σ.herb) +</span>
+<span id="L225"><span class="lineNum">     225</span>              :             f.wood * (250.0 + 1116.0*M.wood) * exp(-138.0/σ.wood)</span>
+<span id="L226"><span class="lineNum">     226</span>              :           )</span>
+<span id="L227"><span class="lineNum">     227</span>              : </span>
+<span id="L228"><span class="lineNum">     228</span> <span class="tlaGNC">       43922 :     heat_sink = ρ_b * eps</span></span>
+<span id="L229"><span class="lineNum">     229</span> <span class="tlaGNC">       43922 :     heat_sink ≤ z &amp;&amp; return z</span></span>
+<span id="L230"><span class="lineNum">     230</span>              : </span>
+<span id="L231"><span class="lineNum">     231</span>              :     # --- Rate of spread [ft/min → m/min] ---</span>
+<span id="L232"><span class="lineNum">     232</span> <span class="tlaGNC">       43922 :     R = I_R * ξ * (1.0 + φ_w + φ_s) / heat_sink</span></span>
+<span id="L233"><span class="lineNum">     233</span> <span class="tlaGNC">       43922 :     return R * _FT_TO_M</span></span>
+<span id="L234"><span class="lineNum">     234</span>              : end</span>
+<span id="L235"><span class="lineNum">     235</span>              : </span>
+<span id="L236"><span class="lineNum">     236</span>              : # ============================================================================ #</span>
+<span id="L237"><span class="lineNum">     237</span>              : #               13 Standard NFFL Fuel Models — Anderson (1982)</span>
+<span id="L238"><span class="lineNum">     238</span>              : # ============================================================================ #</span>
+<span id="L239"><span class="lineNum">     239</span>              : </span>
+<span id="L240"><span class="lineNum">     240</span>              : const _H8 = FuelClasses(8000.0, 8000.0, 8000.0, 8000.0, 8000.0)</span>
+<span id="L241"><span class="lineNum">     241</span>              : const _σ_STD = (109.0, 30.0, 1500.0, 1500.0)   # standard SAV for classes 2–5</span>
+<span id="L242"><span class="lineNum">     242</span>              : </span>
+<span id="L243"><span class="lineNum">     243</span>              : # --- Grass (1–3) ---</span>
+<span id="L244"><span class="lineNum">     244</span>              : </span>
+<span id="L245"><span class="lineNum">     245</span>              : &quot;&quot;&quot;NFFL 1: Short grass (1 ft)&quot;&quot;&quot;</span>
+<span id="L246"><span class="lineNum">     246</span>              : const SHORT_GRASS = Rothermel(&quot;NFFL 1: Short grass (1 ft)&quot;,</span>
+<span id="L247"><span class="lineNum">     247</span>              :     FuelClasses(0.74, 0.0,  0.0,  0.0,  0.0),  FuelClasses(3500.0, _σ_STD...), _H8, 1.0, 0.12)</span>
+<span id="L248"><span class="lineNum">     248</span>              : </span>
+<span id="L249"><span class="lineNum">     249</span>              : &quot;&quot;&quot;NFFL 2: Timber grass and understory&quot;&quot;&quot;</span>
+<span id="L250"><span class="lineNum">     250</span>              : const TIMBER_GRASS = Rothermel(&quot;NFFL 2: Timber grass/understory&quot;,</span>
+<span id="L251"><span class="lineNum">     251</span>              :     FuelClasses(2.0,  1.0,  0.5,  0.5,  0.0),  FuelClasses(3000.0, _σ_STD...), _H8, 1.0, 0.15)</span>
+<span id="L252"><span class="lineNum">     252</span>              : </span>
+<span id="L253"><span class="lineNum">     253</span>              : &quot;&quot;&quot;NFFL 3: Tall grass (2.5 ft)&quot;&quot;&quot;</span>
+<span id="L254"><span class="lineNum">     254</span>              : const TALL_GRASS = Rothermel(&quot;NFFL 3: Tall grass (2.5 ft)&quot;,</span>
+<span id="L255"><span class="lineNum">     255</span>              :     FuelClasses(3.01, 0.0,  0.0,  0.0,  0.0),  FuelClasses(1500.0, _σ_STD...), _H8, 2.5, 0.25)</span>
+<span id="L256"><span class="lineNum">     256</span>              : </span>
+<span id="L257"><span class="lineNum">     257</span>              : # --- Chaparral/Shrub (4–7) ---</span>
+<span id="L258"><span class="lineNum">     258</span>              : </span>
+<span id="L259"><span class="lineNum">     259</span>              : &quot;&quot;&quot;NFFL 4: Chaparral (6 ft)&quot;&quot;&quot;</span>
+<span id="L260"><span class="lineNum">     260</span>              : const CHAPARRAL = Rothermel(&quot;NFFL 4: Chaparral (6 ft)&quot;,</span>
+<span id="L261"><span class="lineNum">     261</span>              :     FuelClasses(5.01, 4.01, 2.0,  0.0,  5.01), FuelClasses(2000.0, _σ_STD...), _H8, 6.0, 0.20)</span>
+<span id="L262"><span class="lineNum">     262</span>              : </span>
+<span id="L263"><span class="lineNum">     263</span>              : &quot;&quot;&quot;NFFL 5: Brush (2 ft)&quot;&quot;&quot;</span>
+<span id="L264"><span class="lineNum">     264</span>              : const BRUSH = Rothermel(&quot;NFFL 5: Brush (2 ft)&quot;,</span>
+<span id="L265"><span class="lineNum">     265</span>              :     FuelClasses(1.0,  0.5,  0.0,  0.0,  2.0),  FuelClasses(2000.0, _σ_STD...), _H8, 2.0, 0.20)</span>
+<span id="L266"><span class="lineNum">     266</span>              : </span>
+<span id="L267"><span class="lineNum">     267</span>              : &quot;&quot;&quot;NFFL 6: Dormant brush, hardwood slash&quot;&quot;&quot;</span>
+<span id="L268"><span class="lineNum">     268</span>              : const DORMANT_BRUSH = Rothermel(&quot;NFFL 6: Dormant brush/hardwood slash&quot;,</span>
+<span id="L269"><span class="lineNum">     269</span>              :     FuelClasses(1.5,  2.5,  2.0,  0.0,  0.0),  FuelClasses(1750.0, _σ_STD...), _H8, 2.5, 0.25)</span>
+<span id="L270"><span class="lineNum">     270</span>              : </span>
+<span id="L271"><span class="lineNum">     271</span>              : &quot;&quot;&quot;NFFL 7: Southern rough&quot;&quot;&quot;</span>
+<span id="L272"><span class="lineNum">     272</span>              : const SOUTHERN_ROUGH = Rothermel(&quot;NFFL 7: Southern rough&quot;,</span>
+<span id="L273"><span class="lineNum">     273</span>              :     FuelClasses(1.13, 1.87, 1.5,  0.0,  0.37), FuelClasses(1750.0, _σ_STD...), _H8, 2.5, 0.40)</span>
+<span id="L274"><span class="lineNum">     274</span>              : </span>
+<span id="L275"><span class="lineNum">     275</span>              : # --- Timber Litter (8–10) ---</span>
+<span id="L276"><span class="lineNum">     276</span>              : </span>
+<span id="L277"><span class="lineNum">     277</span>              : &quot;&quot;&quot;NFFL 8: Closed timber litter&quot;&quot;&quot;</span>
+<span id="L278"><span class="lineNum">     278</span>              : const CLOSED_TIMBER_LITTER = Rothermel(&quot;NFFL 8: Closed timber litter&quot;,</span>
+<span id="L279"><span class="lineNum">     279</span>              :     FuelClasses(1.5,  1.0,  2.5,  0.0,  0.0),  FuelClasses(2000.0, _σ_STD...), _H8, 0.2, 0.30)</span>
+<span id="L280"><span class="lineNum">     280</span>              : </span>
+<span id="L281"><span class="lineNum">     281</span>              : &quot;&quot;&quot;NFFL 9: Hardwood litter&quot;&quot;&quot;</span>
+<span id="L282"><span class="lineNum">     282</span>              : const HARDWOOD_LITTER = Rothermel(&quot;NFFL 9: Hardwood litter&quot;,</span>
+<span id="L283"><span class="lineNum">     283</span>              :     FuelClasses(2.92, 0.41, 0.15, 0.0,  0.0),  FuelClasses(2500.0, _σ_STD...), _H8, 0.2, 0.25)</span>
+<span id="L284"><span class="lineNum">     284</span>              : </span>
+<span id="L285"><span class="lineNum">     285</span>              : &quot;&quot;&quot;NFFL 10: Timber litter and understory&quot;&quot;&quot;</span>
+<span id="L286"><span class="lineNum">     286</span>              : const TIMBER_UNDERSTORY = Rothermel(&quot;NFFL 10: Timber litter/understory&quot;,</span>
+<span id="L287"><span class="lineNum">     287</span>              :     FuelClasses(3.01, 2.0,  5.01, 0.0,  2.0),  FuelClasses(2000.0, _σ_STD...), _H8, 1.0, 0.25)</span>
+<span id="L288"><span class="lineNum">     288</span>              : </span>
+<span id="L289"><span class="lineNum">     289</span>              : # --- Logging Slash (11–13) ---</span>
+<span id="L290"><span class="lineNum">     290</span>              : </span>
+<span id="L291"><span class="lineNum">     291</span>              : &quot;&quot;&quot;NFFL 11: Light logging slash&quot;&quot;&quot;</span>
+<span id="L292"><span class="lineNum">     292</span>              : const LIGHT_SLASH = Rothermel(&quot;NFFL 11: Light logging slash&quot;,</span>
+<span id="L293"><span class="lineNum">     293</span>              :     FuelClasses(1.5,  4.51, 5.51, 0.0,  0.0),  FuelClasses(1500.0, _σ_STD...), _H8, 1.0, 0.15)</span>
+<span id="L294"><span class="lineNum">     294</span>              : </span>
+<span id="L295"><span class="lineNum">     295</span>              : &quot;&quot;&quot;NFFL 12: Medium logging slash&quot;&quot;&quot;</span>
+<span id="L296"><span class="lineNum">     296</span>              : const MEDIUM_SLASH = Rothermel(&quot;NFFL 12: Medium logging slash&quot;,</span>
+<span id="L297"><span class="lineNum">     297</span>              :     FuelClasses(4.01, 14.03, 16.53, 0.0, 0.0), FuelClasses(1500.0, _σ_STD...), _H8, 2.3, 0.20)</span>
+<span id="L298"><span class="lineNum">     298</span>              : </span>
+<span id="L299"><span class="lineNum">     299</span>              : &quot;&quot;&quot;NFFL 13: Heavy logging slash&quot;&quot;&quot;</span>
+<span id="L300"><span class="lineNum">     300</span>              : const HEAVY_SLASH = Rothermel(&quot;NFFL 13: Heavy logging slash&quot;,</span>
+<span id="L301"><span class="lineNum">     301</span>              :     FuelClasses(7.01, 23.04, 28.05, 0.0, 0.0), FuelClasses(1500.0, _σ_STD...), _H8, 3.0, 0.25)</span>
+<span id="L302"><span class="lineNum">     302</span>              : </span>
+<span id="L303"><span class="lineNum">     303</span>              : end # module</span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.0-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>
