@@ -356,7 +356,7 @@
     "href": "spreadmodel.html#performance-float64-vs-float32",
     "title": "Spread Model",
     "section": "Performance: Float64 vs Float32",
-    "text": "Performance: Float64 vs Float32\nThe level set grid and all simulation operations support Float32 for reduced memory and potentially faster computation. To create a Float32 simulation, pass Float32 values to all constructors:\n\n\n\n\n\n\nNote\n\n\n\nThe LevelSetGrid constructor determines its element type via promote_type on all keyword arguments (dx, dy, x0, y0). The defaults are Float64, so you must pass Float32 values for all of them — e.g. LevelSetGrid(200, 200, dx=30f0, x0=0f0, y0=0f0).\n\n\n\nusing BenchmarkTools\n\nfunction run_simulation(::Type{T}, n=200) where T\n    grid = LevelSetGrid(n, n,\n        dx=T(30), x0=zero(T), y0=zero(T))\n    ignite!(grid, T(3000), T(3000), T(50))\n    F = fill(T(10), size(grid))\n    for _ in 1:100\n        advance!(grid, F, T(0.5))\n    end\n    reinitialize!(grid)\n    grid\nend\n\nb64 = @benchmark run_simulation(Float64)\nb32 = @benchmark run_simulation(Float32)\nnothing\n\n\n\n| Metric | Float64 | Float32 | Ratio |\n|--------|---------|---------|-------|\n| Median time | 31.63 ms | 22.94 ms | 1.38x |\n| Memory | 32.7 MiB | 16.3 MiB | 2.00x |",
+    "text": "Performance: Float64 vs Float32\nThe level set grid and all simulation operations support Float32 for reduced memory and potentially faster computation. To create a Float32 simulation, pass Float32 values to all constructors:\n\n\n\n\n\n\nNote\n\n\n\nThe LevelSetGrid constructor determines its element type via promote_type on all keyword arguments (dx, dy, x0, y0). The defaults are Float64, so you must pass Float32 values for all of them — e.g. LevelSetGrid(200, 200, dx=30f0, x0=0f0, y0=0f0).\n\n\n\nusing BenchmarkTools\n\nfunction run_simulation(::Type{T}, n=200) where T\n    grid = LevelSetGrid(n, n,\n        dx=T(30), x0=zero(T), y0=zero(T))\n    ignite!(grid, T(3000), T(3000), T(50))\n    F = fill(T(10), size(grid))\n    for _ in 1:100\n        advance!(grid, F, T(0.5))\n    end\n    reinitialize!(grid)\n    grid\nend\n\nb64 = @benchmark run_simulation(Float64)\nb32 = @benchmark run_simulation(Float32)\nnothing\n\n\n\n| Metric | Float64 | Float32 | Ratio |\n|--------|---------|---------|-------|\n| Median time | 32.66 ms | 23.55 ms | 1.39x |\n| Memory | 32.7 MiB | 16.3 MiB | 2.00x |",
     "crumbs": [
       "Docs",
       "<span class='chapter-number'>5</span>  <span class='chapter-title'>Spread Model</span>"
@@ -664,7 +664,7 @@
     "href": "resources/benchmarks.html",
     "title": "Benchmarks",
     "section": "",
-    "text": "\u001b[32m\u001b[1mPrecompiling\u001b[22m\u001b[39m packages… 1071.3 ms\u001b[32m ✓ \u001b[39mQuartoNotebookWorkerJSON3Ext\u001b[90m (serial)\u001b[39m 1 dependency successfully precompiled in 1 seconds ::: {.callout-note} ## No benchmark results available\nBenchmarks have not been set up for this package yet. See the CLAUDE.md for instructions on how to set up benchmarks. :::",
+    "text": "\u001b[32m\u001b[1mPrecompiling\u001b[22m\u001b[39m packages… 1296.0 ms\u001b[32m ✓ \u001b[39mQuartoNotebookWorkerJSON3Ext\u001b[90m (serial)\u001b[39m 1 dependency successfully precompiled in 1 seconds ::: {.callout-note} ## No benchmark results available\nBenchmarks have not been set up for this package yet. See the CLAUDE.md for instructions on how to set up benchmarks. :::",
     "crumbs": [
       "Resources",
       "<span class='chapter-number'>10</span>  <span class='chapter-title'>Benchmarks</span>"
