@@ -1,20 +1,9 @@
 module Wildfires
 
-import Random
-import Adapt
-
 include("Rothermel.jl")
 include("LevelSet.jl")
 include("SpreadModel.jl")
 include("PINNTypes.jl")
-
-#-----------------------------------------------------------------------------# Adapt.jl integration
-Adapt.adapt_structure(to, g::LevelSet.LevelSetGrid) =
-    LevelSet.LevelSetGrid(Adapt.adapt(to, g.φ), g.dx, g.dy, g.x0, g.y0, g.t, g.bc)
-
-Adapt.adapt_structure(to, m::SpreadModel.DynamicMoisture) =
-    SpreadModel.DynamicMoisture(Adapt.adapt(to, m.d1), m.base, m.ambient_d1,
-        m.dry_rate, m.recovery_rate, m.min_d1, m.dx, m.dy, m.x0, m.y0)
 
 using .PINNTypes: AbstractPINNConfig, PINNConfig, NeuralPDEConfig, PINNSolution
 export AbstractPINNConfig, PINNConfig, NeuralPDEConfig, PINNSolution
