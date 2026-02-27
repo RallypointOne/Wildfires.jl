@@ -6,7 +6,8 @@ using Wildfires.Rothermel: FuelClasses, Rothermel, rate_of_spread,
 using Wildfires.LevelSet: LevelSetGrid, xcoords, ycoords, ignite!, advance!, reinitialize!, burned, burn_area,
     cfl_dt, AbstractBoundaryCondition, ZeroNeumann, Dirichlet, Periodic
 using Wildfires.SpreadModel: FireSpreadModel, UniformWind, UniformMoisture, FlatTerrain,
-    DynamicMoisture, spread_rate_field!, simulate!, update!
+    DynamicMoisture, spread_rate_field!, simulate!, update!,
+    CosineBlending, EllipticalBlending, length_to_breadth, fire_eccentricity
 using Adapt
 using KernelAbstractions, GPUArraysCore
 using Test
@@ -377,6 +378,62 @@ const ALL_FUELS = [
             m = methods(train_pinn, (typeof(grid), Function, Tuple{Float64,Float64}, typeof(config)))
             @test length(m) == 1
             @test occursin("NeuralPDE", string(first(m)))
+        end
+    end
+
+    @testset "Elliptical Fire Spread" begin
+        M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+
+        @testset "length_to_breadth" begin
+            @test length_to_breadth(0.0) ≈ 1.0 atol=0.01
+            @test length_to_breadth(2.0) > 1.0
+            @test length_to_breadth(5.0) > length_to_breadth(2.0)
+            # Green formula
+            @test length_to_breadth(0.0; formula=:green) == 1.0  # clamped to 1
+            @test length_to_breadth(2.0; formula=:green) > 1.0
+        end
+
+        @testset "fire_eccentricity" begin
+            @test fire_eccentricity(1.0) ≈ 0.0
+            @test fire_eccentricity(3.0) ≈ sqrt(8.0) / 3.0 atol=1e-10
+            @test 0.0 < fire_eccentricity(2.0) < 1.0
+        end
+
+        @testset "CosineBlending default" begin
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+            @test model.directional isa CosineBlending
+        end
+
+        @testset "EllipticalBlending construction" begin
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain(), EllipticalBlending())
+            @test model.directional isa EllipticalBlending
+            @test model.directional.formula == :anderson
+        end
+
+        @testset "elliptical simulate! runs" begin
+            grid = LevelSetGrid(30, 30, dx=30.0)
+            ignite!(grid, 450.0, 450.0, 50.0)
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain(), EllipticalBlending())
+            simulate!(grid, model, steps=20, dt=0.5)
+            @test burn_area(grid) > 0
+        end
+
+        @testset "elliptical produces different fire shape than cosine" begin
+            grid_cos = LevelSetGrid(50, 50, dx=30.0)
+            ignite!(grid_cos, 750.0, 750.0, 50.0)
+            model_cos = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+
+            grid_ell = LevelSetGrid(50, 50, dx=30.0)
+            ignite!(grid_ell, 750.0, 750.0, 50.0)
+            model_ell = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain(), EllipticalBlending())
+
+            simulate!(grid_cos, model_cos, steps=30, dt=0.5)
+            simulate!(grid_ell, model_ell, steps=30, dt=0.5)
+
+            # Both burn, but produce different perimeters
+            @test burn_area(grid_cos) > 0
+            @test burn_area(grid_ell) > 0
+            @test burn_area(grid_ell) != burn_area(grid_cos)
         end
     end
 

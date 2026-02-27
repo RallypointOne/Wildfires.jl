@@ -3,6 +3,8 @@ module SpreadModel
 export AbstractWind, AbstractMoisture, AbstractTerrain
 export UniformWind, UniformMoisture, UniformSlope, FlatTerrain, DynamicMoisture
 export FireSpreadModel, spread_rate_field!, simulate!, fire_loss, update!
+export AbstractDirectionalModel, CosineBlending, EllipticalBlending
+export length_to_breadth, fire_eccentricity
 
 using ..Rothermel: Rothermel as RothermelModel, FuelClasses, rate_of_spread
 using ..LevelSet: LevelSetGrid, xcoords, ycoords, ignite!, advance!, reinitialize!, cfl_dt
@@ -174,9 +176,111 @@ UniformSlope(; slope, aspect=0.0) = UniformSlope(promote(slope, aspect)...)
 
 (s::UniformSlope)(t, x, y) = (s.slope, s.aspect)
 
-#-----------------------------------------------------------------------------# FireSpreadModel
+#--------------------------------------------------------------------------------# Directional Spread Models
 """
-    FireSpreadModel(fuel, wind, moisture, terrain)
+    AbstractDirectionalModel
+
+Supertype for directional fire spread models that determine how the head-fire
+rate varies with angle from the push direction.
+
+Subtypes: [`CosineBlending`](@ref), [`EllipticalBlending`](@ref).
+"""
+abstract type AbstractDirectionalModel end
+
+"""
+    CosineBlending()
+
+Cosine-based directional spread model (default).
+
+The spread rate at angle `θ` from the push direction is:
+
+    R(θ) = R_base + (R_head - R_base) · max(0, cos θ)
+
+This produces fires that are somewhat wider than observed in practice.
+"""
+struct CosineBlending <: AbstractDirectionalModel end
+
+"""
+    EllipticalBlending(; formula=:anderson)
+
+Elliptical fire spread model based on Anderson (1983).
+
+The spread rate at angle `θ` from the push direction follows an ellipse:
+
+    R(θ) = R_head · (1 - ε) / (1 - ε · cos θ)
+
+where `ε` is the fire eccentricity derived from the length-to-breadth ratio `LB`,
+which is computed from effective midflame wind speed.
+
+# Fields
+- `formula::Symbol` - Length-to-breadth formula: `:anderson` (default) or `:green`
+
+### Examples
+```julia
+model = FireSpreadModel(
+    SHORT_GRASS,
+    UniformWind(speed=8.0),
+    UniformMoisture(FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)),
+    FlatTerrain(),
+    EllipticalBlending(),
+)
+```
+"""
+struct EllipticalBlending <: AbstractDirectionalModel
+    formula::Symbol
+end
+EllipticalBlending(; formula::Symbol=:anderson) = EllipticalBlending(formula)
+
+#--------------------------------------------------------------------------------# Length-to-Breadth and Eccentricity
+"""
+    length_to_breadth(U; formula=:anderson)
+
+Compute the fire length-to-breadth ratio from effective midflame wind speed `U` [m/s].
+
+# Formulas
+- `:anderson` (default) — Anderson (1983):
+  `LB = 0.936 · exp(0.2566 · U) + 0.461 · exp(-0.1548 · U) - 0.397`
+- `:green` — Green (1983): `LB = 1.1 · U^0.464` (suitable for grass)
+
+Returns at least `1.0` (a circle at zero wind).
+
+### Examples
+```julia
+length_to_breadth(0.0)   # ≈ 1.0 (circle)
+length_to_breadth(2.0)   # > 1.0 (elongated)
+```
+"""
+function length_to_breadth(U; formula::Symbol=:anderson)
+    if formula === :anderson
+        LB = oftype(U, 0.936) * exp(oftype(U, 0.2566) * U) +
+             oftype(U, 0.461) * exp(oftype(U, -0.1548) * U) -
+             oftype(U, 0.397)
+    elseif formula === :green
+        LB = oftype(U, 1.1) * U^oftype(U, 0.464)
+    else
+        error("Unknown LB formula: $formula. Use :anderson or :green.")
+    end
+    return max(LB, one(LB))
+end
+
+"""
+    fire_eccentricity(LB)
+
+Compute fire eccentricity from the length-to-breadth ratio `LB`.
+
+Returns `0` for `LB = 1` (circle), approaching `1` for large `LB` (highly elongated).
+
+### Examples
+```julia
+fire_eccentricity(1.0)  # 0.0 (circle)
+fire_eccentricity(3.0)  # ≈ 0.943
+```
+"""
+fire_eccentricity(LB) = sqrt(LB^2 - one(LB)) / LB
+
+#--------------------------------------------------------------------------------# FireSpreadModel
+"""
+    FireSpreadModel(fuel, wind, moisture, terrain, [directional])
 
 Composable fire spread model that combines a fuel model with spatially varying
 environmental inputs. Callable as `model(t, x, y)` → spread rate [m/min].
@@ -185,6 +289,7 @@ Each component is a callable with signature `(t, x, y)`:
 - `wind::AbstractWind` → `(speed, direction)`
 - `moisture::AbstractMoisture` → `FuelClasses`
 - `terrain::AbstractTerrain` → `(slope, aspect)`
+- `directional::AbstractDirectionalModel` → how spread varies with angle (default: `CosineBlending()`)
 
 Dynamic components (e.g. `DynamicMoisture`) are updated between time steps
 via `update!(component, grid, dt)` during `simulate!`.
@@ -194,6 +299,7 @@ via `update!(component, grid, dt)` during `simulate!`.
 using Wildfires.Rothermel
 using Wildfires.SpreadModel
 
+# Cosine blending (default)
 model = FireSpreadModel(
     SHORT_GRASS,
     UniformWind(speed=8.0),
@@ -201,15 +307,26 @@ model = FireSpreadModel(
     FlatTerrain()
 )
 
+# Elliptical blending (more realistic fire shapes)
+model = FireSpreadModel(
+    SHORT_GRASS,
+    UniformWind(speed=8.0),
+    UniformMoisture(FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)),
+    FlatTerrain(),
+    EllipticalBlending(),
+)
+
 model(0.0, 100.0, 100.0)  # spread rate at (t=0, x=100, y=100)
 ```
 """
-struct FireSpreadModel{F,W<:AbstractWind,M<:AbstractMoisture,T<:AbstractTerrain}
+struct FireSpreadModel{F,W<:AbstractWind,M<:AbstractMoisture,T<:AbstractTerrain,D<:AbstractDirectionalModel}
     fuel::F
     wind::W
     moisture::M
     terrain::T
+    directional::D
 end
+FireSpreadModel(fuel, wind, moisture, terrain) = FireSpreadModel(fuel, wind, moisture, terrain, CosineBlending())
 
 function (s::FireSpreadModel)(t, x, y)
     speed, _ = s.wind(t, x, y)
@@ -279,7 +396,7 @@ function spread_rate_field!(F::AbstractMatrix, model::FireSpreadModel, grid::Lev
 
         if grad > 0
             F[i, j] = _directional_rate(
-                model, t, xs[j], ys[i],
+                model, model.directional, t, xs[j], ys[i],
                 dφdx / grad, dφdy / grad)
         else
             F[i, j] = model(t, xs[j], ys[i])
@@ -288,23 +405,18 @@ function spread_rate_field!(F::AbstractMatrix, model::FireSpreadModel, grid::Lev
     F
 end
 
-# Direction-dependent spread rate using front normal (nx, ny)
-function _directional_rate(model::FireSpreadModel,
-        t, x, y, nx, ny)
+# Shared helper: compute push direction and cos(theta) with front normal
+function _push_direction(model::FireSpreadModel, t, x, y, nx, ny)
     speed, wind_dir = model.wind(t, x, y)
     moist = model.moisture(t, x, y)
     slope_val, aspect = model.terrain(t, x, y)
 
     R_head = rate_of_spread(model.fuel,
         moisture=moist, wind=speed, slope=slope_val)
-    R_head == 0 && return 0.0
-
     R_base = rate_of_spread(model.fuel,
         moisture=moist, wind=0.0, slope=0.0)
-    R_head ≈ R_base && return R_head
 
-    # Push direction weighted by each component's
-    # contribution to spread rate
+    # Push direction weighted by each component's contribution to spread rate
     R_w = rate_of_spread(model.fuel,
         moisture=moist, wind=speed, slope=0.0)
     R_s = rate_of_spread(model.fuel,
@@ -319,10 +431,32 @@ function _directional_rate(model::FireSpreadModel,
     py = w_wind * (-sin(wind_dir)) +
          w_slope * (-sin(aspect))
     pmag = hypot(px, py)
-    pmag == 0 && return R_head
 
-    cos_theta = (nx * px + ny * py) / pmag
+    cos_theta = pmag == 0 ? one(px) : (nx * px + ny * py) / pmag
+    return (; R_head, R_base, speed, cos_theta)
+end
+
+# Cosine blending: R = R_base + (R_head - R_base) * max(0, cos θ)
+function _directional_rate(model::FireSpreadModel, ::CosineBlending,
+        t, x, y, nx, ny)
+    (; R_head, R_base, cos_theta) = _push_direction(model, t, x, y, nx, ny)
+    R_head == 0 && return 0.0
+    R_head ≈ R_base && return R_head
     return R_base + (R_head - R_base) * max(0.0, cos_theta)
+end
+
+# Elliptical blending: R = R_head * (1 - ε) / (1 - ε * cos θ)
+function _directional_rate(model::FireSpreadModel, dir::EllipticalBlending,
+        t, x, y, nx, ny)
+    (; R_head, R_base, speed, cos_theta) = _push_direction(model, t, x, y, nx, ny)
+    R_head == 0 && return 0.0
+    R_head ≈ R_base && return R_head
+
+    # Wind speed in m/s for LB formula (stored as km/h)
+    U_ms = speed / 3.6
+    LB = length_to_breadth(U_ms; formula=dir.formula)
+    ε = fire_eccentricity(LB)
+    return R_head * (1 - ε) / (1 - ε * cos_theta)
 end
 
 #-----------------------------------------------------------------------------# simulate!

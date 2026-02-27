@@ -64,6 +64,54 @@ fireplot!(ax, grid)
 fig
 ```
 
+## Directional Spread Models
+
+By default, `FireSpreadModel` uses cosine blending to distribute the head-fire rate across angles.  This produces fires that are wider than typically observed.  The **elliptical model** (Anderson, 1983) produces more realistic elongated fire shapes by computing a length-to-breadth ratio from wind speed.
+
+Pass a directional model as the 5th argument to `FireSpreadModel`:
+
+- `CosineBlending()` (default) — `R(θ) = R_base + (R_head - R_base) · max(0, cos θ)`
+- `EllipticalBlending()` — `R(θ) = R_head · (1 - ε) / (1 - ε · cos θ)` where `ε` is fire eccentricity
+
+```{julia}
+M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+
+fig = Figure(size=(700, 300))
+for (col, (label, dir)) in enumerate([
+    ("Cosine (default)", CosineBlending()),
+    ("Elliptical (Anderson)", EllipticalBlending()),
+])
+    g = LevelSetGrid(200, 200, dx=30.0)
+    ignite!(g, 3000.0, 3000.0, 50.0)
+    m = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain(), dir)
+    simulate!(g, m, steps=100, dt=0.5)
+    ax = Axis(fig[1, col], title=label, aspect=DataAspect())
+    fireplot!(ax, g)
+    hidedecorations!(ax)
+end
+fig
+```
+
+### Length-to-Breadth Formulas
+
+The `EllipticalBlending` model computes a length-to-breadth ratio (LB) from midflame wind speed using a published formula.  Two options are available:
+
+- `:anderson` (default) — Anderson (1983), general-purpose
+- `:green` — Green (1983), suitable for grass fuels
+
+```{julia}
+EllipticalBlending(formula=:green)  # use Green's formula
+```
+
+The helper functions `length_to_breadth` and `fire_eccentricity` are exported for use in custom spread models:
+
+```{julia}
+U = 2.0  # m/s midflame wind speed
+LB = length_to_breadth(U)
+ε = fire_eccentricity(LB)
+(LB=LB, ε=ε)
+```
+
 ## Wind
 
 ### `UniformWind`
