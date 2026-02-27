@@ -428,7 +428,7 @@ window.Quarto = {
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Single point evaluation</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">sol</span>(<span class="fl">5.0</span>, <span class="fl">500.0</span>, <span class="fl">500.0</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display" data-execution_count="1">
-<pre><code>-48.06566849824874</code></pre>
+<pre><code>-48.06566849824875</code></pre>
 </div>
 </div>
 <p>Evaluate on the full grid at a specific time with <code>predict_on_grid</code>:</p>
@@ -556,6 +556,21 @@ window.Quarto = {
 <td><code>500</code></td>
 <td>Resample collocation points every N epochs</td>
 </tr>
+<tr class="odd">
+<td><code>lbfgs_epochs</code></td>
+<td><code>0</code></td>
+<td>L-BFGS refinement iterations after Adam (0 = disabled)</td>
+</tr>
+<tr class="even">
+<td><code>importance_sampling</code></td>
+<td><code>false</code></td>
+<td>Concentrate collocation points near fire front</td>
+</tr>
+<tr class="odd">
+<td><code>float32</code></td>
+<td><code>false</code></td>
+<td>Use Float32 for NN weights (halves memory)</td>
+</tr>
 </tbody>
 </table>
 <section id="tuning-hyperparameters" class="level3">
@@ -565,6 +580,14 @@ window.Quarto = {
 <p><strong>Learning rate</strong>: The default <code>1e-3</code> works well with Adam for most cases. If the loss oscillates, reduce to <code>1e-4</code>. If training is very slow, try <code>3e-3</code> briefly.</p>
 <p><strong>Loss weights (<code>lambda_pde</code>, <code>lambda_bc</code>, <code>lambda_data</code>)</strong>: The defaults of <code>1.0</code> for all terms are a reasonable starting point. If the fire front bleeds through boundaries, increase <code>lambda_bc</code> (e.g., <code>10.0</code>). When using observations, increase <code>lambda_data</code> (e.g., <code>5.0</code>–<code>10.0</code>) to tighten the fit to observed perimeters.</p>
 <p><strong>Resampling (<code>resample_every</code>)</strong>: Periodically resampling collocation points prevents overfitting to a fixed set of training locations. The default of <code>500</code> epochs works well; lower values (e.g., <code>100</code>) can help if the loss stagnates.</p>
+<p><strong>L-BFGS refinement (<code>lbfgs_epochs</code>)</strong>: After Adam converges to the right neighborhood, L-BFGS can polish the solution with second-order curvature information. Typical values are 100–500 iterations. Requires passing the optimizer explicitly:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">OptimizationOptimJL</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>config <span class="op">=</span> <span class="fu">PINNConfig</span>(max_epochs<span class="op">=</span><span class="fl">5000</span>, lbfgs_epochs<span class="op">=</span><span class="fl">200</span>)</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>sol <span class="op">=</span> <span class="fu">train_pinn</span>(grid, model, tspan;</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>                 config<span class="op">=</span>config, lbfgs_optimizer<span class="op">=</span>OptimizationOptimJL.<span class="fu">LBFGS</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Importance sampling (<code>importance_sampling</code>)</strong>: When enabled, half the collocation points are sampled uniformly and half are concentrated near the initial fire front (where <span class="math inline">\(|\varphi|\)</span> is small). This focuses training capacity on the region that matters most. Enable it when the loss plateaus or the fire front is poorly resolved relative to the domain size.</p>
+<p><strong>Float32 weights (<code>float32</code>)</strong>: Halves NN memory and can speed up forward/backward passes. Collocation points remain Float64 for spatial accuracy. Try this when memory is tight or training is slow. May reduce precision slightly.</p>
 </section>
 </section>
 <section id="loss-function" class="level2">
@@ -583,14 +606,14 @@ window.Quarto = {
 <section id="data-assimilation" class="level2">
 <h2 class="anchored" data-anchor-id="data-assimilation">Data Assimilation</h2>
 <p>Pass observations as a tuple of vectors <code>(t, x, y, phi)</code> to incorporate fire perimeter data:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Example: observations at t=10 along a known fire boundary</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>obs_t <span class="op">=</span> <span class="fu">fill</span>(<span class="fl">10.0</span>, <span class="fl">50</span>)</span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>obs_x <span class="op">=</span> <span class="fu">rand</span>(<span class="fl">400.0</span><span class="op">:</span><span class="fl">800.0</span>, <span class="fl">50</span>)</span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>obs_y <span class="op">=</span> <span class="fu">rand</span>(<span class="fl">400.0</span><span class="op">:</span><span class="fl">800.0</span>, <span class="fl">50</span>)</span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>obs_phi <span class="op">=</span> <span class="fu">zeros</span>(<span class="fl">50</span>)  <span class="co"># on the fire front (phi = 0)</span></span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>sol <span class="op">=</span> <span class="fu">train_pinn</span>(grid, model, (<span class="fl">0.0</span>, <span class="fl">20.0</span>);</span>
-<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>                 observations<span class="op">=</span>(obs_t, obs_x, obs_y, obs_phi))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Example: observations at t=10 along a known fire boundary</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>obs_t <span class="op">=</span> <span class="fu">fill</span>(<span class="fl">10.0</span>, <span class="fl">50</span>)</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>obs_x <span class="op">=</span> <span class="fu">rand</span>(<span class="fl">400.0</span><span class="op">:</span><span class="fl">800.0</span>, <span class="fl">50</span>)</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>obs_y <span class="op">=</span> <span class="fu">rand</span>(<span class="fl">400.0</span><span class="op">:</span><span class="fl">800.0</span>, <span class="fl">50</span>)</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>obs_phi <span class="op">=</span> <span class="fu">zeros</span>(<span class="fl">50</span>)  <span class="co"># on the fire front (phi = 0)</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>sol <span class="op">=</span> <span class="fu">train_pinn</span>(grid, model, (<span class="fl">0.0</span>, <span class="fl">20.0</span>);</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>                 observations<span class="op">=</span>(obs_t, obs_x, obs_y, obs_phi))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>Observation format details:</strong></p>
 <ul>
 <li><strong><code>t</code></strong>: Time in minutes (same units as the simulation time span)</li>
@@ -1030,7 +1053,7 @@ window.Quarto = {
       &nbsp;
     </div>   
     <div class="nav-footer-center">
-<p>Built on 2026-02-26</p>
+<p>Built on 2026-02-27</p>
 </div>
     <div class="nav-footer-right">
       &nbsp;

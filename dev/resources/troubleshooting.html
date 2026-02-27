@@ -346,6 +346,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><strong>Too few collocation points</strong>: Increase <code>n_interior</code>. Use at least 10x the number of grid cells.</li>
 <li><strong>Loss weight imbalance</strong>: If one loss term dominates, the others are undertrained. Check individual loss components and adjust <code>lambda_pde</code>, <code>lambda_bc</code>, <code>lambda_data</code>.</li>
 <li><strong>Stale collocation points</strong>: Decrease <code>resample_every</code> (e.g., <code>100</code>) so the network sees diverse training locations.</li>
+<li><strong>Try importance sampling</strong>: Set <code>importance_sampling=true</code> to concentrate points near the fire front.</li>
+<li><strong>Try L-BFGS refinement</strong>: After Adam, L-BFGS can push the loss lower. Set <code>lbfgs_epochs=200</code> and pass <code>lbfgs_optimizer=OptimizationOptimJL.LBFGS()</code>.</li>
 </ul>
 </section>
 <section id="pinn-fire-front-bleeds-through-boundaries" class="level2">
@@ -799,7 +801,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       &nbsp;
     </div>   
     <div class="nav-footer-center">
-<p>Built on 2026-02-26</p>
+<p>Built on 2026-02-27</p>
 </div>
     <div class="nav-footer-right">
       &nbsp;

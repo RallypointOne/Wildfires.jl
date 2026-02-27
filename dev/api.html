@@ -402,6 +402,9 @@ document.getElementById('toggle-all-callouts').addEventListener('click', functio
 <li><code>learning_rate::Float64</code> - Adam learning rate (default <code>1e-3</code>)</li>
 <li><code>max_epochs::Int</code> - Maximum training epochs (default <code>10000</code>)</li>
 <li><code>resample_every::Int</code> - Resample collocation points every N epochs (default <code>500</code>)</li>
+<li><code>lbfgs_epochs::Int</code> - L-BFGS refinement epochs after Adam (default <code>0</code>, disabled)</li>
+<li><code>importance_sampling::Bool</code> - Concentrate points near fire front (default <code>false</code>)</li>
+<li><code>float32::Bool</code> - Use Float32 for NN weights (default <code>false</code>)</li>
 </ul>
 <section id="examples-1" class="level3">
 <h3 class="anchored" data-anchor-id="examples-1">Examples</h3>
@@ -552,6 +555,7 @@ document.getElementById('toggle-all-callouts').addEventListener('click', functio
 <li><code>tspan</code> - Time interval <code>(t_start, t_end)</code></li>
 <li><code>config</code> - <code>PINNConfig</code> or <code>NeuralPDEConfig</code> with training hyperparameters</li>
 <li><code>observations</code> - Optional <code>(t, x, y, phi)</code> tuple of observation data (Lux backend only)</li>
+<li><code>lbfgs_optimizer</code> - Optimizer for L-BFGS refinement phase, e.g.&nbsp;<code>OptimizationOptimJL.LBFGS()</code> (Lux backend only, requires <code>lbfgs_epochs &gt; 0</code> in config)</li>
 </ul>
 </section>
 <section id="returns" class="level1">
@@ -992,7 +996,7 @@ document.getElementById('toggle-all-callouts').addEventListener('click', functio
       &nbsp;
     </div>   
     <div class="nav-footer-center">
-<p>Built on 2026-02-26</p>
+<p>Built on 2026-02-27</p>
 </div>
     <div class="nav-footer-right">
       &nbsp;
