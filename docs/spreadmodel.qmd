@@ -231,6 +231,80 @@ end
 fig
 ```
 
+## Fuel Breaks and Unburnable Areas
+
+The `LevelSetGrid` includes a `burnable` field — a `BitMatrix` where `false` marks cells that fire cannot enter.  By default all cells are burnable.  Use `set_unburnable!` to mark circular regions, or directly set `grid.burnable[i, j] = false` for arbitrary shapes.
+
+This is useful for representing water bodies, roads, fuel breaks, and pre-existing fire scars.
+
+### Creating a Fuel Break
+
+```{julia}
+M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+
+fig = Figure(size=(700, 300))
+
+# Without fuel break
+g1 = LevelSetGrid(200, 200, dx=30.0)
+ignite!(g1, 3000.0, 3000.0, 50.0)
+m1 = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+simulate!(g1, m1, steps=100, dt=0.5)
+ax1 = Axis(fig[1, 1], title="No fuel break", aspect=DataAspect())
+fireplot!(ax1, g1)
+hidedecorations!(ax1)
+
+# With fuel break (unburnable strip)
+g2 = LevelSetGrid(200, 200, dx=30.0)
+ignite!(g2, 3000.0, 3000.0, 50.0)
+# Mark a vertical strip as unburnable
+xs = xcoords(g2)
+for j in eachindex(xs)
+    if 3400.0 <= xs[j] <= 3500.0
+        g2.burnable[:, j] .= false
+    end
+end
+m2 = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+simulate!(g2, m2, steps=100, dt=0.5)
+ax2 = Axis(fig[1, 2], title="With fuel break", aspect=DataAspect())
+fireplot!(ax2, g2)
+hidedecorations!(ax2)
+fig
+```
+
+### Marking Pre-Burned Areas
+
+To represent an existing fire scar that should not re-ignite, combine `set_unburnable!` with setting `φ < 0`:
+
+```{julia}
+grid = LevelSetGrid(200, 200, dx=30.0)
+
+# Pre-existing fire scar: set φ < 0 AND mark unburnable
+cx, cy, r = 2500.0, 3000.0, 300.0
+xs = xcoords(grid)
+ys = ycoords(grid)
+for j in eachindex(xs), i in eachindex(ys)
+    if hypot(xs[j] - cx, ys[i] - cy) <= r
+        grid.φ[i, j] = -1.0
+    end
+end
+set_unburnable!(grid, cx, cy, r)
+
+# New ignition away from the scar
+ignite!(grid, 4000.0, 3000.0, 50.0)
+
+M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+simulate!(grid, model, steps=100, dt=0.5)
+
+fig = Figure()
+ax = Axis(fig[1, 1], title="Fire scar blocks spread", aspect=DataAspect(),
+    xlabel="x (m)", ylabel="y (m)")
+fireplot!(ax, grid)
+fig
+```
+
+Without `set_unburnable!`, the fire scar boundary would be treated as an active fire front and expand outward.
+
 ## Custom Components
 
 To create a custom component, define a callable struct that subtypes `AbstractWind`, `AbstractMoisture`, or `AbstractTerrain`.

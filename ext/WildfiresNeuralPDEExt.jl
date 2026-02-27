@@ -91,7 +91,7 @@ function Wildfires.train_pinn(grid::LevelSetGrid, spread_model, tspan::Tuple,
     ic_y0 = Float64(first(ys_grid))
     ic_dx = Float64(step(xs_grid))
     ic_dy = Float64(step(ys_grid))
-    grid_ic = LevelSetGrid(copy(grid.φ), grid.dx, grid.dy, grid.x0, grid.y0, grid.t, grid.bc)
+    grid_ic = LevelSetGrid(copy(grid.φ), copy(grid.burnable), grid.dx, grid.dy, grid.x0, grid.y0, grid.t, grid.bc)
 
     # Set module-level refs for registered symbolic functions
     _SPREAD_REF[] = spread_model

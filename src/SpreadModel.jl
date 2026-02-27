@@ -363,7 +363,7 @@ function spread_rate_field!(F::AbstractMatrix, model, grid::LevelSetGrid)
     ys = ycoords(grid)
     t = grid.t
     for j in eachindex(xs), i in eachindex(ys)
-        F[i, j] = model(t, xs[j], ys[i])
+        F[i, j] = grid.burnable[i, j] ? model(t, xs[j], ys[i]) : zero(eltype(F))
     end
     F
 end
@@ -394,7 +394,9 @@ function spread_rate_field!(F::AbstractMatrix, model::FireSpreadModel, grid::Lev
         end
         grad = hypot(dφdx, dφdy)
 
-        if grad > 0
+        if !grid.burnable[i, j]
+            F[i, j] = zero(eltype(F))
+        elseif grad > 0
             F[i, j] = _directional_rate(
                 model, model.directional, t, xs[j], ys[i],
                 dφdx / grad, dφdy / grad)

@@ -1,6 +1,6 @@
 module LevelSet
 
-export LevelSetGrid, xcoords, ycoords, burned, burn_area, ignite!, advance!, reinitialize!, cfl_dt
+export LevelSetGrid, xcoords, ycoords, burned, burn_area, ignite!, advance!, reinitialize!, cfl_dt, set_unburnable!
 export AbstractBoundaryCondition, ZeroNeumann, Dirichlet, Periodic
 
 #=
@@ -101,7 +101,7 @@ Return `true` if cell `(i, j)` should be skipped during the update.
 
 #-----------------------------------------------------------------------------# LevelSetGrid
 """
-    LevelSetGrid{T, M, BC} <: AbstractMatrix{T}
+    LevelSetGrid{T, M, B, BC} <: AbstractMatrix{T}
 
 A 2D grid representing a fire spread simulation via the level set method.
 
@@ -111,18 +111,19 @@ The grid stores a signed distance function `φ` where:
 - `φ > 0` → unburned
 
 # Fields
-- `φ::M`    - Level set function values (`M <: AbstractMatrix{T}`)
-- `dx::T`   - Grid spacing in x [m]
-- `dy::T`   - Grid spacing in y [m]
-- `x0::T`   - x-coordinate of grid origin (lower-left) [m]
-- `y0::T`   - y-coordinate of grid origin (lower-left) [m]
-- `t::T`    - Current simulation time [min]
-- `bc::BC`  - Boundary condition (`BC <: AbstractBoundaryCondition`)
+- `φ::M`          - Level set function values (`M <: AbstractMatrix{T}`)
+- `burnable::B`   - Mask of burnable cells (`B <: AbstractMatrix{Bool}`); `false` → unburnable
+- `dx::T`         - Grid spacing in x [m]
+- `dy::T`         - Grid spacing in y [m]
+- `x0::T`         - x-coordinate of grid origin (lower-left) [m]
+- `y0::T`         - y-coordinate of grid origin (lower-left) [m]
+- `t::T`          - Current simulation time [min]
+- `bc::BC`        - Boundary condition (`BC <: AbstractBoundaryCondition`)
 
 # Constructor
     LevelSetGrid(nx, ny; dx=30.0, dy=dx, x0=0.0, y0=0.0, bc=ZeroNeumann())
 
-Create an unburned grid with `nx × ny` cells.
+Create an unburned grid with `nx × ny` cells (all burnable by default).
 
 ### Examples
 ```julia
@@ -132,8 +133,9 @@ ignite!(grid, 1500.0, 1500.0, 100.0)
 grid = LevelSetGrid(100, 100, dx=30.0, bc=Periodic())
 ```
 """
-mutable struct LevelSetGrid{T, M <: AbstractMatrix{T}, BC <: AbstractBoundaryCondition} <: AbstractMatrix{T}
+mutable struct LevelSetGrid{T, M <: AbstractMatrix{T}, B <: AbstractMatrix{Bool}, BC <: AbstractBoundaryCondition} <: AbstractMatrix{T}
     φ::M
+    burnable::B
     dx::T
     dy::T
     x0::T
@@ -145,7 +147,8 @@ end
 function LevelSetGrid(nx::Integer, ny::Integer; dx=30.0, dy=dx, x0=0.0, y0=0.0, bc::AbstractBoundaryCondition=ZeroNeumann())
     T = promote_type(typeof(dx), typeof(dy), typeof(x0), typeof(y0))
     φ = ones(T, ny, nx)  # all positive → unburned
-    LevelSetGrid(φ, T(dx), T(dy), T(x0), T(y0), zero(T), bc)
+    burnable = trues(ny, nx)
+    LevelSetGrid(φ, burnable, T(dx), T(dy), T(x0), T(y0), zero(T), bc)
 end
 
 #-----------------------------------------------------------------------------# AbstractMatrix interface
@@ -157,7 +160,9 @@ function Base.show(io::IO, ::MIME"text/plain", g::LevelSetGrid{T}) where {T}
     ny, nx = size(g.φ)
     nb = count(<(0), g.φ)
     bc_str = g.bc isa ZeroNeumann ? "" : ", bc=$(nameof(typeof(g.bc)))"
-    print(io, "LevelSetGrid{$T} $(nx)×$(ny) (t=$(g.t), burned=$(nb)/$(nx*ny)$(bc_str))")
+    n_unburnable = count(!, g.burnable)
+    ub_str = n_unburnable > 0 ? ", unburnable=$n_unburnable" : ""
+    print(io, "LevelSetGrid{$T} $(nx)×$(ny) (t=$(g.t), burned=$(nb)/$(nx*ny)$(ub_str)$(bc_str))")
 end
 
 function Base.show(io::IO, g::LevelSetGrid{T}) where {T}
@@ -215,6 +220,33 @@ function ignite!(g::LevelSetGrid, cx, cy, r)
     ys = ycoords(g)
     # Broadcasting: ys is ny-column, xs' is 1×nx row → broadcasts to ny×nx
     g.φ .= min.(g.φ, hypot.(xs' .- cx, ys .- cy) .- r)
+    g
+end
+
+#-----------------------------------------------------------------------------# set_unburnable!
+"""
+    set_unburnable!(grid::LevelSetGrid, cx, cy, r)
+
+Mark all cells within radius `r` of `(cx, cy)` as unburnable.
+
+Unburnable cells always have a spread rate of zero, preventing fire from
+entering them.  Useful for representing water bodies, roads, fuel breaks,
+and pre-existing fire scars.
+
+### Examples
+```julia
+grid = LevelSetGrid(100, 100, dx=30.0)
+set_unburnable!(grid, 1500.0, 1500.0, 200.0)  # circular fuel break
+```
+"""
+function set_unburnable!(g::LevelSetGrid, cx, cy, r)
+    xs = xcoords(g)
+    ys = ycoords(g)
+    for j in eachindex(xs), i in eachindex(ys)
+        if hypot(xs[j] - cx, ys[i] - cy) <= r
+            g.burnable[i, j] = false
+        end
+    end
     g
 end
 

@@ -4,7 +4,7 @@ using Wildfires.Rothermel: FuelClasses, Rothermel, rate_of_spread,
     SOUTHERN_ROUGH, CLOSED_TIMBER_LITTER, HARDWOOD_LITTER, TIMBER_UNDERSTORY,
     LIGHT_SLASH, MEDIUM_SLASH, HEAVY_SLASH
 using Wildfires.LevelSet: LevelSetGrid, xcoords, ycoords, ignite!, advance!, reinitialize!, burned, burn_area,
-    cfl_dt, AbstractBoundaryCondition, ZeroNeumann, Dirichlet, Periodic
+    cfl_dt, AbstractBoundaryCondition, ZeroNeumann, Dirichlet, Periodic, set_unburnable!
 using Wildfires.SpreadModel: FireSpreadModel, UniformWind, UniformMoisture, FlatTerrain,
     UniformSlope, DynamicMoisture, spread_rate_field!, simulate!, update!,
     CosineBlending, EllipticalBlending, length_to_breadth, fire_eccentricity
@@ -169,16 +169,19 @@ const ALL_FUELS = [
 
         @testset "type parameterization" begin
             grid = LevelSetGrid(20, 20, dx=30.0)
-            @test grid isa LevelSetGrid{Float64, Matrix{Float64}}
+            @test grid isa LevelSetGrid{Float64, Matrix{Float64}, BitMatrix}
             @test grid.φ isa Matrix{Float64}
+            @test grid.burnable isa BitMatrix
         end
 
         @testset "Adapt roundtrip" begin
             grid = LevelSetGrid(30, 30, dx=30.0)
             ignite!(grid, 450.0, 450.0, 50.0)
+            set_unburnable!(grid, 300.0, 300.0, 50.0)
             grid2 = Adapt.adapt(Array, grid)
             @test grid2 isa LevelSetGrid{Float64, Matrix{Float64}}
             @test grid2.φ == grid.φ
+            @test grid2.burnable == grid.burnable
             @test grid2.dx == grid.dx
             @test grid2.t == grid.t
         end
@@ -451,6 +454,104 @@ const ALL_FUELS = [
             @test burn_area(grid_cos) > 0
             @test burn_area(grid_ell) > 0
             @test burn_area(grid_ell) != burn_area(grid_cos)
+        end
+    end
+
+    @testset "Burnable" begin
+        M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+
+        @testset "default all burnable" begin
+            grid = LevelSetGrid(20, 20, dx=30.0)
+            @test all(grid.burnable)
+        end
+
+        @testset "set_unburnable! marks correct cells" begin
+            grid = LevelSetGrid(50, 50, dx=30.0)
+            cx, cy, r = 750.0, 750.0, 100.0
+            set_unburnable!(grid, cx, cy, r)
+            xs = xcoords(grid)
+            ys = ycoords(grid)
+            for j in eachindex(xs), i in eachindex(ys)
+                inside = hypot(xs[j] - cx, ys[i] - cy) <= r
+                @test grid.burnable[i, j] == !inside
+            end
+        end
+
+        @testset "spread_rate_field! returns zero in unburnable cells" begin
+            grid = LevelSetGrid(30, 30, dx=30.0)
+            ignite!(grid, 450.0, 450.0, 50.0)
+            set_unburnable!(grid, 300.0, 300.0, 80.0)
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+            F = similar(grid.φ)
+            spread_rate_field!(F, model, grid)
+            for j in axes(F, 2), i in axes(F, 1)
+                if !grid.burnable[i, j]
+                    @test F[i, j] == 0.0
+                end
+            end
+        end
+
+        @testset "spread_rate_field! generic model respects burnable" begin
+            grid = LevelSetGrid(20, 20, dx=30.0)
+            set_unburnable!(grid, 300.0, 300.0, 80.0)
+            const_model = (t, x, y) -> 5.0
+            F = similar(grid.φ)
+            spread_rate_field!(F, const_model, grid)
+            for j in axes(F, 2), i in axes(F, 1)
+                if !grid.burnable[i, j]
+                    @test F[i, j] == 0.0
+                else
+                    @test F[i, j] == 5.0
+                end
+            end
+        end
+
+        @testset "fire stops at unburnable strip" begin
+            grid = LevelSetGrid(80, 80, dx=20.0)
+            ignite!(grid, 800.0, 800.0, 50.0)
+            # Vertical unburnable strip at x ≈ 1000m
+            xs = xcoords(grid)
+            for j in eachindex(xs)
+                if 980.0 <= xs[j] <= 1020.0
+                    grid.burnable[:, j] .= false
+                end
+            end
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+            simulate!(grid, model, steps=200, dt=0.3)
+            # Fire should not cross the strip: cells beyond x=1020 should be unburned
+            for j in eachindex(xs)
+                if xs[j] > 1040.0
+                    @test all(>(0), grid.φ[:, j])
+                end
+            end
+        end
+
+        @testset "fire cannot spread into unburnable region" begin
+            grid = LevelSetGrid(80, 80, dx=20.0)
+            ignite!(grid, 800.0, 800.0, 50.0)
+            # Place unburnable circle ahead of the fire
+            set_unburnable!(grid, 1100.0, 800.0, 100.0)
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+            simulate!(grid, model, steps=200, dt=0.3)
+            # No unburnable cell should have φ < 0
+            for j in axes(grid.φ, 2), i in axes(grid.φ, 1)
+                if !grid.burnable[i, j]
+                    @test grid.φ[i, j] >= 0
+                end
+            end
+        end
+
+        @testset "show includes unburnable count" begin
+            grid = LevelSetGrid(20, 20, dx=30.0)
+            set_unburnable!(grid, 300.0, 300.0, 50.0)
+            s = sprint(show, MIME("text/plain"), grid)
+            @test contains(s, "unburnable=")
+        end
+
+        @testset "show omits unburnable when all burnable" begin
+            grid = LevelSetGrid(10, 10, dx=30.0)
+            s = sprint(show, MIME("text/plain"), grid)
+            @test !contains(s, "unburnable")
         end
     end
 
