@@ -6,7 +6,7 @@ using Wildfires.Rothermel: FuelClasses, Rothermel, rate_of_spread,
 using Wildfires.LevelSet: LevelSetGrid, xcoords, ycoords, ignite!, advance!, reinitialize!, burned, burn_area,
     cfl_dt, AbstractBoundaryCondition, ZeroNeumann, Dirichlet, Periodic
 using Wildfires.SpreadModel: FireSpreadModel, UniformWind, UniformMoisture, FlatTerrain,
-    DynamicMoisture, spread_rate_field!, simulate!, update!,
+    UniformSlope, DynamicMoisture, spread_rate_field!, simulate!, update!,
     CosineBlending, EllipticalBlending, length_to_breadth, fire_eccentricity
 using Adapt
 using KernelAbstractions, GPUArraysCore
@@ -416,6 +416,23 @@ const ALL_FUELS = [
             model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain(), EllipticalBlending())
             simulate!(grid, model, steps=20, dt=0.5)
             @test burn_area(grid) > 0
+        end
+
+        @testset "slope-only produces elongated fire with elliptical" begin
+            grid = LevelSetGrid(80, 80, dx=20.0)
+            ignite!(grid, 800.0, 800.0, 50.0)
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=0.0), UniformMoisture(M),
+                UniformSlope(slope=0.6, aspect=0.0), EllipticalBlending())
+            simulate!(grid, model, steps=80, dt=0.5)
+            @test burn_area(grid) > 0
+            # Fire should be asymmetric (elongated uphill) not circular
+            burned = grid.φ .< 0
+            xs = [j for i in axes(burned, 1) for j in axes(burned, 2) if burned[i, j]]
+            ys = [i for i in axes(burned, 1) for j in axes(burned, 2) if burned[i, j]]
+            @test !isempty(xs)
+            x_span = maximum(xs) - minimum(xs)
+            y_span = maximum(ys) - minimum(ys)
+            @test x_span != y_span  # not circular
         end
 
         @testset "elliptical produces different fire shape than cosine" begin

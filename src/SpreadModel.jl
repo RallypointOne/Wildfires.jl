@@ -445,16 +445,39 @@ function _directional_rate(model::FireSpreadModel, ::CosineBlending,
     return R_base + (R_head - R_base) * max(0.0, cos_theta)
 end
 
+# Find wind speed (km/h) that alone produces R_target, capturing combined wind+slope effect.
+# Uses bisection on rate_of_spread (monotonic in wind).
+function _effective_wind_speed(fuel, moist, R_target, R_base)
+    R_target <= R_base && return 0.0
+    lo, hi = 0.0, 50.0
+    while rate_of_spread(fuel, moisture=moist, wind=hi, slope=0.0) < R_target
+        hi *= 2
+    end
+    for _ in 1:20
+        mid = (lo + hi) / 2
+        R_mid = rate_of_spread(fuel, moisture=moist, wind=mid, slope=0.0)
+        if R_mid < R_target
+            lo = mid
+        else
+            hi = mid
+        end
+        (hi - lo) < 0.1 && break
+    end
+    return (lo + hi) / 2
+end
+
 # Elliptical blending: R = R_head * (1 - ε) / (1 - ε * cos θ)
 function _directional_rate(model::FireSpreadModel, dir::EllipticalBlending,
         t, x, y, nx, ny)
-    (; R_head, R_base, speed, cos_theta) = _push_direction(model, t, x, y, nx, ny)
+    (; R_head, R_base, cos_theta) = _push_direction(model, t, x, y, nx, ny)
     R_head == 0 && return 0.0
     R_head ≈ R_base && return R_head
 
-    # Wind speed in m/s for LB formula (stored as km/h)
-    U_ms = speed / 3.6
-    LB = length_to_breadth(U_ms; formula=dir.formula)
+    # Effective wind speed accounts for both wind and slope
+    moist = model.moisture(t, x, y)
+    U_eff_kmh = _effective_wind_speed(model.fuel, moist, R_head, R_base)
+    U_eff_ms = U_eff_kmh / 3.6
+    LB = length_to_breadth(U_eff_ms; formula=dir.formula)
     ε = fire_eccentricity(LB)
     return R_head * (1 - ε) / (1 - ε * cos_theta)
 end
