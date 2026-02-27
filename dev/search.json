@@ -341,6 +341,17 @@
     ]
   },
   {
+    "objectID": "spreadmodel.html#fuel-breaks-and-unburnable-areas",
+    "href": "spreadmodel.html#fuel-breaks-and-unburnable-areas",
+    "title": "Spread Model",
+    "section": "Fuel Breaks and Unburnable Areas",
+    "text": "Fuel Breaks and Unburnable Areas\nThe LevelSetGrid includes a burnable field — a BitMatrix where false marks cells that fire cannot enter. By default all cells are burnable. Use set_unburnable! to mark circular regions, or directly set grid.burnable[i, j] = false for arbitrary shapes.\nThis is useful for representing water bodies, roads, fuel breaks, and pre-existing fire scars.\n\nCreating a Fuel Break\n\nM = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)\n\nfig = Figure(size=(700, 300))\n\n# Without fuel break\ng1 = LevelSetGrid(200, 200, dx=30.0)\nignite!(g1, 3000.0, 3000.0, 50.0)\nm1 = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())\nsimulate!(g1, m1, steps=100, dt=0.5)\nax1 = Axis(fig[1, 1], title=\"No fuel break\", aspect=DataAspect())\nfireplot!(ax1, g1)\nhidedecorations!(ax1)\n\n# With fuel break (unburnable strip)\ng2 = LevelSetGrid(200, 200, dx=30.0)\nignite!(g2, 3000.0, 3000.0, 50.0)\n# Mark a vertical strip as unburnable\nxs = xcoords(g2)\nfor j in eachindex(xs)\n    if 3400.0 &lt;= xs[j] &lt;= 3500.0\n        g2.burnable[:, j] .= false\n    end\nend\nm2 = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())\nsimulate!(g2, m2, steps=100, dt=0.5)\nax2 = Axis(fig[1, 2], title=\"With fuel break\", aspect=DataAspect())\nfireplot!(ax2, g2)\nhidedecorations!(ax2)\nfig\n\n\n\n\n\n\nMarking Pre-Burned Areas\nTo represent an existing fire scar that should not re-ignite, combine set_unburnable! with setting φ &lt; 0:\n\ngrid = LevelSetGrid(200, 200, dx=30.0)\n\n# Pre-existing fire scar: set φ &lt; 0 AND mark unburnable\ncx, cy, r = 2500.0, 3000.0, 300.0\nxs = xcoords(grid)\nys = ycoords(grid)\nfor j in eachindex(xs), i in eachindex(ys)\n    if hypot(xs[j] - cx, ys[i] - cy) &lt;= r\n        grid.φ[i, j] = -1.0\n    end\nend\nset_unburnable!(grid, cx, cy, r)\n\n# New ignition away from the scar\nignite!(grid, 4000.0, 3000.0, 50.0)\n\nM = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)\nmodel = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())\nsimulate!(grid, model, steps=100, dt=0.5)\n\nfig = Figure()\nax = Axis(fig[1, 1], title=\"Fire scar blocks spread\", aspect=DataAspect(),\n    xlabel=\"x (m)\", ylabel=\"y (m)\")\nfireplot!(ax, grid)\nfig\n\n\n\n\nWithout set_unburnable!, the fire scar boundary would be treated as an active fire front and expand outward.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Spread Model</span>"
+    ]
+  },
+  {
     "objectID": "spreadmodel.html#custom-components",
     "href": "spreadmodel.html#custom-components",
     "title": "Spread Model",
@@ -367,7 +378,7 @@
     "href": "spreadmodel.html#performance-float64-vs-float32",
     "title": "Spread Model",
     "section": "Performance: Float64 vs Float32",
-    "text": "Performance: Float64 vs Float32\nThe level set grid and all simulation operations support Float32 for reduced memory and potentially faster computation. To create a Float32 simulation, pass Float32 values to all constructors:\n\n\n\n\n\n\nNote\n\n\n\nThe LevelSetGrid constructor determines its element type via promote_type on all keyword arguments (dx, dy, x0, y0). The defaults are Float64, so you must pass Float32 values for all of them — e.g. LevelSetGrid(200, 200, dx=30f0, x0=0f0, y0=0f0).\n\n\n\nusing BenchmarkTools\n\nfunction run_simulation(::Type{T}, n=200) where T\n    grid = LevelSetGrid(n, n,\n        dx=T(30), x0=zero(T), y0=zero(T))\n    ignite!(grid, T(3000), T(3000), T(50))\n    F = fill(T(10), size(grid))\n    for _ in 1:100\n        advance!(grid, F, T(0.5))\n    end\n    reinitialize!(grid)\n    grid\nend\n\nb64 = @benchmark run_simulation(Float64)\nb32 = @benchmark run_simulation(Float32)\nnothing\n\n\n\n| Metric | Float64 | Float32 | Ratio |\n|--------|---------|---------|-------|\n| Median time | 31.66 ms | 22.92 ms | 1.38x |\n| Memory | 32.7 MiB | 16.3 MiB | 2.00x |",
+    "text": "Performance: Float64 vs Float32\nThe level set grid and all simulation operations support Float32 for reduced memory and potentially faster computation. To create a Float32 simulation, pass Float32 values to all constructors:\n\n\n\n\n\n\nNote\n\n\n\nThe LevelSetGrid constructor determines its element type via promote_type on all keyword arguments (dx, dy, x0, y0). The defaults are Float64, so you must pass Float32 values for all of them — e.g. LevelSetGrid(200, 200, dx=30f0, x0=0f0, y0=0f0).\n\n\n\nusing BenchmarkTools\n\nfunction run_simulation(::Type{T}, n=200) where T\n    grid = LevelSetGrid(n, n,\n        dx=T(30), x0=zero(T), y0=zero(T))\n    ignite!(grid, T(3000), T(3000), T(50))\n    F = fill(T(10), size(grid))\n    for _ in 1:100\n        advance!(grid, F, T(0.5))\n    end\n    reinitialize!(grid)\n    grid\nend\n\nb64 = @benchmark run_simulation(Float64)\nb32 = @benchmark run_simulation(Float32)\nnothing\n\n\n\n| Metric | Float64 | Float32 | Ratio |\n|--------|---------|---------|-------|\n| Median time | 32.96 ms | 23.64 ms | 1.39x |\n| Memory | 32.7 MiB | 16.3 MiB | 2.00x |",
     "crumbs": [
       "Docs",
       "<span class='chapter-number'>5</span>  <span class='chapter-title'>Spread Model</span>"
@@ -433,7 +444,7 @@
     "href": "gpu.html#type-parameterization",
     "title": "GPU Acceleration",
     "section": "Type Parameterization",
-    "text": "Type Parameterization\nLevelSetGrid and DynamicMoisture are parameterized on their array type:\n\ngrid = LevelSetGrid(20, 20, dx=30.0)\ntypeof(grid)\n\nLevelSetGrid{Float64, Matrix{Float64}, ZeroNeumann}\n\n\nOn the GPU this becomes LevelSetGrid{Float64, CuMatrix{Float64}} (or MtlMatrix, etc.). The GPU extension methods dispatch on LevelSetGrid{T, &lt;:AbstractGPUArray}, so CPU code paths are completely unaffected.",
+    "text": "Type Parameterization\nLevelSetGrid and DynamicMoisture are parameterized on their array type:\n\ngrid = LevelSetGrid(20, 20, dx=30.0)\ntypeof(grid)\n\nLevelSetGrid{Float64, Matrix{Float64}, BitMatrix, ZeroNeumann}\n\n\nOn the GPU this becomes LevelSetGrid{Float64, CuMatrix{Float64}} (or MtlMatrix, etc.). The GPU extension methods dispatch on LevelSetGrid{T, &lt;:AbstractGPUArray}, so CPU code paths are completely unaffected.",
     "crumbs": [
       "Docs",
       "<span class='chapter-number'>6</span>  <span class='chapter-title'>GPU Acceleration</span>"

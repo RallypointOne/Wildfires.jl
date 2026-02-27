@@ -397,7 +397,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>grid <span class="op">=</span> <span class="fu">LevelSetGrid</span>(<span class="fl">20</span>, <span class="fl">20</span>, dx<span class="op">=</span><span class="fl">30.0</span>)</span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">typeof</span>(grid)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display" data-execution_count="1">
-<pre><code>LevelSetGrid{Float64, Matrix{Float64}, ZeroNeumann}</code></pre>
+<pre><code>LevelSetGrid{Float64, Matrix{Float64}, BitMatrix, ZeroNeumann}</code></pre>
 </div>
 </div>
 <p>On the GPU this becomes <code>LevelSetGrid{Float64, CuMatrix{Float64}}</code> (or <code>MtlMatrix</code>, etc.). The GPU extension methods dispatch on <code>LevelSetGrid{T, &lt;:AbstractGPUArray}</code>, so CPU code paths are completely unaffected.</p>
