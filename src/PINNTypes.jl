@@ -33,6 +33,9 @@ The initial condition is enforced exactly via a hard constraint decomposition
 - `learning_rate::Float64` - Adam learning rate (default `1e-3`)
 - `max_epochs::Int` - Maximum training epochs (default `10000`)
 - `resample_every::Int` - Resample collocation points every N epochs (default `500`)
+- `lbfgs_epochs::Int` - L-BFGS refinement epochs after Adam (default `0`, disabled)
+- `importance_sampling::Bool` - Concentrate points near fire front (default `false`)
+- `float32::Bool` - Use Float32 for NN weights (default `false`)
 
 ### Examples
 ```julia
@@ -50,6 +53,9 @@ Base.@kwdef struct PINNConfig <: AbstractPINNConfig
     learning_rate::Float64 = 1e-3
     max_epochs::Int = 10000
     resample_every::Int = 500
+    lbfgs_epochs::Int = 0
+    importance_sampling::Bool = false
+    float32::Bool = false
 end
 
 #-----------------------------------------------------------------------------# NeuralPDEConfig

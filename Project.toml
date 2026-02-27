@@ -18,9 +18,9 @@ Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
 NeuralPDE = "315f7962-48a3-4962-8226-d0f33b1235f0"
 Optimization = "7f7a1694-90dd-40f0-9382-eb1efda571ba"
-OptimizationOptimJL = "36348300-93cb-4f02-beb5-3c3902f8871e"
 OptimizationOptimisers = "42dfb2eb-d2b4-4451-abcd-913932933ac1"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+OptimizationOptimJL = "36348300-93cb-4f02-beb5-3c3902f8871e"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [extensions]

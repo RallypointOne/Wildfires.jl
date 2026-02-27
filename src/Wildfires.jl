@@ -61,6 +61,7 @@ The solver backend is selected by the `config` type:
 - `tspan` - Time interval `(t_start, t_end)`
 - `config` - `PINNConfig` or `NeuralPDEConfig` with training hyperparameters
 - `observations` - Optional `(t, x, y, phi)` tuple of observation data (Lux backend only)
+- `lbfgs_optimizer` - Optimizer for L-BFGS refinement phase, e.g. `OptimizationOptimJL.LBFGS()` (Lux backend only, requires `lbfgs_epochs > 0` in config)
 
 # Returns
 A `PINNSolution` callable as `sol(t, x, y)`.

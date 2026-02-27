@@ -49,6 +49,8 @@ Common issues and how to resolve them.
 - **Too few collocation points**: Increase `n_interior`.  Use at least 10x the number of grid cells.
 - **Loss weight imbalance**: If one loss term dominates, the others are undertrained.  Check individual loss components and adjust `lambda_pde`, `lambda_bc`, `lambda_data`.
 - **Stale collocation points**: Decrease `resample_every` (e.g., `100`) so the network sees diverse training locations.
+- **Try importance sampling**: Set `importance_sampling=true` to concentrate points near the fire front.
+- **Try L-BFGS refinement**: After Adam, L-BFGS can push the loss lower.  Set `lbfgs_epochs=200` and pass `lbfgs_optimizer=OptimizationOptimJL.LBFGS()`.
 
 ## PINN Fire Front Bleeds Through Boundaries
 
