@@ -329,6 +329,7 @@ window.Quarto = {
   </ul></li>
   <li><a href="#custom-components" id="toc-custom-components" class="nav-link" data-scroll-target="#custom-components">Custom Components</a></li>
   <li><a href="#simulation-parameters" id="toc-simulation-parameters" class="nav-link" data-scroll-target="#simulation-parameters">Simulation Parameters</a></li>
+  <li><a href="#animation-with-trace" id="toc-animation-with-trace" class="nav-link" data-scroll-target="#animation-with-trace">Animation with Trace</a></li>
   <li><a href="#performance-float64-vs-float32" id="toc-performance-float64-vs-float32" class="nav-link" data-scroll-target="#performance-float64-vs-float32">Performance: Float64 vs Float32</a></li>
   <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references">References</a></li>
   </ul>
@@ -860,6 +861,46 @@ Note
 <p><strong><code>reinit_every</code></strong>: Over many steps, <code>φ</code> drifts from a true signed distance function, degrading the accuracy of the upwind scheme. More frequent reinitialization (e.g., <code>5</code>) improves accuracy at modest cost; less frequent (e.g., <code>50</code>) is faster but may introduce artifacts in long simulations. For most cases, the default of <code>10</code> works well.</p>
 <p><strong><code>dt</code></strong>: When set to <code>nothing</code> (default), <code>simulate!</code> calls <code>spread_rate_field!</code> first, then computes a CFL-limited time step automatically. If you pass a fixed <code>dt</code>, you are responsible for ensuring it satisfies the CFL condition — violating it causes numerical blowup.</p>
 </section>
+<section id="animation-with-trace" class="level2">
+<h2 class="anchored" data-anchor-id="animation-with-trace">Animation with Trace</h2>
+<p>The <code>Trace</code> type records snapshots of the level set field during simulation, making it easy to create animations of fire spread. Pass <code>trace=Trace(grid, every)</code> to <code>simulate!</code> to record <code>φ</code> every <code>every</code> steps.</p>
+<div id="38" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>M <span class="op">=</span> <span class="fu">FuelClasses</span>(d1<span class="op">=</span><span class="fl">0.06</span>, d10<span class="op">=</span><span class="fl">0.07</span>, d100<span class="op">=</span><span class="fl">0.08</span>, herb<span class="op">=</span><span class="fl">0.0</span>, wood<span class="op">=</span><span class="fl">0.0</span>)</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>grid <span class="op">=</span> <span class="fu">LevelSetGrid</span>(<span class="fl">200</span>, <span class="fl">200</span>, dx<span class="op">=</span><span class="fl">30.0</span>)</span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a><span class="fu">ignite!</span>(grid, <span class="fl">3000.0</span>, <span class="fl">3000.0</span>, <span class="fl">50.0</span>)</span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> <span class="fu">FireSpreadModel</span>(SHORT_GRASS, <span class="fu">UniformWind</span>(speed<span class="op">=</span><span class="fl">8.0</span>), <span class="fu">UniformMoisture</span>(M), <span class="fu">FlatTerrain</span>(),</span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">EllipticalBlending</span>())</span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>trace <span class="op">=</span> <span class="fu">Trace</span>(grid, <span class="fl">5</span>)</span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a><span class="fu">simulate!</span>(grid, model, steps<span class="op">=</span><span class="fl">150</span>, dt<span class="op">=</span><span class="fl">0.5</span>, trace<span class="op">=</span>trace)</span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a><span class="fu">length</span>(trace.stack)  <span class="co"># initial + every 5 steps</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<pre><code>31</code></pre>
+</div>
+</div>
+<p>Each entry in <code>trace.stack</code> is a <code>(time, φ)</code> tuple. Here’s how to create a GIF:</p>
+<div id="40" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>fig <span class="op">=</span> <span class="fu">Figure</span>(size<span class="op">=</span>(<span class="fl">500</span>, <span class="fl">450</span>))</span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> <span class="fu">Axis</span>(fig[<span class="fl">1</span>, <span class="fl">1</span>], aspect<span class="op">=</span><span class="fu">DataAspect</span>(), xlabel<span class="op">=</span><span class="st">"x (m)"</span>, ylabel<span class="op">=</span><span class="st">"y (m)"</span>)</span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>xs <span class="op">=</span> <span class="fu">collect</span>(<span class="fu">xcoords</span>(grid))</span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>ys <span class="op">=</span> <span class="fu">collect</span>(<span class="fu">ycoords</span>(grid))</span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a><span class="fu">record</span>(fig, <span class="fu">joinpath</span>(<span class="pp">@__DIR__</span>, <span class="st">"fire_spread.gif"</span>), <span class="fu">eachindex</span>(trace.stack); framerate<span class="op">=</span><span class="fl">15</span>) <span class="cf">do</span> idx</span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">empty!</span>(ax)</span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>    t, <span class="cn">φ</span> <span class="op">=</span> trace.stack[idx]</span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a>    ax.title <span class="op">=</span> <span class="pp">@sprintf</span>(<span class="st">"t = %.1f min"</span>, t)</span>
+<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">contourf!</span>(ax, xs, ys, <span class="cn">φ</span>, levels<span class="op">=</span>[<span class="op">-</span><span class="fl">1e4</span>, <span class="fl">0</span>, <span class="fl">1e4</span>],</span>
+<span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a>        colormap<span class="op">=</span>[<span class="op">:</span>red, <span class="op">:</span>green])</span>
+<span id="cb31-13"><a href="#cb31-13" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<pre><code>"/home/runner/work/Wildfires.jl/Wildfires.jl/docs/fire_spread.gif"</code></pre>
+</div>
+</div>
+<p><img src="fire_spread.gif" class="img-fluid"></p>
+</section>
 <section id="performance-float64-vs-float32" class="level2">
 <h2 class="anchored" data-anchor-id="performance-float64-vs-float32">Performance: Float64 vs Float32</h2>
 <p>The level set grid and all simulation operations support <code>Float32</code> for reduced memory and potentially faster computation. To create a <code>Float32</code> simulation, pass <code>Float32</code> values to all constructors:</p>
@@ -876,33 +917,49 @@ Note
 <p>The <code>LevelSetGrid</code> constructor determines its element type via <code>promote_type</code> on all keyword arguments (<code>dx</code>, <code>dy</code>, <code>x0</code>, <code>y0</code>). The defaults are <code>Float64</code>, so you must pass <code>Float32</code> values for <strong>all</strong> of them — e.g.&nbsp;<code>LevelSetGrid(200, 200, dx=30f0, x0=0f0, y0=0f0)</code>.</p>
 </div>
 </div>
-<div id="38" class="cell" data-execution_count="1">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">BenchmarkTools</span></span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">run_simulation</span>(<span class="op">::</span><span class="dt">Type{T}</span>, n<span class="op">=</span><span class="fl">200</span>) <span class="kw">where</span> T</span>
-<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>    grid <span class="op">=</span> <span class="fu">LevelSetGrid</span>(n, n,</span>
-<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>        dx<span class="op">=</span><span class="fu">T</span>(<span class="fl">30</span>), x0<span class="op">=</span><span class="fu">zero</span>(T), y0<span class="op">=</span><span class="fu">zero</span>(T))</span>
-<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ignite!</span>(grid, <span class="fu">T</span>(<span class="fl">3000</span>), <span class="fu">T</span>(<span class="fl">3000</span>), <span class="fu">T</span>(<span class="fl">50</span>))</span>
-<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>    F <span class="op">=</span> <span class="fu">fill</span>(<span class="fu">T</span>(<span class="fl">10</span>), <span class="fu">size</span>(grid))</span>
-<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _ <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span><span class="fl">100</span></span>
-<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a>        <span class="fu">advance!</span>(grid, F, <span class="fu">T</span>(<span class="fl">0.5</span>))</span>
-<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
-<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">reinitialize!</span>(grid)</span>
-<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>    grid</span>
-<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
-<span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a>b64 <span class="op">=</span> <span class="pp">@benchmark</span> <span class="fu">run_simulation</span>(<span class="dt">Float64</span>)</span>
-<span id="cb29-16"><a href="#cb29-16" aria-hidden="true" tabindex="-1"></a>b32 <span class="op">=</span> <span class="pp">@benchmark</span> <span class="fu">run_simulation</span>(<span class="dt">Float32</span>)</span>
-<span id="cb29-17"><a href="#cb29-17" aria-hidden="true" tabindex="-1"></a><span class="cn">nothing</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div id="42" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">BenchmarkTools</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">run_simulation</span>(<span class="op">::</span><span class="dt">Type{T}</span>, n<span class="op">=</span><span class="fl">200</span>) <span class="kw">where</span> T</span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>    grid <span class="op">=</span> <span class="fu">LevelSetGrid</span>(n, n,</span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>        dx<span class="op">=</span><span class="fu">T</span>(<span class="fl">30</span>), x0<span class="op">=</span><span class="fu">zero</span>(T), y0<span class="op">=</span><span class="fu">zero</span>(T))</span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ignite!</span>(grid, <span class="fu">T</span>(<span class="fl">3000</span>), <span class="fu">T</span>(<span class="fl">3000</span>), <span class="fu">T</span>(<span class="fl">50</span>))</span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a>    F <span class="op">=</span> <span class="fu">fill</span>(<span class="fu">T</span>(<span class="fl">10</span>), <span class="fu">size</span>(grid))</span>
+<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _ <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span><span class="fl">100</span></span>
+<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a>        <span class="fu">advance!</span>(grid, F, <span class="fu">T</span>(<span class="fl">0.5</span>))</span>
+<span id="cb33-10"><a href="#cb33-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb33-11"><a href="#cb33-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">reinitialize!</span>(grid)</span>
+<span id="cb33-12"><a href="#cb33-12" aria-hidden="true" tabindex="-1"></a>    grid</span>
+<span id="cb33-13"><a href="#cb33-13" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb33-14"><a href="#cb33-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-15"><a href="#cb33-15" aria-hidden="true" tabindex="-1"></a>b64 <span class="op">=</span> <span class="pp">@benchmark</span> <span class="fu">run_simulation</span>(<span class="dt">Float64</span>)</span>
+<span id="cb33-16"><a href="#cb33-16" aria-hidden="true" tabindex="-1"></a>b32 <span class="op">=</span> <span class="pp">@benchmark</span> <span class="fu">run_simulation</span>(<span class="dt">Float32</span>)</span>
+<span id="cb33-17"><a href="#cb33-17" aria-hidden="true" tabindex="-1"></a><span class="cn">nothing</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<div id="40" class="cell" data-execution_count="1">
-<div class="cell-output cell-output-stdout">
-<pre><code>| Metric | Float64 | Float32 | Ratio |
-|--------|---------|---------|-------|
-| Median time | 31.49 ms | 23.50 ms | 1.34x |
-| Memory | 33.0 MiB | 16.5 MiB | 2.00x |</code></pre>
-</div>
-</div>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Metric</th>
+<th>Float64</th>
+<th>Float32</th>
+<th>Ratio</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Median time</td>
+<td>31.70 ms</td>
+<td>23.62 ms</td>
+<td>1.34x</td>
+</tr>
+<tr class="even">
+<td>Memory</td>
+<td>33.0 MiB</td>
+<td>16.5 MiB</td>
+<td>2.00x</td>
+</tr>
+</tbody>
+</table>
 </section>
 <section id="references" class="level2">
 <h2 class="anchored" data-anchor-id="references">References</h2>
