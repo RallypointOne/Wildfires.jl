@@ -8,7 +8,7 @@ include("PINNTypes.jl")
 using .PINNTypes: AbstractPINNConfig, PINNConfig, NeuralPDEConfig, PINNSolution
 export AbstractPINNConfig, PINNConfig, NeuralPDEConfig, PINNSolution
 export train_pinn, predict_on_grid, predict_on_grid!
-export fireplot, fireplot!
+export fireplot, fireplot!, firegif
 
 #-----------------------------------------------------------------------------# Makie stubs (implemented in WildfiresMakieExt)
 """
@@ -37,6 +37,30 @@ In-place version of `fireplot`: draws into an existing `Axis`.
 Requires `Makie` (or a backend like `CairoMakie` / `GLMakie`) to be loaded.
 """
 function fireplot! end
+
+"""
+    firegif(path, trace::Trace, grid::LevelSetGrid; framerate=15, colormap=:RdYlGn, frontcolor=:black, frontlinewidth=2.0)
+
+Create an animated GIF of fire spread from a [`Trace`](@ref) recorded during [`simulate!`](@ref).
+
+Uses the same visualization style as [`fireplot!`](@ref): a heatmap of `φ` with the fire
+front (`φ = 0`) overlaid as a contour line.
+
+Requires `Makie` (or a backend like `CairoMakie` / `GLMakie`) to be loaded.
+
+### Examples
+```julia
+using CairoMakie
+
+grid = LevelSetGrid(200, 200, dx=30.0)
+ignite!(grid, 3000.0, 3000.0, 50.0)
+trace = Trace(grid, 5)
+simulate!(grid, model, steps=100, trace=trace)
+
+firegif("fire.gif", trace, grid)
+```
+"""
+function firegif end
 
 #-----------------------------------------------------------------------------# PINN API stubs
 """

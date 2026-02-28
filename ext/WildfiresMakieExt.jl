@@ -2,6 +2,7 @@ module WildfiresMakieExt
 
 using Wildfires
 using Wildfires.LevelSet: LevelSetGrid, xcoords, ycoords
+using Wildfires.SpreadModel: Trace
 
 using Makie
 
@@ -35,6 +36,27 @@ function Wildfires.fireplot(grid::LevelSetGrid; colormap=:RdYlGn, frontcolor=:bl
     ax = Axis(fig[1, 1])
     Wildfires.fireplot!(ax, grid; colormap, frontcolor, frontlinewidth)
     fig
+end
+
+#-----------------------------------------------------------------------------# firegif
+function Wildfires.firegif(path, trace::Trace, grid::LevelSetGrid;
+        framerate=15, colormap=:RdYlGn, frontcolor=:black, frontlinewidth=2.0)
+    xs = collect(xcoords(grid))
+    ys = collect(ycoords(grid))
+    φ_final = trace.stack[end][2]
+    v = max(abs(minimum(φ_final)), abs(maximum(φ_final)))
+
+    fig = Figure(size=(500, 450))
+    ax = Axis(fig[1, 1], aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)")
+
+    record(fig, path, eachindex(trace.stack); framerate) do idx
+        empty!(ax)
+        t, φ = trace.stack[idx]
+        ax.title = "t = $(round(t, digits=1)) min"
+        heatmap!(ax, xs, ys, φ; colormap, colorrange=(-v, v))
+        contour!(ax, xs, ys, φ; levels=[0.0], color=frontcolor, linewidth=frontlinewidth)
+    end
+    path
 end
 
 end # module

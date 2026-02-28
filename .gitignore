@@ -25,3 +25,4 @@ benchmark/Manifest.toml
 *.sqlite
 *.history
 *.json
+*.gif

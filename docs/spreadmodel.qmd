@@ -431,22 +431,10 @@ simulate!(grid, model, steps=150, dt=0.5, trace=trace)
 length(trace.stack)  # initial + every 5 steps
 ```
 
-Each entry in `trace.stack` is a `(time, φ)` tuple.  Here's how to create a GIF:
+Each entry in `trace.stack` is a `(time, φ)` tuple.  Use `firegif` to create a GIF:
 
 ```{julia}
-fig = Figure(size=(500, 450))
-ax = Axis(fig[1, 1], aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)")
-
-xs = collect(xcoords(grid))
-ys = collect(ycoords(grid))
-
-record(fig, joinpath(@__DIR__, "fire_spread.gif"), eachindex(trace.stack); framerate=15) do idx
-    empty!(ax)
-    t, φ = trace.stack[idx]
-    ax.title = @sprintf("t = %.1f min", t)
-    contourf!(ax, xs, ys, φ, levels=[-1e4, 0, 1e4],
-        colormap=[:red, :green])
-end
+firegif(joinpath(@__DIR__, "fire_spread.gif"), trace, grid)
 ```
 
 ![](fire_spread.gif)
