@@ -908,13 +908,13 @@ Note
 <div id="42" class="cell" data-execution_count="1">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">BenchmarkTools</span></span>
 <span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">run_simulation</span>(<span class="op">::</span><span class="dt">Type{T}</span>, n<span class="op">=</span><span class="fl">200</span>) <span class="kw">where</span> T</span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">run_simulation</span>(<span class="op">::</span><span class="dt">Type{T}</span>, n<span class="op">=</span><span class="fl">500</span>) <span class="kw">where</span> T</span>
 <span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>    grid <span class="op">=</span> <span class="fu">LevelSetGrid</span>(n, n,</span>
-<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>        dx<span class="op">=</span><span class="fu">T</span>(<span class="fl">30</span>), x0<span class="op">=</span><span class="fu">zero</span>(T), y0<span class="op">=</span><span class="fu">zero</span>(T))</span>
-<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ignite!</span>(grid, <span class="fu">T</span>(<span class="fl">3000</span>), <span class="fu">T</span>(<span class="fl">3000</span>), <span class="fu">T</span>(<span class="fl">50</span>))</span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>        dx<span class="op">=</span><span class="fu">T</span>(<span class="fl">10</span>), x0<span class="op">=</span><span class="fu">zero</span>(T), y0<span class="op">=</span><span class="fu">zero</span>(T))</span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ignite!</span>(grid, <span class="fu">T</span>(<span class="fl">2500</span>), <span class="fu">T</span>(<span class="fl">2500</span>), <span class="fu">T</span>(<span class="fl">50</span>))</span>
 <span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a>    F <span class="op">=</span> <span class="fu">fill</span>(<span class="fu">T</span>(<span class="fl">10</span>), <span class="fu">size</span>(grid))</span>
-<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _ <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span><span class="fl">100</span></span>
-<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a>        <span class="fu">advance!</span>(grid, F, <span class="fu">T</span>(<span class="fl">0.5</span>))</span>
+<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _ <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span><span class="fl">200</span></span>
+<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a>        <span class="fu">advance!</span>(grid, F, <span class="fu">T</span>(<span class="fl">0.25</span>))</span>
 <span id="cb33-10"><a href="#cb33-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
 <span id="cb33-11"><a href="#cb33-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">reinitialize!</span>(grid)</span>
 <span id="cb33-12"><a href="#cb33-12" aria-hidden="true" tabindex="-1"></a>    grid</span>
@@ -936,14 +936,14 @@ Note
 <tbody>
 <tr class="odd">
 <td>Median time</td>
-<td>32.01 ms</td>
-<td>24.17 ms</td>
+<td>368.05 ms</td>
+<td>277.82 ms</td>
 <td>1.32x</td>
 </tr>
 <tr class="even">
 <td>Memory</td>
-<td>33.0 MiB</td>
-<td>16.5 MiB</td>
+<td>396.7 MiB</td>
+<td>198.4 MiB</td>
 <td>2.00x</td>
 </tr>
 </tbody>
