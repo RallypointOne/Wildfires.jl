@@ -1,6 +1,6 @@
 #-----------------------------------------------------------------------------# GPU advance! kernel
 
-@kernel function _advance_kernel!(φ, @Const(φ_old), @Const(F), dx, dy, dt, nx, ny, bc)
+@kernel function _advance_kernel!(φ, t_ignite, @Const(φ_old), @Const(F), dx, dy, dt, new_t, nx, ny, bc)
     i, j = @index(Global, NTuple)
 
     T = eltype(φ)
@@ -22,7 +22,11 @@
             grad_sq = max(Dxm_plus, -Dxp_minus)^2 + max(Dym_plus, -Dyp_minus)^2
             if grad_sq > z
                 grad_mag = sqrt(grad_sq)
-                φ[i, j] = φ_old[i, j] - dt * Fij * grad_mag
+                new_phi = φ_old[i, j] - dt * Fij * grad_mag
+                if φ_old[i, j] >= z && new_phi < z && !isnan(t_ignite[i, j]) && isinf(t_ignite[i, j])
+                    t_ignite[i, j] = new_t
+                end
+                φ[i, j] = new_phi
             end
         end
     end
@@ -32,9 +36,10 @@ function LevelSet.advance!(g::LevelSetGrid{T, <:AbstractGPUArray}, F::AbstractGP
     φ = g.φ
     ny, nx = size(φ)
     φ_old = copy(φ)
+    new_t = g.t + dt
 
     backend = get_backend(φ)
-    _advance_kernel!(backend)(φ, φ_old, F, g.dx, g.dy, dt, nx, ny, g.bc, ndrange=(ny, nx))
+    _advance_kernel!(backend)(φ, g.t_ignite, φ_old, F, g.dx, g.dy, dt, new_t, nx, ny, g.bc, ndrange=(ny, nx))
     KernelAbstractions.synchronize(backend)
 
     g.t += dt

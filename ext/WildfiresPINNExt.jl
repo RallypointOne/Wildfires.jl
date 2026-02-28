@@ -353,7 +353,7 @@ function Wildfires.train_pinn(grid::LevelSetGrid, spread_model, tspan::Tuple,
     ic_y0 = Float64(first(ys))
     ic_dx = Float64(step(xs))
     ic_dy = Float64(step(ys))
-    grid_ic = LevelSetGrid(copy(grid.φ), copy(grid.burnable), grid.dx, grid.dy, grid.x0, grid.y0, grid.t, grid.bc)
+    grid_ic = LevelSetGrid(copy(grid.φ), copy(grid.t_ignite), grid.dx, grid.dy, grid.x0, grid.y0, grid.t, grid.bc)
 
     # Collocation points (mutable for resampling)
     colloc_ref = Ref(sample_collocation(config, domain, rng;

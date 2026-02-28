@@ -1,6 +1,6 @@
 module Rothermel
 
-export FuelClasses, Rothermel, rate_of_spread
+export FuelClasses, Rothermel, rate_of_spread, residence_time
 export SHORT_GRASS, TIMBER_GRASS, TALL_GRASS, CHAPARRAL, BRUSH, DORMANT_BRUSH,
     SOUTHERN_ROUGH, CLOSED_TIMBER_LITTER, HARDWOOD_LITTER, TIMBER_UNDERSTORY,
     LIGHT_SLASH, MEDIUM_SLASH, HEAVY_SLASH
@@ -299,5 +299,45 @@ const MEDIUM_SLASH = Rothermel("NFFL 12: Medium logging slash",
 """NFFL 13: Heavy logging slash"""
 const HEAVY_SLASH = Rothermel("NFFL 13: Heavy logging slash",
     FuelClasses(7.01, 23.04, 28.05, 0.0, 0.0), FuelClasses(1500.0, _σ_STD...), _H8, 3.0, 0.25)
+
+#-----------------------------------------------------------------------------# residence_time
+"""
+    residence_time(fuel::Rothermel)
+
+Flame residence time [min] from Anderson (1969): `t_r = 384 / σ_char` seconds,
+converted to minutes.
+
+Uses the same characteristic SAV computation as [`rate_of_spread`](@ref).
+
+### Examples
+```julia
+residence_time(SHORT_GRASS)  # ≈ 0.00183 min
+```
+"""
+function residence_time(fuel::Rothermel{T}) where {T}
+    (; w, σ) = fuel
+    z = zero(T)
+
+    w_i = map(x -> x * _TONS_ACRE_TO_LB_FT2, w)
+    a = map(x -> x / _ρ_P, map(*, σ, w_i))
+    a_dead = a.d1 + a.d10 + a.d100
+    a_live = a.herb + a.wood
+    a_tot = a_dead + a_live
+    a_tot > z || return T(Inf)
+
+    f = FuelClasses(
+        a_dead > z ? a.d1 / a_dead : z,
+        a_dead > z ? a.d10 / a_dead : z,
+        a_dead > z ? a.d100 / a_dead : z,
+        a_live > z ? a.herb / a_live : z,
+        a_live > z ? a.wood / a_live : z,
+    )
+    σ_dead = f.d1*σ.d1 + f.d10*σ.d10 + f.d100*σ.d100
+    σ_live = f.herb*σ.herb + f.wood*σ.wood
+    σ_tot = (a_dead / a_tot) * σ_dead + (a_live / a_tot) * σ_live
+    σ_tot > z || return T(Inf)
+
+    return T(384) / (σ_tot * T(60))
+end
 
 end # module

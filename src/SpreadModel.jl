@@ -363,7 +363,7 @@ function spread_rate_field!(F::AbstractMatrix, model, grid::LevelSetGrid)
     ys = ycoords(grid)
     t = grid.t
     for j in eachindex(xs), i in eachindex(ys)
-        F[i, j] = grid.burnable[i, j] ? model(t, xs[j], ys[i]) : zero(eltype(F))
+        F[i, j] = isnan(grid.t_ignite[i, j]) ? zero(eltype(F)) : model(t, xs[j], ys[i])
     end
     F
 end
@@ -394,7 +394,7 @@ function spread_rate_field!(F::AbstractMatrix, model::FireSpreadModel, grid::Lev
         end
         grad = hypot(dφdx, dφdy)
 
-        if !grid.burnable[i, j]
+        if isnan(grid.t_ignite[i, j])
             F[i, j] = zero(eltype(F))
         elseif grad > 0
             F[i, j] = _directional_rate(
@@ -486,7 +486,7 @@ end
 
 #-----------------------------------------------------------------------------# simulate!
 """
-    simulate!(grid::LevelSetGrid, model; steps=100, dt=nothing, cfl=0.5, reinit_every=10)
+    simulate!(grid::LevelSetGrid, model; steps=100, dt=nothing, cfl=0.5, reinit_every=10, burnout=nothing)
 
 Run the level set simulation using a `FireSpreadModel` to compute spread rates.
 
@@ -496,6 +496,12 @@ step via the CFL condition: `dt = cfl * min(dx, dy) / max(F)`.  Pass an explicit
 
 Between time steps, dynamic components are updated via `update!(model, grid, dt)`.
 This allows components like `DynamicMoisture` to respond to the evolving fire state.
+
+# Burnout
+
+Pass `burnout` as a residence time in minutes (e.g. from [`residence_time`](@ref)) to
+stop spread from cells that have been burning longer than `burnout`.  When `burnout=nothing`
+(the default), fire spreads indefinitely once ignited.
 
 ### Examples
 ```julia
@@ -507,18 +513,31 @@ simulate!(grid, model, steps=100)
 
 # Fixed time step (user must ensure CFL stability)
 simulate!(grid, model, steps=100, dt=0.5)
+
+# With burnout
+simulate!(grid, model, steps=100, burnout=residence_time(SHORT_GRASS))
 ```
 """
-function simulate!(grid::LevelSetGrid, model; steps::Int=100, dt=nothing, cfl=0.5, reinit_every::Int=10)
+function simulate!(grid::LevelSetGrid, model; steps::Int=100, dt=nothing, cfl=0.5, reinit_every::Int=10, burnout=nothing)
     F = similar(grid.φ)
     for step in 1:steps
         spread_rate_field!(F, model, grid)
+        burnout !== nothing && _apply_burnout!(F, grid, burnout)
         step_dt = dt === nothing ? cfl_dt(grid, F; cfl=cfl) : dt
         update!(model, grid, step_dt)
         advance!(grid, F, step_dt)
         step % reinit_every == 0 && reinitialize!(grid)
     end
     grid
+end
+
+function _apply_burnout!(F, grid, t_r)
+    for j in axes(F, 2), i in axes(F, 1)
+        t_ig = grid.t_ignite[i, j]
+        if isfinite(t_ig) && grid.t - t_ig > t_r
+            F[i, j] = zero(eltype(F))
+        end
+    end
 end
 
 #-----------------------------------------------------------------------------# fire_loss

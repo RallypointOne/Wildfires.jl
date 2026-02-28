@@ -1,10 +1,10 @@
 using Wildfires
-using Wildfires.Rothermel: FuelClasses, Rothermel, rate_of_spread,
+using Wildfires.Rothermel: FuelClasses, Rothermel, rate_of_spread, residence_time,
     SHORT_GRASS, TIMBER_GRASS, TALL_GRASS, CHAPARRAL, BRUSH, DORMANT_BRUSH,
     SOUTHERN_ROUGH, CLOSED_TIMBER_LITTER, HARDWOOD_LITTER, TIMBER_UNDERSTORY,
     LIGHT_SLASH, MEDIUM_SLASH, HEAVY_SLASH
 using Wildfires.LevelSet: LevelSetGrid, xcoords, ycoords, ignite!, advance!, reinitialize!, burned, burn_area,
-    cfl_dt, AbstractBoundaryCondition, ZeroNeumann, Dirichlet, Periodic, set_unburnable!
+    cfl_dt, AbstractBoundaryCondition, ZeroNeumann, Dirichlet, Periodic, set_unburnable!, burnable
 using Wildfires.SpreadModel: FireSpreadModel, UniformWind, UniformMoisture, FlatTerrain,
     UniformSlope, DynamicMoisture, spread_rate_field!, simulate!, update!,
     CosineBlending, EllipticalBlending, length_to_breadth, fire_eccentricity
@@ -169,9 +169,9 @@ const ALL_FUELS = [
 
         @testset "type parameterization" begin
             grid = LevelSetGrid(20, 20, dx=30.0)
-            @test grid isa LevelSetGrid{Float64, Matrix{Float64}, BitMatrix}
+            @test grid isa LevelSetGrid{Float64, Matrix{Float64}}
             @test grid.φ isa Matrix{Float64}
-            @test grid.burnable isa BitMatrix
+            @test grid.t_ignite isa Matrix{Float64}
         end
 
         @testset "Adapt roundtrip" begin
@@ -181,7 +181,7 @@ const ALL_FUELS = [
             grid2 = Adapt.adapt(Array, grid)
             @test grid2 isa LevelSetGrid{Float64, Matrix{Float64}}
             @test grid2.φ == grid.φ
-            @test grid2.burnable == grid.burnable
+            @test all(isnan.(grid2.t_ignite) .== isnan.(grid.t_ignite))
             @test grid2.dx == grid.dx
             @test grid2.t == grid.t
         end
@@ -462,7 +462,8 @@ const ALL_FUELS = [
 
         @testset "default all burnable" begin
             grid = LevelSetGrid(20, 20, dx=30.0)
-            @test all(grid.burnable)
+            @test all(isinf, grid.t_ignite)
+            @test all(burnable(grid))
         end
 
         @testset "set_unburnable! marks correct cells" begin
@@ -473,7 +474,8 @@ const ALL_FUELS = [
             ys = ycoords(grid)
             for j in eachindex(xs), i in eachindex(ys)
                 inside = hypot(xs[j] - cx, ys[i] - cy) <= r
-                @test grid.burnable[i, j] == !inside
+                @test isnan(grid.t_ignite[i, j]) == inside
+                @test burnable(grid)[i, j] == !inside
             end
         end
 
@@ -485,7 +487,7 @@ const ALL_FUELS = [
             F = similar(grid.φ)
             spread_rate_field!(F, model, grid)
             for j in axes(F, 2), i in axes(F, 1)
-                if !grid.burnable[i, j]
+                if isnan(grid.t_ignite[i, j])
                     @test F[i, j] == 0.0
                 end
             end
@@ -498,7 +500,7 @@ const ALL_FUELS = [
             F = similar(grid.φ)
             spread_rate_field!(F, const_model, grid)
             for j in axes(F, 2), i in axes(F, 1)
-                if !grid.burnable[i, j]
+                if isnan(grid.t_ignite[i, j])
                     @test F[i, j] == 0.0
                 else
                     @test F[i, j] == 5.0
@@ -513,7 +515,7 @@ const ALL_FUELS = [
             xs = xcoords(grid)
             for j in eachindex(xs)
                 if 980.0 <= xs[j] <= 1020.0
-                    grid.burnable[:, j] .= false
+                    grid.t_ignite[:, j] .= NaN
                 end
             end
             model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
@@ -535,7 +537,7 @@ const ALL_FUELS = [
             simulate!(grid, model, steps=200, dt=0.3)
             # No unburnable cell should have φ < 0
             for j in axes(grid.φ, 2), i in axes(grid.φ, 1)
-                if !grid.burnable[i, j]
+                if isnan(grid.t_ignite[i, j])
                     @test grid.φ[i, j] >= 0
                 end
             end
@@ -552,6 +554,108 @@ const ALL_FUELS = [
             grid = LevelSetGrid(10, 10, dx=30.0)
             s = sprint(show, MIME("text/plain"), grid)
             @test !contains(s, "unburnable")
+        end
+    end
+
+    @testset "residence_time" begin
+        @testset "SHORT_GRASS has small residence time" begin
+            t_r = residence_time(SHORT_GRASS)
+            @test t_r > 0
+            @test t_r < 0.01  # very fast burning grass
+        end
+
+        @testset "all standard fuels have positive residence time" begin
+            for fuel in ALL_FUELS
+                t_r = residence_time(fuel)
+                @test t_r > 0
+                @test isfinite(t_r)
+            end
+        end
+
+        @testset "zero fuel → Inf" begin
+            zero_fuel = Rothermel(
+                name = "zero",
+                w = FuelClasses(0.0, 0.0, 0.0, 0.0, 0.0),
+                σ = FuelClasses(3500.0, 109.0, 30.0, 1500.0, 1500.0),
+                h = FuelClasses(8000.0, 8000.0, 8000.0, 8000.0, 8000.0),
+                δ = 1.0,
+                Mx = 0.12,
+            )
+            @test residence_time(zero_fuel) == Inf
+        end
+    end
+
+    @testset "Ignition Tracking" begin
+        @testset "ignite! records t_ignite at current time" begin
+            grid = LevelSetGrid(20, 20, dx=30.0)
+            ignite!(grid, 300.0, 300.0, 50.0)
+            # Cells inside the ignition circle should have t_ignite = 0.0
+            for j in axes(grid.φ, 2), i in axes(grid.φ, 1)
+                if grid.φ[i, j] < 0
+                    @test grid.t_ignite[i, j] == 0.0
+                else
+                    @test isinf(grid.t_ignite[i, j])
+                end
+            end
+        end
+
+        @testset "advance! records ignition time for newly burned cells" begin
+            grid = LevelSetGrid(30, 30, dx=30.0)
+            ignite!(grid, 450.0, 450.0, 50.0)
+            F = fill(10.0, size(grid))
+            initial_ignited = count(isfinite, grid.t_ignite)
+            for _ in 1:5
+                advance!(grid, F, 0.5)
+            end
+            # More cells should be ignited now
+            @test count(isfinite, grid.t_ignite) > initial_ignited
+            # Newly ignited cells should have t_ignite > 0
+            for j in axes(grid.t_ignite, 2), i in axes(grid.t_ignite, 1)
+                t_ig = grid.t_ignite[i, j]
+                if isfinite(t_ig) && t_ig > 0
+                    @test t_ig <= grid.t
+                end
+            end
+        end
+
+        @testset "show includes ignited count" begin
+            grid = LevelSetGrid(20, 20, dx=30.0)
+            ignite!(grid, 300.0, 300.0, 50.0)
+            s = sprint(show, MIME("text/plain"), grid)
+            @test contains(s, "ignited=")
+        end
+    end
+
+    @testset "Burnout" begin
+        M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+
+        @testset "burnout=nothing preserves current behavior" begin
+            grid1 = LevelSetGrid(30, 30, dx=30.0)
+            ignite!(grid1, 450.0, 450.0, 50.0)
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+            simulate!(grid1, model, steps=20, dt=0.5)
+
+            grid2 = LevelSetGrid(30, 30, dx=30.0)
+            ignite!(grid2, 450.0, 450.0, 50.0)
+            simulate!(grid2, model, steps=20, dt=0.5, burnout=nothing)
+
+            @test grid1.φ == grid2.φ
+        end
+
+        @testset "burnout limits fire spread" begin
+            t_r = residence_time(SHORT_GRASS)
+
+            grid_no = LevelSetGrid(50, 50, dx=30.0)
+            ignite!(grid_no, 750.0, 750.0, 50.0)
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+            simulate!(grid_no, model, steps=200, dt=0.5)
+
+            grid_bo = LevelSetGrid(50, 50, dx=30.0)
+            ignite!(grid_bo, 750.0, 750.0, 50.0)
+            simulate!(grid_bo, model, steps=200, dt=0.5, burnout=t_r)
+
+            # With burnout, fire should spread less or equal
+            @test burn_area(grid_bo) <= burn_area(grid_no)
         end
     end
 

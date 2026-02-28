@@ -1,6 +1,6 @@
 module LevelSet
 
-export LevelSetGrid, xcoords, ycoords, burned, burn_area, ignite!, advance!, reinitialize!, cfl_dt, set_unburnable!
+export LevelSetGrid, xcoords, ycoords, burned, burn_area, ignite!, advance!, reinitialize!, cfl_dt, set_unburnable!, burnable
 export AbstractBoundaryCondition, ZeroNeumann, Dirichlet, Periodic
 
 #=
@@ -101,7 +101,7 @@ Return `true` if cell `(i, j)` should be skipped during the update.
 
 #-----------------------------------------------------------------------------# LevelSetGrid
 """
-    LevelSetGrid{T, M, B, BC} <: AbstractMatrix{T}
+    LevelSetGrid{T, M, BC} <: AbstractMatrix{T}
 
 A 2D grid representing a fire spread simulation via the level set method.
 
@@ -110,9 +110,14 @@ The grid stores a signed distance function `φ` where:
 - `φ = 0` → fire front
 - `φ > 0` → unburned
 
+Ignition time is tracked per cell via `t_ignite`:
+- `Inf`    → burnable, not yet ignited
+- `NaN`    → unburnable (water, road, fuel break)
+- finite   → ignited at that simulation time
+
 # Fields
 - `φ::M`          - Level set function values (`M <: AbstractMatrix{T}`)
-- `burnable::B`   - Mask of burnable cells (`B <: AbstractMatrix{Bool}`); `false` → unburnable
+- `t_ignite::M`   - Per-cell ignition time [min]
 - `dx::T`         - Grid spacing in x [m]
 - `dy::T`         - Grid spacing in y [m]
 - `x0::T`         - x-coordinate of grid origin (lower-left) [m]
@@ -133,9 +138,9 @@ ignite!(grid, 1500.0, 1500.0, 100.0)
 grid = LevelSetGrid(100, 100, dx=30.0, bc=Periodic())
 ```
 """
-mutable struct LevelSetGrid{T, M <: AbstractMatrix{T}, B <: AbstractMatrix{Bool}, BC <: AbstractBoundaryCondition} <: AbstractMatrix{T}
+mutable struct LevelSetGrid{T, M <: AbstractMatrix{T}, BC <: AbstractBoundaryCondition} <: AbstractMatrix{T}
     φ::M
-    burnable::B
+    t_ignite::M
     dx::T
     dy::T
     x0::T
@@ -147,8 +152,8 @@ end
 function LevelSetGrid(nx::Integer, ny::Integer; dx=30.0, dy=dx, x0=0.0, y0=0.0, bc::AbstractBoundaryCondition=ZeroNeumann())
     T = promote_type(typeof(dx), typeof(dy), typeof(x0), typeof(y0))
     φ = ones(T, ny, nx)  # all positive → unburned
-    burnable = trues(ny, nx)
-    LevelSetGrid(φ, burnable, T(dx), T(dy), T(x0), T(y0), zero(T), bc)
+    t_ignite = fill(T(Inf), ny, nx)
+    LevelSetGrid(φ, t_ignite, T(dx), T(dy), T(x0), T(y0), zero(T), bc)
 end
 
 #-----------------------------------------------------------------------------# AbstractMatrix interface
@@ -160,9 +165,11 @@ function Base.show(io::IO, ::MIME"text/plain", g::LevelSetGrid{T}) where {T}
     ny, nx = size(g.φ)
     nb = count(<(0), g.φ)
     bc_str = g.bc isa ZeroNeumann ? "" : ", bc=$(nameof(typeof(g.bc)))"
-    n_unburnable = count(!, g.burnable)
+    n_unburnable = count(isnan, g.t_ignite)
+    n_ignited = count(isfinite, g.t_ignite)
     ub_str = n_unburnable > 0 ? ", unburnable=$n_unburnable" : ""
-    print(io, "LevelSetGrid{$T} $(nx)×$(ny) (t=$(g.t), burned=$(nb)/$(nx*ny)$(ub_str)$(bc_str))")
+    ig_str = n_ignited > 0 ? ", ignited=$n_ignited" : ""
+    print(io, "LevelSetGrid{$T} $(nx)×$(ny) (t=$(g.t), burned=$(nb)/$(nx*ny)$(ub_str)$(ig_str)$(bc_str))")
 end
 
 function Base.show(io::IO, g::LevelSetGrid{T}) where {T}
@@ -200,6 +207,13 @@ Return the total burned area [m²].
 """
 burn_area(g::LevelSetGrid) = count(<(0), g.φ) * g.dx * g.dy
 
+"""
+    burnable(grid::LevelSetGrid)
+
+Return a `BitMatrix` where `true` indicates burnable cells (i.e. `t_ignite` is not `NaN`).
+"""
+burnable(g::LevelSetGrid) = .!isnan.(g.t_ignite)
+
 #-----------------------------------------------------------------------------# ignite!
 """
     ignite!(grid::LevelSetGrid, cx, cy, r)
@@ -218,8 +232,16 @@ ignite!(grid, 1500.0, 1500.0, 100.0)
 function ignite!(g::LevelSetGrid, cx, cy, r)
     xs = xcoords(g)
     ys = ycoords(g)
-    # Broadcasting: ys is ny-column, xs' is 1×nx row → broadcasts to ny×nx
-    g.φ .= min.(g.φ, hypot.(xs' .- cx, ys .- cy) .- r)
+    for j in eachindex(xs), i in eachindex(ys)
+        d = hypot(xs[j] - cx, ys[i] - cy) - r
+        if d < g.φ[i, j]
+            was_unburned = g.φ[i, j] >= 0
+            g.φ[i, j] = d
+            if was_unburned && d < 0 && isinf(g.t_ignite[i, j])
+                g.t_ignite[i, j] = g.t
+            end
+        end
+    end
     g
 end
 
@@ -244,7 +266,7 @@ function set_unburnable!(g::LevelSetGrid, cx, cy, r)
     ys = ycoords(g)
     for j in eachindex(xs), i in eachindex(ys)
         if hypot(xs[j] - cx, ys[i] - cy) <= r
-            g.burnable[i, j] = false
+            g.t_ignite[i, j] = eltype(g.t_ignite)(NaN)
         end
     end
     g
@@ -293,7 +315,11 @@ function advance!(g::LevelSetGrid{T}, F::AbstractMatrix, dt) where {T}
         grad_sq > z || continue
         grad_mag = sqrt(grad_sq)
 
-        φ[i, j] = φ_old[i, j] - dt * Fij * grad_mag
+        new_phi = φ_old[i, j] - dt * Fij * grad_mag
+        if φ_old[i, j] >= z && new_phi < z && !isnan(g.t_ignite[i, j]) && isinf(g.t_ignite[i, j])
+            g.t_ignite[i, j] = g.t + dt
+        end
+        φ[i, j] = new_phi
     end
 
     g.t += dt
