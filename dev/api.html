@@ -246,11 +246,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./resources/benchmarks.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Benchmarks</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
   <a href="./resources/changelog.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Changelog</span></a>
   </div>
 </li>
@@ -266,8 +261,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
-        
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#types" id="toc-types" class="nav-link active" data-scroll-target="#types">Types</a></li>
+  <li><a href="#functions" id="toc-functions" class="nav-link" data-scroll-target="#functions">Functions</a></li>
+  </ul>
+</nav>
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
@@ -291,44 +293,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<button class="btn btn-sm btn-outline-secondary mb-3" id="toggle-all-callouts">
-Expand All
-</button>
-<script>
-document.getElementById('toggle-all-callouts').addEventListener('click', function() {
-  var btn = this;
-  var bodies = document.querySelectorAll('.callout-collapse.collapse');
-  var allOpen = Array.from(bodies).every(function(el) { return el.classList.contains('show'); });
-  bodies.forEach(function(el) {
-    var bsCollapse = bootstrap.Collapse.getOrCreateInstance(el, {toggle: false});
-    allOpen ? bsCollapse.hide() : bsCollapse.show();
-  });
-  btn.textContent = allOpen ? 'Expand All' : 'Collapse All';
-});
-</script>
-<ul>
-<li><a href="#abstractpinnconfig"><code>AbstractPINNConfig</code></a> <em>(type)</em></li>
-<li><a href="#neuralpdeconfig"><code>NeuralPDEConfig</code></a> <em>(type)</em></li>
-<li><a href="#pinnconfig"><code>PINNConfig</code></a> <em>(type)</em></li>
-<li><a href="#pinnsolution"><code>PINNSolution</code></a> <em>(type)</em></li>
-<li><a href="levelset.html#fireplot"><code>fireplot</code></a> <em>(function)</em></li>
-<li><a href="#fireplot!"><code>fireplot!</code></a> <em>(function)</em></li>
-<li><a href="#predict_on_grid"><code>predict_on_grid</code></a> <em>(function)</em></li>
-<li><a href="#predict_on_grid!"><code>predict_on_grid!</code></a> <em>(function)</em></li>
-<li><a href="#train_pinn"><code>train_pinn</code></a> <em>(function)</em></li>
-</ul>
-<div class="callout callout-style-simple callout-note no-icon callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-1-contents" aria-controls="callout-1" aria-expanded="false" aria-label="Toggle callout">
-<div class="callout-icon-container">
-<i class="callout-icon no-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span><code>AbstractPINNConfig</code> <span class="text-muted"><em>(type)</em></span>
-</div>
-<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
-</div>
-<div id="callout-1" class="callout-1-contents callout-collapse collapse">
-<div class="callout-body-container callout-body">
+<section id="types" class="level2">
+<h2 class="anchored" data-anchor-id="types">Types</h2>
+<div class="card mb-3">
+<section id="abstractpinnconfig" class="level4 card-header api-item-header">
+<h4 class="anchored" data-anchor-id="abstractpinnconfig"><code>AbstractPINNConfig</code></h4>
+</section>
+<div class="card-body">
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>AbstractPINNConfig</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Supertype for PINN training configurations. Subtypes select the solver backend:</p>
 <ul>
@@ -337,19 +308,11 @@ document.getElementById('toggle-all-callouts').addEventListener('click', functio
 </ul>
 </div>
 </div>
-</div>
-<div class="callout callout-style-simple callout-note no-icon callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-2-contents" aria-controls="callout-2" aria-expanded="false" aria-label="Toggle callout">
-<div class="callout-icon-container">
-<i class="callout-icon no-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span><code>NeuralPDEConfig</code> <span class="text-muted"><em>(type)</em></span>
-</div>
-<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
-</div>
-<div id="callout-2" class="callout-2-contents callout-collapse collapse">
-<div class="callout-body-container callout-body">
+<div class="card mb-3">
+<section id="neuralpdeconfig" class="level4 card-header api-item-header">
+<h4 class="anchored" data-anchor-id="neuralpdeconfig"><code>NeuralPDEConfig</code></h4>
+</section>
+<div class="card-body">
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">NeuralPDEConfig</span>(; kwargs<span class="op">...</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Training hyperparameters for the NeuralPDE.jl PINN solver.</p>
 <p>Uses ModelingToolkit symbolic PDE definition with <code>PhysicsInformedNN</code> discretization. IC and BC are enforced as soft constraints (loss terms).</p>
@@ -373,19 +336,11 @@ document.getElementById('toggle-all-callouts').addEventListener('click', functio
 </section>
 </div>
 </div>
-</div>
-<div class="callout callout-style-simple callout-note no-icon callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-3-contents" aria-controls="callout-3" aria-expanded="false" aria-label="Toggle callout">
-<div class="callout-icon-container">
-<i class="callout-icon no-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span><code>PINNConfig</code> <span class="text-muted"><em>(type)</em></span>
-</div>
-<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
-</div>
-<div id="callout-3" class="callout-3-contents callout-collapse collapse">
-<div class="callout-body-container callout-body">
+<div class="card mb-3">
+<section id="pinnconfig" class="level4 card-header api-item-header">
+<h4 class="anchored" data-anchor-id="pinnconfig"><code>PINNConfig</code></h4>
+</section>
+<div class="card-body">
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">PINNConfig</span>(; kwargs<span class="op">...</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Training hyperparameters for the custom Lux-based PINN solver.</p>
 <p>The initial condition is enforced exactly via a hard constraint decomposition (no IC loss term or IC collocation points needed).</p>
@@ -413,19 +368,11 @@ document.getElementById('toggle-all-callouts').addEventListener('click', functio
 </section>
 </div>
 </div>
-</div>
-<div class="callout callout-style-simple callout-note no-icon callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-4-contents" aria-controls="callout-4" aria-expanded="false" aria-label="Toggle callout">
-<div class="callout-icon-container">
-<i class="callout-icon no-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span><code>PINNSolution</code> <span class="text-muted"><em>(type)</em></span>
-</div>
-<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
-</div>
-<div id="callout-4" class="callout-4-contents callout-collapse collapse">
-<div class="callout-body-container callout-body">
+<div class="card mb-3">
+<section id="pinnsolution" class="level4 card-header api-item-header">
+<h4 class="anchored" data-anchor-id="pinnsolution"><code>PINNSolution</code></h4>
+</section>
+<div class="card-body">
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>PINNSolution</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Trained PINN model. Callable as <code>sol(t, x, y)</code> to evaluate the level set function.</p>
 <section id="fields" class="level1">
@@ -446,19 +393,14 @@ document.getElementById('toggle-all-callouts').addEventListener('click', functio
 </section>
 </div>
 </div>
-</div>
-<div class="callout callout-style-simple callout-note no-icon callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-5-contents" aria-controls="callout-5" aria-expanded="false" aria-label="Toggle callout">
-<div class="callout-icon-container">
-<i class="callout-icon no-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span><code>fireplot</code> <span class="text-muted"><em>(function)</em></span>
-</div>
-<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
-</div>
-<div id="callout-5" class="callout-5-contents callout-collapse collapse">
-<div class="callout-body-container callout-body">
+</section>
+<section id="functions" class="level2">
+<h2 class="anchored" data-anchor-id="functions">Functions</h2>
+<div class="card mb-3">
+<section id="fireplot" class="level4 card-header api-item-header">
+<h4 class="anchored" data-anchor-id="fireplot"><code>fireplot</code></h4>
+</section>
+<div class="card-body">
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">fireplot</span>(grid<span class="op">::</span><span class="dt">LevelSetGrid</span>; colormap<span class="op">=:</span>RdYlGn, frontcolor<span class="op">=:</span>black, frontlinewidth<span class="op">=</span><span class="fl">2.0</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Plot a <code>LevelSetGrid</code> as a heatmap of the <code>φ</code> field with the fire front (<code>φ = 0</code>) overlaid as a contour line. Returns a <code>Makie.Figure</code>.</p>
 <p>Requires <code>Makie</code> (or a backend like <code>CairoMakie</code> / <code>GLMakie</code>) to be loaded.</p>
@@ -471,71 +413,39 @@ document.getElementById('toggle-all-callouts').addEventListener('click', functio
 </section>
 </div>
 </div>
-</div>
-<div class="callout callout-style-simple callout-note no-icon callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-6-contents" aria-controls="callout-6" aria-expanded="false" aria-label="Toggle callout">
-<div class="callout-icon-container">
-<i class="callout-icon no-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span><code>fireplot!</code> <span class="text-muted"><em>(function)</em></span> {#fireplot!}
-</div>
-<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
-</div>
-<div id="callout-6" class="callout-6-contents callout-collapse collapse">
-<div class="callout-body-container callout-body">
+<div class="card mb-3">
+<section id="fireplot-fireplot" class="level4 card-header api-item-header">
+<h4 class="anchored" data-anchor-id="fireplot-fireplot"><code>fireplot!</code> {#fireplot!}</h4>
+</section>
+<div class="card-body">
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">fireplot!</span>(ax, grid<span class="op">::</span><span class="dt">LevelSetGrid</span>; colormap<span class="op">=:</span>RdYlGn, frontcolor<span class="op">=:</span>black, frontlinewidth<span class="op">=</span><span class="fl">2.0</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>In-place version of <code>fireplot</code>: draws into an existing <code>Axis</code>.</p>
 <p>Requires <code>Makie</code> (or a backend like <code>CairoMakie</code> / <code>GLMakie</code>) to be loaded.</p>
 </div>
 </div>
-</div>
-<div class="callout callout-style-simple callout-note no-icon callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-7-contents" aria-controls="callout-7" aria-expanded="false" aria-label="Toggle callout">
-<div class="callout-icon-container">
-<i class="callout-icon no-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span><code>predict_on_grid</code> <span class="text-muted"><em>(function)</em></span>
-</div>
-<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
-</div>
-<div id="callout-7" class="callout-7-contents callout-collapse collapse">
-<div class="callout-body-container callout-body">
+<div class="card mb-3">
+<section id="predict_on_grid" class="level4 card-header api-item-header">
+<h4 class="anchored" data-anchor-id="predict_on_grid"><code>predict_on_grid</code></h4>
+</section>
+<div class="card-body">
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">predict_on_grid</span>(sol<span class="op">::</span><span class="dt">PINNSolution</span>, grid<span class="op">::</span><span class="dt">LevelSet.LevelSetGrid</span>, t)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Evaluate the trained PINN on every cell center of <code>grid</code> at time <code>t</code>. Returns a matrix of phi values with the same dimensions as <code>grid</code>.</p>
 </div>
 </div>
-</div>
-<div class="callout callout-style-simple callout-note no-icon callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-8-contents" aria-controls="callout-8" aria-expanded="false" aria-label="Toggle callout">
-<div class="callout-icon-container">
-<i class="callout-icon no-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span><code>predict_on_grid!</code> <span class="text-muted"><em>(function)</em></span> {#predict_on_grid!}
-</div>
-<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
-</div>
-<div id="callout-8" class="callout-8-contents callout-collapse collapse">
-<div class="callout-body-container callout-body">
+<div class="card mb-3">
+<section id="predict_on_grid-predict_on_grid" class="level4 card-header api-item-header">
+<h4 class="anchored" data-anchor-id="predict_on_grid-predict_on_grid"><code>predict_on_grid!</code> {#predict_on_grid!}</h4>
+</section>
+<div class="card-body">
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">predict_on_grid!</span>(grid<span class="op">::</span><span class="dt">LevelSet.LevelSetGrid</span>, sol<span class="op">::</span><span class="dt">PINNSolution</span>, t)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>In-place version of <code>predict_on_grid</code>: updates <code>grid.phi</code> and <code>grid.t</code>.</p>
 </div>
 </div>
-</div>
-<div class="callout callout-style-simple callout-note no-icon callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-9-contents" aria-controls="callout-9" aria-expanded="false" aria-label="Toggle callout">
-<div class="callout-icon-container">
-<i class="callout-icon no-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span><code>train_pinn</code> <span class="text-muted"><em>(function)</em></span>
-</div>
-<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
-</div>
-<div id="callout-9" class="callout-9-contents callout-collapse collapse">
-<div class="callout-body-container callout-body">
+<div class="card mb-3">
+<section id="train_pinn" class="level4 card-header api-item-header">
+<h4 class="anchored" data-anchor-id="train_pinn"><code>train_pinn</code></h4>
+</section>
+<div class="card-body">
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">train_pinn</span>(grid, model, tspan; config<span class="op">=</span><span class="fu">PINNConfig</span>(), <span class="op">...</span>)</span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fu">train_pinn</span>(grid, model, tspan, config; <span class="op">...</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Train a Physics-Informed Neural Network to solve the fire spread level set PDE.</p>
@@ -572,9 +482,9 @@ document.getElementById('toggle-all-callouts').addEventListener('click', functio
 </section>
 </div>
 </div>
-</div>
 
 
+</section>
 
 </main> <!-- /main -->
 <script id="quarto-html-after-body" type="application/javascript">
