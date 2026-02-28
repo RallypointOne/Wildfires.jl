@@ -470,7 +470,7 @@ y: 15.0 to 2985.0 m  (100 cells)</code></pre>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ignite!</span>(grid, <span class="fl">1500.0</span>, <span class="fl">1500.0</span>, <span class="fl">100.0</span>)</span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>grid</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display" data-execution_count="1">
-<pre><code>LevelSetGrid{Float64} 100×100 (t=0.0, burned=32/10000)</code></pre>
+<pre><code>LevelSetGrid{Float64} 100×100 (t=0.0, burned=32/10000, ignited=32)</code></pre>
 </div>
 </div>
 </section>
@@ -501,7 +501,7 @@ y: 15.0 to 2985.0 m  (100 cells)</code></pre>
 <span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>grid</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display" data-execution_count="1">
-<pre><code>LevelSetGrid{Float64} 100×100 (t=10.0, burned=264/10000)</code></pre>
+<pre><code>LevelSetGrid{Float64} 100×100 (t=10.0, burned=264/10000, ignited=264)</code></pre>
 </div>
 </div>
 <section id="godunovs-upwind-scheme" class="level3">
@@ -548,7 +548,7 @@ y: 15.0 to 2985.0 m  (100 cells)</code></pre>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="fu">reinitialize!</span>(grid)</span>
 <span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>grid</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display" data-execution_count="1">
-<pre><code>LevelSetGrid{Float64} 100×100 (t=10.0, burned=264/10000)</code></pre>
+<pre><code>LevelSetGrid{Float64} 100×100 (t=10.0, burned=264/10000, ignited=264)</code></pre>
 </div>
 </div>
 </section>
@@ -1047,7 +1047,7 @@ y: 15.0 to 2985.0 m  (100 cells)</code></pre>
       &nbsp;
     </div>   
     <div class="nav-footer-center">
-<p>Built on 2026-02-27</p>
+<p>Built on 2026-02-28</p>
 </div>
     <div class="nav-footer-right">
       &nbsp;
