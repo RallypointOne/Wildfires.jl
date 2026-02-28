@@ -45,6 +45,11 @@ jobs:
         run: sudo apt-get install -y lcov
       - name: Fetch benchmark results
         run: git fetch origin benchmark-results || true
+      - name: Add benchmarks page if results exist
+        run: |
+          if git show origin/benchmark-results:results.json >/dev/null 2>&1 && [ -f docs/resources/benchmarks.qmd ]; then
+            sed -i '/- resources\/changelog.qmd/i\        - resources/benchmarks.qmd' docs/_quarto.yml
+          fi
       - uses: quarto-dev/quarto-actions/setup@v2
       - name: Set build date
         run: sed -i "s/__BUILD_DATE__/$(date -u +'%Y-%m-%d')/" docs/_quarto.yml

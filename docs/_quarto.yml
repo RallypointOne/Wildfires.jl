@@ -38,7 +38,6 @@ book:
     - part: "Resources"
       chapters:
         - resources/troubleshooting.qmd
-        - resources/benchmarks.qmd
         - resources/changelog.qmd
         - resources/coverage.qmd
 
