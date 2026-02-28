@@ -11,6 +11,7 @@ using Wildfires.Rothermel
 using Wildfires.LevelSet
 using Wildfires.SpreadModel
 using CairoMakie
+using Printf
 ```
 
 The `SpreadModel` module provides composable, differentiable components for driving level set fire simulations.  Instead of manually constructing a spread rate matrix `F`, you build a `FireSpreadModel` from pluggable wind, moisture, and terrain components — each a callable `(t, x, y)` struct.
@@ -412,6 +413,44 @@ The `simulate!` function accepts several keyword arguments that control numerica
 
 **`dt`**: When set to `nothing` (default), `simulate!` calls `spread_rate_field!` first, then computes a CFL-limited time step automatically.  If you pass a fixed `dt`, you are responsible for ensuring it satisfies the CFL condition — violating it causes numerical blowup.
 
+## Animation with Trace
+
+The `Trace` type records snapshots of the level set field during simulation, making it easy to create animations of fire spread.  Pass `trace=Trace(grid, every)` to `simulate!` to record `φ` every `every` steps.
+
+```{julia}
+M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+
+grid = LevelSetGrid(200, 200, dx=30.0)
+ignite!(grid, 3000.0, 3000.0, 50.0)
+model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain(),
+    EllipticalBlending())
+
+trace = Trace(grid, 5)
+simulate!(grid, model, steps=150, dt=0.5, trace=trace)
+
+length(trace.stack)  # initial + every 5 steps
+```
+
+Each entry in `trace.stack` is a `(time, φ)` tuple.  Here's how to create a GIF:
+
+```{julia}
+fig = Figure(size=(500, 450))
+ax = Axis(fig[1, 1], aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)")
+
+xs = collect(xcoords(grid))
+ys = collect(ycoords(grid))
+
+record(fig, joinpath(@__DIR__, "fire_spread.gif"), eachindex(trace.stack); framerate=15) do idx
+    empty!(ax)
+    t, φ = trace.stack[idx]
+    ax.title = @sprintf("t = %.1f min", t)
+    contourf!(ax, xs, ys, φ, levels=[-1e4, 0, 1e4],
+        colormap=[:red, :green])
+end
+```
+
+![](fire_spread.gif)
+
 ## Performance: Float64 vs Float32
 
 The level set grid and all simulation operations support `Float32` for reduced memory and potentially faster computation.  To create a `Float32` simulation, pass `Float32` values to all constructors:
@@ -442,7 +481,7 @@ nothing
 
 ```{julia}
 #| echo: false
-using Printf
+#| output: asis
 
 t64 = median(b64).time / 1e6
 t32 = median(b32).time / 1e6

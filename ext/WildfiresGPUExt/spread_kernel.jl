@@ -41,7 +41,7 @@ end
 #-----------------------------------------------------------------------------# GPU simulate!
 
 function SpreadModel.simulate!(grid::LevelSetGrid{T, <:AbstractGPUArray}, model;
-                               steps::Int=100, dt=nothing, cfl=0.5, reinit_every::Int=10, burnout=nothing) where {T}
+                               steps::Int=100, dt=nothing, cfl=0.5, reinit_every::Int=10, burnout=nothing, trace=nothing) where {T}
     F_gpu = similar(grid.φ)
 
     for step in 1:steps
@@ -51,6 +51,7 @@ function SpreadModel.simulate!(grid::LevelSetGrid{T, <:AbstractGPUArray}, model;
         SpreadModel.update!(model, grid, step_dt)
         LevelSet.advance!(grid, F_gpu, step_dt)
         step % reinit_every == 0 && LevelSet.reinitialize!(grid)
+        trace !== nothing && step % trace.every == 0 && SpreadModel._record!(trace, grid)
     end
     grid
 end

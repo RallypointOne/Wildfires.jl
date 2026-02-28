@@ -5,6 +5,7 @@ export UniformWind, UniformMoisture, UniformSlope, FlatTerrain, DynamicMoisture
 export FireSpreadModel, spread_rate_field!, simulate!, fire_loss, update!
 export AbstractDirectionalModel, CosineBlending, EllipticalBlending
 export length_to_breadth, fire_eccentricity
+export Trace
 
 using ..Rothermel: Rothermel as RothermelModel, FuelClasses, rate_of_spread
 using ..LevelSet: LevelSetGrid, xcoords, ycoords, ignite!, advance!, reinitialize!, cfl_dt
@@ -484,9 +485,49 @@ function _directional_rate(model::FireSpreadModel, dir::EllipticalBlending,
     return R_head * (1 - ε) / (1 - ε * cos_theta)
 end
 
+#-----------------------------------------------------------------------------# Trace
+"""
+    Trace{T}
+
+Records snapshots of the level set field during [`simulate!`](@ref).
+
+# Fields
+- `stack::Vector{Tuple{T, Matrix{T}}}` - Collected `(time, φ)` snapshots
+- `every::Int` - Record every N simulation steps
+
+# Constructor
+    Trace(grid::LevelSetGrid, every::Integer)
+
+Create a trace that records the initial grid state and will record every `every` steps
+during `simulate!`.
+
+### Examples
+```julia
+grid = LevelSetGrid(100, 100, dx=30.0)
+ignite!(grid, 1500.0, 1500.0, 50.0)
+trace = Trace(grid, 5)
+simulate!(grid, model, steps=100, trace=trace)
+
+length(trace.stack)  # 1 (initial) + 20 (every 5 of 100 steps) = 21
+trace.stack[1]       # (0.0, Matrix{Float64})
+```
+"""
+struct Trace{T}
+    stack::Vector{Tuple{T, Matrix{T}}}
+    every::Int
+end
+
+function Trace(grid::LevelSetGrid{T}, every::Integer) where {T}
+    Trace{T}(Tuple{T, Matrix{T}}[(grid.t, collect(grid.φ))], every)
+end
+
+function _record!(trace::Trace, grid::LevelSetGrid)
+    push!(trace.stack, (grid.t, collect(grid.φ)))
+end
+
 #-----------------------------------------------------------------------------# simulate!
 """
-    simulate!(grid::LevelSetGrid, model; steps=100, dt=nothing, cfl=0.5, reinit_every=10, burnout=nothing)
+    simulate!(grid::LevelSetGrid, model; steps=100, dt=nothing, cfl=0.5, reinit_every=10, burnout=nothing, trace=nothing)
 
 Run the level set simulation using a `FireSpreadModel` to compute spread rates.
 
@@ -503,6 +544,13 @@ Pass `burnout` as a residence time in minutes (e.g. from [`residence_time`](@ref
 stop spread from cells that have been burning longer than `burnout`.  When `burnout=nothing`
 (the default), fire spreads indefinitely once ignited.
 
+# Trace
+
+Pass a [`Trace`](@ref) to record snapshots of `φ` at regular intervals for animation:
+
+    trace = Trace(grid, 5)
+    simulate!(grid, model, steps=100, trace=trace)
+
 ### Examples
 ```julia
 grid = LevelSetGrid(100, 100, dx=30.0)
@@ -516,9 +564,13 @@ simulate!(grid, model, steps=100, dt=0.5)
 
 # With burnout
 simulate!(grid, model, steps=100, burnout=residence_time(SHORT_GRASS))
+
+# With trace for animation
+trace = Trace(grid, 10)
+simulate!(grid, model, steps=100, trace=trace)
 ```
 """
-function simulate!(grid::LevelSetGrid, model; steps::Int=100, dt=nothing, cfl=0.5, reinit_every::Int=10, burnout=nothing)
+function simulate!(grid::LevelSetGrid, model; steps::Int=100, dt=nothing, cfl=0.5, reinit_every::Int=10, burnout=nothing, trace=nothing)
     F = similar(grid.φ)
     for step in 1:steps
         spread_rate_field!(F, model, grid)
@@ -527,6 +579,7 @@ function simulate!(grid::LevelSetGrid, model; steps::Int=100, dt=nothing, cfl=0.
         update!(model, grid, step_dt)
         advance!(grid, F, step_dt)
         step % reinit_every == 0 && reinitialize!(grid)
+        trace !== nothing && step % trace.every == 0 && _record!(trace, grid)
     end
     grid
 end
