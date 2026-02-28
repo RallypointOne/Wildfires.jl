@@ -880,21 +880,9 @@ Note
 <pre><code>31</code></pre>
 </div>
 </div>
-<p>Each entry in <code>trace.stack</code> is a <code>(time, φ)</code> tuple. Here’s how to create a GIF:</p>
+<p>Each entry in <code>trace.stack</code> is a <code>(time, φ)</code> tuple. Use <code>firegif</code> to create a GIF:</p>
 <div id="40" class="cell" data-execution_count="1">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>fig <span class="op">=</span> <span class="fu">Figure</span>(size<span class="op">=</span>(<span class="fl">500</span>, <span class="fl">450</span>))</span>
-<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> <span class="fu">Axis</span>(fig[<span class="fl">1</span>, <span class="fl">1</span>], aspect<span class="op">=</span><span class="fu">DataAspect</span>(), xlabel<span class="op">=</span><span class="st">"x (m)"</span>, ylabel<span class="op">=</span><span class="st">"y (m)"</span>)</span>
-<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>xs <span class="op">=</span> <span class="fu">collect</span>(<span class="fu">xcoords</span>(grid))</span>
-<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>ys <span class="op">=</span> <span class="fu">collect</span>(<span class="fu">ycoords</span>(grid))</span>
-<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a><span class="fu">record</span>(fig, <span class="fu">joinpath</span>(<span class="pp">@__DIR__</span>, <span class="st">"fire_spread.gif"</span>), <span class="fu">eachindex</span>(trace.stack); framerate<span class="op">=</span><span class="fl">15</span>) <span class="cf">do</span> idx</span>
-<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">empty!</span>(ax)</span>
-<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>    t, <span class="cn">φ</span> <span class="op">=</span> trace.stack[idx]</span>
-<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a>    ax.title <span class="op">=</span> <span class="pp">@sprintf</span>(<span class="st">"t = %.1f min"</span>, t)</span>
-<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">contourf!</span>(ax, xs, ys, <span class="cn">φ</span>, levels<span class="op">=</span>[<span class="op">-</span><span class="fl">1e4</span>, <span class="fl">0</span>, <span class="fl">1e4</span>],</span>
-<span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a>        colormap<span class="op">=</span>[<span class="op">:</span>red, <span class="op">:</span>green])</span>
-<span id="cb31-13"><a href="#cb31-13" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="fu">firegif</span>(<span class="fu">joinpath</span>(<span class="pp">@__DIR__</span>, <span class="st">"fire_spread.gif"</span>), trace, grid)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display" data-execution_count="1">
 <pre><code>"/home/runner/work/Wildfires.jl/Wildfires.jl/docs/fire_spread.gif"</code></pre>
 </div>
@@ -948,9 +936,9 @@ Note
 <tbody>
 <tr class="odd">
 <td>Median time</td>
-<td>31.70 ms</td>
-<td>23.62 ms</td>
-<td>1.34x</td>
+<td>32.01 ms</td>
+<td>24.17 ms</td>
+<td>1.32x</td>
 </tr>
 <tr class="even">
 <td>Memory</td>
