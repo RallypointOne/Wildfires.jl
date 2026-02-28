@@ -293,36 +293,40 @@ function advance!(g::LevelSetGrid{T}, F::AbstractMatrix, dt) where {T}
     z = zero(T)
 
     φ_old = copy(φ)
+    t_ignite = g.t_ignite
+    t_now = g.t + dt
 
-    for j in 1:nx, i in 1:ny
-        _skip_update(i, j, ny, nx, bc) && continue
+    Threads.@threads for j in 1:nx
+        for i in 1:ny
+            _skip_update(i, j, ny, nx, bc) && continue
 
-        Fij = F[i, j]
-        Fij > z || continue
+            Fij = F[i, j]
+            Fij > z || continue
 
-        # Upwind finite differences (Godunov)
-        dxm = _Dxm(φ_old, i, j, dx, bc)
-        dxp = _Dxp(φ_old, i, j, nx, dx, bc)
-        dym = _Dym(φ_old, i, j, dy, bc)
-        dyp = _Dyp(φ_old, i, j, ny, dy, bc)
+            # Upwind finite differences (Godunov)
+            dxm = _Dxm(φ_old, i, j, dx, bc)
+            dxp = _Dxp(φ_old, i, j, nx, dx, bc)
+            dym = _Dym(φ_old, i, j, dy, bc)
+            dyp = _Dyp(φ_old, i, j, ny, dy, bc)
 
-        Dxm_plus = max(dxm, z)
-        Dxp_minus = min(dxp, z)
-        Dym_plus = max(dym, z)
-        Dyp_minus = min(dyp, z)
+            Dxm_plus = max(dxm, z)
+            Dxp_minus = min(dxp, z)
+            Dym_plus = max(dym, z)
+            Dyp_minus = min(dyp, z)
 
-        grad_sq = max(Dxm_plus, -Dxp_minus)^2 + max(Dym_plus, -Dyp_minus)^2
-        grad_sq > z || continue
-        grad_mag = sqrt(grad_sq)
+            grad_sq = max(Dxm_plus, -Dxp_minus)^2 + max(Dym_plus, -Dyp_minus)^2
+            grad_sq > z || continue
+            grad_mag = sqrt(grad_sq)
 
-        new_phi = φ_old[i, j] - dt * Fij * grad_mag
-        if φ_old[i, j] >= z && new_phi < z && !isnan(g.t_ignite[i, j]) && isinf(g.t_ignite[i, j])
-            g.t_ignite[i, j] = g.t + dt
+            new_phi = φ_old[i, j] - dt * Fij * grad_mag
+            if φ_old[i, j] >= z && new_phi < z && !isnan(t_ignite[i, j]) && isinf(t_ignite[i, j])
+                t_ignite[i, j] = t_now
+            end
+            φ[i, j] = new_phi
         end
-        φ[i, j] = new_phi
     end
 
-    g.t += dt
+    g.t = t_now
     g
 end
 
@@ -341,10 +345,10 @@ F = fill(10.0, size(grid))
 cfl_dt(grid, F)  # 1.5
 ```
 """
-function cfl_dt(g::LevelSetGrid, F::AbstractMatrix; cfl=0.5)
+function cfl_dt(g::LevelSetGrid{T}, F::AbstractMatrix; cfl=0.5) where {T}
     Fmax = maximum(F)
-    Fmax > 0 || return typeof(g.dx)(Inf)
-    cfl * min(g.dx, g.dy) / Fmax
+    Fmax > 0 || return T(Inf)
+    T(cfl) * min(g.dx, g.dy) / Fmax
 end
 
 #-----------------------------------------------------------------------------# reinitialize!
@@ -362,31 +366,33 @@ function reinitialize!(g::LevelSetGrid{T}; iterations::Int=5) where {T}
     ny, nx = size(φ)
     dx, dy = g.dx, g.dy
     bc = g.bc
-    dτ = min(dx, dy) * 0.5  # pseudo-timestep
+    dτ = min(dx, dy) / 2  # pseudo-timestep
     z = zero(T)
 
     for _ in 1:iterations
         φ_old = copy(φ)
-        for j in 1:nx, i in 1:ny
-            _skip_update(i, j, ny, nx, bc) && continue
+        Threads.@threads for j in 1:nx
+            for i in 1:ny
+                _skip_update(i, j, ny, nx, bc) && continue
 
-            S = sign(φ_old[i, j])
+                S = sign(φ_old[i, j])
 
-            dxm = _Dxm(φ_old, i, j, dx, bc)
-            dxp = _Dxp(φ_old, i, j, nx, dx, bc)
-            dym = _Dym(φ_old, i, j, dy, bc)
-            dyp = _Dyp(φ_old, i, j, ny, dy, bc)
+                dxm = _Dxm(φ_old, i, j, dx, bc)
+                dxp = _Dxp(φ_old, i, j, nx, dx, bc)
+                dym = _Dym(φ_old, i, j, dy, bc)
+                dyp = _Dyp(φ_old, i, j, ny, dy, bc)
 
-            if S > 0
-                a = max(max(dxm, z), -min(dxp, z))
-                b = max(max(dym, z), -min(dyp, z))
-            else
-                a = max(-min(dxm, z), max(dxp, z))
-                b = max(-min(dym, z), max(dyp, z))
+                if S > 0
+                    a = max(max(dxm, z), -min(dxp, z))
+                    b = max(max(dym, z), -min(dyp, z))
+                else
+                    a = max(-min(dxm, z), max(dxp, z))
+                    b = max(-min(dym, z), max(dyp, z))
+                end
+
+                grad_mag = hypot(a, b)
+                φ[i, j] = φ_old[i, j] - dτ * S * (grad_mag - one(T))
             end
-
-            grad_mag = hypot(a, b)
-            φ[i, j] = φ_old[i, j] - dτ * S * (grad_mag - one(T))
         end
     end
     g
