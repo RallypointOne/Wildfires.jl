@@ -351,6 +351,8 @@ function cfl_dt(g::LevelSetGrid{T}, F::AbstractMatrix; cfl=0.5) where {T}
     T(cfl) * min(g.dx, g.dy) / Fmax
 end
 
+_smoothed_sign(φ, h) = φ / hypot(φ, h)  # Sussman et al. 1994
+
 #-----------------------------------------------------------------------------# reinitialize!
 """
     reinitialize!(grid::LevelSetGrid; iterations=5)
@@ -366,7 +368,8 @@ function reinitialize!(g::LevelSetGrid{T}; iterations::Int=5) where {T}
     ny, nx = size(φ)
     dx, dy = g.dx, g.dy
     bc = g.bc
-    dτ = min(dx, dy) / 2  # pseudo-timestep
+    h = min(dx, dy)
+    dτ = h / 2  # pseudo-timestep
     z = zero(T)
 
     for _ in 1:iterations
@@ -375,14 +378,15 @@ function reinitialize!(g::LevelSetGrid{T}; iterations::Int=5) where {T}
             for i in 1:ny
                 _skip_update(i, j, ny, nx, bc) && continue
 
-                S = sign(φ_old[i, j])
+                φ_ij = φ_old[i, j]
+                S = _smoothed_sign(φ_ij, h)
 
                 dxm = _Dxm(φ_old, i, j, dx, bc)
                 dxp = _Dxp(φ_old, i, j, nx, dx, bc)
                 dym = _Dym(φ_old, i, j, dy, bc)
                 dyp = _Dyp(φ_old, i, j, ny, dy, bc)
 
-                if S > 0
+                if S > z
                     a = max(max(dxm, z), -min(dxp, z))
                     b = max(max(dym, z), -min(dyp, z))
                 else
@@ -391,7 +395,7 @@ function reinitialize!(g::LevelSetGrid{T}; iterations::Int=5) where {T}
                 end
 
                 grad_mag = hypot(a, b)
-                φ[i, j] = φ_old[i, j] - dτ * S * (grad_mag - one(T))
+                φ[i, j] = φ_ij - dτ * S * (grad_mag - one(T))
             end
         end
     end

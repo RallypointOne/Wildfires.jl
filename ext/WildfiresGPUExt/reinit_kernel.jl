@@ -1,13 +1,14 @@
 #-----------------------------------------------------------------------------# GPU reinitialize! kernel
 
-@kernel function _reinit_kernel!(φ, @Const(φ_old), dx, dy, dτ, nx, ny, bc)
+@kernel function _reinit_kernel!(φ, @Const(φ_old), dx, dy, dτ, h, nx, ny, bc)
     i, j = @index(Global, NTuple)
 
     T = eltype(φ)
     z = zero(T)
 
     if !LevelSet._skip_update(i, j, ny, nx, bc)
-        S = sign(φ_old[i, j])
+        φ_ij = φ_old[i, j]
+        S = LevelSet._smoothed_sign(φ_ij, h)
 
         dxm = LevelSet._Dxm(φ_old, i, j, dx, bc)
         dxp = LevelSet._Dxp(φ_old, i, j, nx, dx, bc)
@@ -23,7 +24,7 @@
         end
 
         grad_mag = hypot(a, b)
-        φ[i, j] = φ_old[i, j] - dτ * S * (grad_mag - one(T))
+        φ[i, j] = φ_ij - dτ * S * (grad_mag - one(T))
     end
 end
 
@@ -31,12 +32,13 @@ function LevelSet.reinitialize!(g::LevelSetGrid{T, <:AbstractGPUArray}; iteratio
     φ = g.φ
     ny, nx = size(φ)
     dx, dy = g.dx, g.dy
-    dτ = min(dx, dy) * T(0.5)
+    h = min(dx, dy)
+    dτ = h / 2
 
     backend = get_backend(φ)
     for _ in 1:iterations
         φ_old = copy(φ)
-        _reinit_kernel!(backend)(φ, φ_old, dx, dy, dτ, nx, ny, g.bc, ndrange=(ny, nx))
+        _reinit_kernel!(backend)(φ, φ_old, dx, dy, dτ, h, nx, ny, g.bc, ndrange=(ny, nx))
         KernelAbstractions.synchronize(backend)
     end
     g

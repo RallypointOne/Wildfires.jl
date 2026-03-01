@@ -206,12 +206,14 @@ struct CosineBlending <: AbstractDirectionalModel end
 
 Elliptical fire spread model based on Anderson (1983).
 
-The spread rate at angle `θ` from the push direction follows an ellipse:
+The normal speed at angle `θ` from the push direction is:
 
-    R(θ) = R_head · (1 - ε) / (1 - ε · cos θ)
+    F_n(θ) = R_head/(1+ε) · (√(cos²θ + sin²θ/LB²) + ε·cos θ)
 
-where `ε` is the fire eccentricity derived from the length-to-breadth ratio `LB`,
-which is computed from effective midflame wind speed.
+where `ε` is the fire eccentricity and `LB` the length-to-breadth ratio,
+both derived from the effective midflame wind speed.  The first term is the
+ellipse expansion and the second is the drift that places the ignition at
+the rear focus (as in the Anderson/Richards fire ellipse convention).
 
 # Fields
 - `formula::Symbol` - Length-to-breadth formula: `:anderson` (default) or `:green`
@@ -469,7 +471,18 @@ function _effective_wind_speed(fuel, moist, R_target, R_base)
     return (lo + hi) / 2
 end
 
-# Elliptical blending: R = R_head * (1 - ε) / (1 - ε * cos θ)
+# Elliptical blending: correct normal speed for elliptical fire shape
+#
+# The fire ellipse (Anderson 1983) has the ignition at the rear focus.
+# Its evolution decomposes into:
+#   - Expansion: the ellipse grows with semi-axes a (head) and b=a/LB (flank)
+#   - Drift: the center moves in the push direction at speed a·ε
+#
+# The corresponding normal speed is:
+#   F_n = R_head/(1+ε) · (sqrt(cos²θ + sin²θ/LB²) + ε·cos θ)
+#
+# This gives R_head at the head (θ=0) and R_head·(1-ε)/(1+ε) at the
+# backing (θ=π), with smooth elliptical flanks.
 function _directional_rate(model::FireSpreadModel, dir::EllipticalBlending,
         t, x, y, nx, ny)
     (; R_head, R_base, cos_theta) = _push_direction(model, t, x, y, nx, ny)
@@ -482,7 +495,11 @@ function _directional_rate(model::FireSpreadModel, dir::EllipticalBlending,
     U_eff_ms = U_eff_kmh / 3.6
     LB = length_to_breadth(U_eff_ms; formula=dir.formula)
     ε = fire_eccentricity(LB)
-    return R_head * (1 - ε) / (1 - ε * cos_theta)
+
+    sin2 = 1 - cos_theta^2
+    R_expand = R_head / (1 + ε)
+    F_n = R_expand * (sqrt(cos_theta^2 + sin2 / LB^2) + ε * cos_theta)
+    return max(F_n, R_base)
 end
 
 #-----------------------------------------------------------------------------# Trace
@@ -527,7 +544,7 @@ end
 
 #-----------------------------------------------------------------------------# simulate!
 """
-    simulate!(grid::LevelSetGrid, model; steps=100, dt=nothing, cfl=0.5, reinit_every=10, burnout=nothing, trace=nothing)
+    simulate!(grid::LevelSetGrid, model; steps=100, dt=nothing, cfl=0.5, reinit_every=10, burnout=nothing, trace=nothing, progress=false)
 
 Run the level set simulation using a `FireSpreadModel` to compute spread rates.
 
@@ -551,6 +568,10 @@ Pass a [`Trace`](@ref) to record snapshots of `φ` at regular intervals for anim
     trace = Trace(grid, 5)
     simulate!(grid, model, steps=100, trace=trace)
 
+# Progress
+
+Pass `progress=true` to display a progress meter during simulation.
+
 ### Examples
 ```julia
 grid = LevelSetGrid(100, 100, dx=30.0)
@@ -568,9 +589,12 @@ simulate!(grid, model, steps=100, burnout=residence_time(SHORT_GRASS))
 # With trace for animation
 trace = Trace(grid, 10)
 simulate!(grid, model, steps=100, trace=trace)
+
+# With progress meter
+simulate!(grid, model, steps=1000, progress=true)
 ```
 """
-function simulate!(grid::LevelSetGrid, model; steps::Int=100, dt=nothing, cfl=0.5, reinit_every::Int=10, burnout=nothing, trace=nothing)
+function simulate!(grid::LevelSetGrid, model; steps::Int=100, dt=nothing, cfl=0.5, reinit_every::Int=10, burnout=nothing, trace=nothing, progress::Bool=false)
     F = similar(grid.φ)
     for step in 1:steps
         spread_rate_field!(F, model, grid)
@@ -580,8 +604,17 @@ function simulate!(grid::LevelSetGrid, model; steps::Int=100, dt=nothing, cfl=0.
         advance!(grid, F, step_dt)
         step % reinit_every == 0 && reinitialize!(grid)
         trace !== nothing && step % trace.every == 0 && _record!(trace, grid)
+        progress && step % max(1, steps ÷ 100) == 0 && _print_progress(step, steps, grid)
     end
+    progress && println()
     grid
+end
+
+function _print_progress(step, steps, grid)
+    pct = round(Int, 100 * step / steps)
+    n_burned = count(<(0), grid.φ)
+    n_total = length(grid.φ)
+    print("\r  step $step/$steps ($pct%) | t = $(round(grid.t, digits=2)) min | burned = $n_burned/$n_total")
 end
 
 function _apply_burnout!(F, grid, t_r)
