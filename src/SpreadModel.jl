@@ -140,7 +140,7 @@ function update!(m::DynamicMoisture, grid::LevelSetGrid, dt)
         if φ[i, j] > 0  # unburned
             # Fire-induced drying: radiative flux decays with distance²
             # φ ≈ signed distance to front [m] after reinitialization
-            fire_flux = m.dry_rate / (φ[i, j]^2 + 1.0)
+            fire_flux = m.dry_rate / (φ[i, j]^2 + 1)
 
             # Recovery toward ambient (weather-driven rewetting)
             recovery = m.recovery_rate * (m.ambient_d1 - m.d1[i, j])
