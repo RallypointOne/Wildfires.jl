@@ -12,10 +12,16 @@ export fireplot, fireplot!, firegif
 
 #-----------------------------------------------------------------------------# Makie stubs (implemented in WildfiresMakieExt)
 """
-    fireplot(grid::LevelSetGrid; colormap=:RdYlGn, frontcolor=:black, frontlinewidth=2.0)
+    fireplot(grid::LevelSetGrid; residence_time=nothing, frontcolor=:black, frontlinewidth=2.0)
 
-Plot a `LevelSetGrid` as a heatmap of the `φ` field with the fire front (`φ = 0`)
-overlaid as a contour line.  Returns a `Makie.Figure`.
+Plot a `LevelSetGrid` as a heatmap with the fire front (`φ = 0`) overlaid as a contour line.
+Returns a `Makie.Figure`.
+
+When `residence_time` is provided, uses a burnout-aware colormap where burned cells
+transition from yellow (just ignited) → red → black (burnt out) and unburned cells
+transition from white (near front) → green (far away).
+
+Without `residence_time`, falls back to a symmetric `φ` heatmap with `:RdYlGn` colormap.
 
 Requires `Makie` (or a backend like `CairoMakie` / `GLMakie`) to be loaded.
 
@@ -25,12 +31,13 @@ using CairoMakie
 grid = LevelSetGrid(100, 100, dx=30.0)
 ignite!(grid, 1500.0, 1500.0, 100.0)
 fireplot(grid)
+fireplot(grid; residence_time=0.005)
 ```
 """
 function fireplot end
 
 """
-    fireplot!(ax, grid::LevelSetGrid; colormap=:RdYlGn, frontcolor=:black, frontlinewidth=2.0)
+    fireplot!(ax, grid::LevelSetGrid; residence_time=nothing, frontcolor=:black, frontlinewidth=2.0)
 
 In-place version of `fireplot`: draws into an existing `Axis`.
 
@@ -39,12 +46,11 @@ Requires `Makie` (or a backend like `CairoMakie` / `GLMakie`) to be loaded.
 function fireplot! end
 
 """
-    firegif(path, trace::Trace, grid::LevelSetGrid; framerate=15, colormap=:RdYlGn, frontcolor=:black, frontlinewidth=2.0)
+    firegif(path, trace::Trace, grid::LevelSetGrid; residence_time=nothing, framerate=15, frontcolor=:black, frontlinewidth=2.0)
 
 Create an animated GIF of fire spread from a [`Trace`](@ref) recorded during [`simulate!`](@ref).
 
-Uses the same visualization style as [`fireplot!`](@ref): a heatmap of `φ` with the fire
-front (`φ = 0`) overlaid as a contour line.
+Uses the same visualization style as [`fireplot!`](@ref).
 
 Requires `Makie` (or a backend like `CairoMakie` / `GLMakie`) to be loaded.
 
@@ -58,6 +64,7 @@ trace = Trace(grid, 5)
 simulate!(grid, model, steps=100, trace=trace)
 
 firegif("fire.gif", trace, grid)
+firegif("fire.gif", trace, grid; residence_time=0.005)
 ```
 """
 function firegif end
