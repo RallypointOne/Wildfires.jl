@@ -118,7 +118,7 @@ t_r = residence_time(CHAPARRAL)
 model = FireSpreadModel(CHAPARRAL, UniformWind(speed=8.0), UniformMoisture(M),
     FlatTerrain(), EllipticalBlending())
 tr = Trace(g, 3)
-simulate!(g, model, steps=150, dt=0.5, trace=tr, burnout=t_r)
+simulate!(g, model, steps=150, dt=0.5, trace=tr, burnout=ExponentialBurnout(t_r))
 firegif(joinpath(@__DIR__, "gallery_burnout.gif"), tr, g; residence_time=t_r)
 nothing
 ```
@@ -303,6 +303,6 @@ fig
 
 ## Hero Animation
 
-Elliptical spread with burnout on chaparral fuel under strong wind — also displayed on the [landing page](index.qmd).
+Elliptical spread with burnout on chaparral fuel over real-world terrain (Thomas Fire origin, Anlauf Canyon, CA) with wind particles — also displayed on the [landing page](index.qmd).
 
 ![](hero.gif){fig-align="center" width="500"}

@@ -1,6 +1,9 @@
 module SpreadModel
 
 export AbstractWind, AbstractMoisture, AbstractTerrain
+export AbstractSpotting, AbstractSuppression, AbstractBurnout, AbstractBurnin
+export NoBurnout, ExponentialBurnout, LinearBurnout
+export NoBurnin, ExponentialBurnin, LinearBurnin
 export UniformWind, UniformMoisture, UniformSlope, FlatTerrain, DynamicMoisture
 export FireSpreadModel, spread_rate_field!, simulate!, fire_loss, update!
 export AbstractDirectionalModel, CosineBlending, EllipticalBlending
@@ -9,277 +12,14 @@ export Trace
 
 using ..Rothermel: Rothermel as RothermelModel, FuelClasses, rate_of_spread
 using ..LevelSet: LevelSetGrid, xcoords, ycoords, ignite!, advance!, reinitialize!, cfl_dt
-
-#-----------------------------------------------------------------------------# Abstract Types
-"""
-    AbstractWind
-
-Supertype for wind field components.
-
-Subtypes must be callable as `wind(t, x, y) -> (speed, direction)` where
-`speed` is midflame wind speed [km/h] and `direction` is the direction the
-wind blows FROM [radians].
-"""
-abstract type AbstractWind end
-
-"""
-    AbstractMoisture
-
-Supertype for fuel moisture components.
-
-Subtypes must be callable as `moisture(t, x, y) -> FuelClasses`.
-"""
-abstract type AbstractMoisture end
-
-"""
-    AbstractTerrain
-
-Supertype for terrain/topography components.
-
-Subtypes must be callable as `terrain(t, x, y) -> (slope, aspect)` where
-`slope` is rise/run [fraction] and `aspect` is the downslope direction [radians].
-"""
-abstract type AbstractTerrain end
-
-#-----------------------------------------------------------------------------# update!
-"""
-    update!(component, grid::LevelSetGrid, dt)
-
-Update a dynamic component based on the current fire state. Called by `simulate!`
-between time steps. Default is a no-op for static components.
-"""
-update!(::AbstractWind, grid::LevelSetGrid, dt) = nothing
-update!(::AbstractMoisture, grid::LevelSetGrid, dt) = nothing
-update!(::AbstractTerrain, grid::LevelSetGrid, dt) = nothing
-
-#-----------------------------------------------------------------------------# Wind Components
-"""
-    UniformWind{T}(; speed, direction=0.0)
-
-Spatially and temporally constant wind field.
-
-# Fields
-- `speed::T` - Midflame wind speed [km/h]
-- `direction::T` - Direction wind blows FROM [radians]
-"""
-struct UniformWind{T} <: AbstractWind
-    speed::T
-    direction::T
-end
-UniformWind(; speed, direction=0.0) = UniformWind(promote(speed, direction)...)
-
-(w::UniformWind)(t, x, y) = (w.speed, w.direction)
-
-#-----------------------------------------------------------------------------# Moisture Components
-"""
-    UniformMoisture{T}(moisture::FuelClasses{T})
-
-Spatially and temporally constant fuel moisture.
-"""
-struct UniformMoisture{T} <: AbstractMoisture
-    moisture::FuelClasses{T}
-end
-
-(m::UniformMoisture)(t, x, y) = m.moisture
-
-"""
-    DynamicMoisture(grid::LevelSetGrid, moisture::FuelClasses; dry_rate=0.1, recovery_rate=0.001, min_d1=0.03)
-
-Spatially varying fuel moisture that responds to fire-induced drying.
-
-The 1-hr dead fuel moisture (`d1`) varies spatially while other size classes remain
-constant. As the fire front approaches, radiative heat flux dries unburned fuel
-ahead of the front. Moisture also recovers toward the ambient value over time.
-
-The drying model at each unburned cell:
-
-    dM/dt = -dry_rate / (φ² + 1) + recovery_rate · (M_ambient - M)
-
-where `φ` is the level set value (approximate distance to the fire front in meters).
-Moisture is clamped to `[min_d1, ambient_d1]` to prevent unrealistic drying.
-
-# Fields
-- `d1::M` - Spatially varying 1-hr dead fuel moisture (`M <: AbstractMatrix{T}`) [fraction]
-- `base::FuelClasses{T}` - Moisture values for other size classes
-- `ambient_d1::T` - Equilibrium d1 moisture from weather [fraction]
-- `dry_rate::T` - Fire-induced drying coefficient [fraction/min]
-- `recovery_rate::T` - Moisture recovery rate toward ambient [1/min]
-- `min_d1::T` - Minimum d1 moisture floor [fraction]
-- `dx::T`, `dy::T`, `x0::T`, `y0::T` - Grid geometry for coordinate lookup
-"""
-mutable struct DynamicMoisture{T, M <: AbstractMatrix{T}} <: AbstractMoisture
-    d1::M
-    base::FuelClasses{T}
-    ambient_d1::T
-    dry_rate::T
-    recovery_rate::T
-    min_d1::T
-    dx::T
-    dy::T
-    x0::T
-    y0::T
-end
-
-function DynamicMoisture(grid::LevelSetGrid{T}, moisture::FuelClasses{T};
-                         dry_rate=T(0.1), recovery_rate=T(0.001), min_d1=T(0.03)) where {T}
-    d1 = fill(moisture.d1, size(grid))
-    DynamicMoisture(d1, moisture, moisture.d1, T(dry_rate), T(recovery_rate),
-                    T(min_d1), grid.dx, grid.dy, grid.x0, grid.y0)
-end
-
-function (m::DynamicMoisture{T})(t, x, y) where {T}
-    j = clamp(round(Int, (x - m.x0) / m.dx + T(0.5)), 1, size(m.d1, 2))
-    i = clamp(round(Int, (y - m.y0) / m.dy + T(0.5)), 1, size(m.d1, 1))
-    FuelClasses(d1=m.d1[i, j], d10=m.base.d10, d100=m.base.d100,
-                herb=m.base.herb, wood=m.base.wood)
-end
-
-function update!(m::DynamicMoisture, grid::LevelSetGrid, dt)
-    φ = grid.φ
-    for j in axes(φ, 2), i in axes(φ, 1)
-        if φ[i, j] > 0  # unburned
-            # Fire-induced drying: radiative flux decays with distance²
-            # φ ≈ signed distance to front [m] after reinitialization
-            fire_flux = m.dry_rate / (φ[i, j]^2 + 1)
-
-            # Recovery toward ambient (weather-driven rewetting)
-            recovery = m.recovery_rate * (m.ambient_d1 - m.d1[i, j])
-
-            m.d1[i, j] = clamp(m.d1[i, j] + (-fire_flux + recovery) * dt, m.min_d1, m.ambient_d1)
-        end
-    end
-end
-
-#-----------------------------------------------------------------------------# Terrain Components
-"""
-    FlatTerrain()
-
-Flat terrain (zero slope everywhere).
-"""
-struct FlatTerrain <: AbstractTerrain end
-
-(::FlatTerrain)(t, x, y) = (zero(x), zero(x))
-
-"""
-    UniformSlope{T}(; slope, aspect=0.0)
-
-Spatially constant terrain slope.
-
-# Fields
-- `slope::T` - Terrain slope as rise/run [fraction]
-- `aspect::T` - Downslope direction [radians]
-"""
-struct UniformSlope{T} <: AbstractTerrain
-    slope::T
-    aspect::T
-end
-UniformSlope(; slope, aspect=0.0) = UniformSlope(promote(slope, aspect)...)
-
-(s::UniformSlope)(t, x, y) = (s.slope, s.aspect)
-
-#--------------------------------------------------------------------------------# Directional Spread Models
-"""
-    AbstractDirectionalModel
-
-Supertype for directional fire spread models that determine how the head-fire
-rate varies with angle from the push direction.
-
-Subtypes: [`CosineBlending`](@ref), [`EllipticalBlending`](@ref).
-"""
-abstract type AbstractDirectionalModel end
-
-"""
-    CosineBlending()
-
-Cosine-based directional spread model (default).
-
-The spread rate at angle `θ` from the push direction is:
-
-    R(θ) = R_base + (R_head - R_base) · max(0, cos θ)
-
-This produces fires that are somewhat wider than observed in practice.
-"""
-struct CosineBlending <: AbstractDirectionalModel end
-
-"""
-    EllipticalBlending(; formula=:anderson)
-
-Elliptical fire spread model based on Anderson (1983).
-
-The normal speed at angle `θ` from the push direction is:
-
-    F_n(θ) = R_head/(1+ε) · (√(cos²θ + sin²θ/LB²) + ε·cos θ)
-
-where `ε` is the fire eccentricity and `LB` the length-to-breadth ratio,
-both derived from the effective midflame wind speed.  The first term is the
-ellipse expansion and the second is the drift that places the ignition at
-the rear focus (as in the Anderson/Richards fire ellipse convention).
-
-# Fields
-- `formula::Symbol` - Length-to-breadth formula: `:anderson` (default) or `:green`
-
-### Examples
-```julia
-model = FireSpreadModel(
-    SHORT_GRASS,
-    UniformWind(speed=8.0),
-    UniformMoisture(FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)),
-    FlatTerrain(),
-    EllipticalBlending(),
-)
-```
-"""
-struct EllipticalBlending <: AbstractDirectionalModel
-    formula::Symbol
-end
-EllipticalBlending(; formula::Symbol=:anderson) = EllipticalBlending(formula)
-
-#--------------------------------------------------------------------------------# Length-to-Breadth and Eccentricity
-"""
-    length_to_breadth(U; formula=:anderson)
-
-Compute the fire length-to-breadth ratio from effective midflame wind speed `U` [m/s].
-
-# Formulas
-- `:anderson` (default) — Anderson (1983):
-  `LB = 0.936 · exp(0.2566 · U) + 0.461 · exp(-0.1548 · U) - 0.397`
-- `:green` — Green (1983): `LB = 1.1 · U^0.464` (suitable for grass)
-
-Returns at least `1.0` (a circle at zero wind).
-
-### Examples
-```julia
-length_to_breadth(0.0)   # ≈ 1.0 (circle)
-length_to_breadth(2.0)   # > 1.0 (elongated)
-```
-"""
-function length_to_breadth(U; formula::Symbol=:anderson)
-    if formula === :anderson
-        LB = oftype(U, 0.936) * exp(oftype(U, 0.2566) * U) +
-             oftype(U, 0.461) * exp(oftype(U, -0.1548) * U) -
-             oftype(U, 0.397)
-    elseif formula === :green
-        LB = oftype(U, 1.1) * U^oftype(U, 0.464)
-    else
-        error("Unknown LB formula: $formula. Use :anderson or :green.")
-    end
-    return max(LB, one(LB))
-end
-
-"""
-    fire_eccentricity(LB)
-
-Compute fire eccentricity from the length-to-breadth ratio `LB`.
-
-Returns `0` for `LB = 1` (circle), approaching `1` for large `LB` (highly elongated).
-
-### Examples
-```julia
-fire_eccentricity(1.0)  # 0.0 (circle)
-fire_eccentricity(3.0)  # ≈ 0.943
-```
-"""
-fire_eccentricity(LB) = sqrt(LB^2 - one(LB)) / LB
+using ..Components: AbstractWind, AbstractMoisture, AbstractTerrain,
+    AbstractSpotting, AbstractSuppression, AbstractBurnout, AbstractBurnin,
+    NoBurnout, ExponentialBurnout, LinearBurnout,
+    NoBurnin, ExponentialBurnin, LinearBurnin,
+    UniformWind, UniformMoisture, FlatTerrain, UniformSlope, DynamicMoisture,
+    AbstractDirectionalModel, CosineBlending, EllipticalBlending,
+    length_to_breadth, fire_eccentricity
+import ..Components: update!
 
 #--------------------------------------------------------------------------------# FireSpreadModel
 """
@@ -544,7 +284,7 @@ end
 
 #-----------------------------------------------------------------------------# simulate!
 """
-    simulate!(grid::LevelSetGrid, model; steps=100, dt=nothing, cfl=0.5, reinit_every=10, burnout=nothing, trace=nothing, progress=false)
+    simulate!(grid::LevelSetGrid, model; steps=100, dt=nothing, cfl=0.5, reinit_every=10, burnout=nothing, burnin=nothing, trace=nothing, progress=false)
 
 Run the level set simulation using a `FireSpreadModel` to compute spread rates.
 
@@ -557,9 +297,21 @@ This allows components like `DynamicMoisture` to respond to the evolving fire st
 
 # Burnout
 
-Pass `burnout` as a residence time in minutes (e.g. from [`residence_time`](@ref)) to
-stop spread from cells that have been burning longer than `burnout`.  When `burnout=nothing`
-(the default), fire spreads indefinitely once ignited.
+Pass `burnout` as an [`AbstractBurnout`](@ref) model to scale spread rates based on burn
+duration.  Available models: [`NoBurnout`](@ref) (default, no scaling),
+[`ExponentialBurnout(τ)`](@ref) (exponential decay), [`LinearBurnout(τ)`](@ref) (linear ramp).
+
+For backward compatibility, passing a `Real` value coerces to `ExponentialBurnout(val)` and
+`nothing` coerces to `NoBurnout()`.
+
+# Burn-in
+
+Pass `burnin` as an [`AbstractBurnin`](@ref) model to ramp up spread rates after ignition.
+This prevents freshly ignited cells from immediately propagating fire in all directions.
+Available models: [`NoBurnin`](@ref) (default, instant full intensity),
+[`ExponentialBurnin(τ)`](@ref) (exponential ramp-up), [`LinearBurnin(τ)`](@ref) (linear ramp-up).
+
+The total scaling at each cell is `burnin(t) * burnout(t)`.
 
 # Trace
 
@@ -583,8 +335,11 @@ simulate!(grid, model, steps=100)
 # Fixed time step (user must ensure CFL stability)
 simulate!(grid, model, steps=100, dt=0.5)
 
-# With burnout
-simulate!(grid, model, steps=100, burnout=residence_time(SHORT_GRASS))
+# With burnout (exponential decay)
+simulate!(grid, model, steps=100, burnout=ExponentialBurnout(residence_time(SHORT_GRASS)))
+
+# With burn-in (prevents instant propagation from freshly ignited cells)
+simulate!(grid, model, steps=100, burnin=ExponentialBurnin(0.5))
 
 # With trace for animation
 trace = Trace(grid, 10)
@@ -594,11 +349,14 @@ simulate!(grid, model, steps=100, trace=trace)
 simulate!(grid, model, steps=1000, progress=true)
 ```
 """
-function simulate!(grid::LevelSetGrid, model; steps::Int=100, dt=nothing, cfl=0.5, reinit_every::Int=10, burnout=nothing, trace=nothing, progress::Bool=false)
+function simulate!(grid::LevelSetGrid, model; steps::Int=100, dt=nothing, cfl=0.5, reinit_every::Int=10, burnout=nothing, burnin=nothing, trace=nothing, progress::Bool=false)
+    bo = _coerce_burnout(burnout)
+    bi = _coerce_burnin(burnin)
     F = similar(grid.φ)
     for step in 1:steps
         spread_rate_field!(F, model, grid)
-        burnout !== nothing && _apply_burnout!(F, grid, burnout)
+        _scale_burnout!(F, grid, bo)
+        _scale_burnin!(F, grid, bi)
         step_dt = dt === nothing ? cfl_dt(grid, F; cfl=cfl) : dt
         update!(model, grid, step_dt)
         advance!(grid, F, step_dt)
@@ -617,11 +375,33 @@ function _print_progress(step, steps, grid)
     print("\r  step $step/$steps ($pct%) | t = $(round(grid.t, digits=2)) min | burned = $n_burned/$n_total")
 end
 
-function _apply_burnout!(F, grid, t_r)
+#-----------------------------------------------------------------------------# Burnout coercion and scaling
+_coerce_burnout(::Nothing) = NoBurnout()
+_coerce_burnout(t_r::Real) = ExponentialBurnout(t_r)
+_coerce_burnout(bo::AbstractBurnout) = bo
+
+_scale_burnout!(F, grid, ::NoBurnout) = nothing
+
+function _scale_burnout!(F, grid, bo::AbstractBurnout)
     for j in axes(F, 2), i in axes(F, 1)
         t_ig = grid.t_ignite[i, j]
-        if isfinite(t_ig) && grid.t - t_ig > t_r
-            F[i, j] = zero(eltype(F))
+        if isfinite(t_ig)
+            F[i, j] *= bo(grid.t - t_ig)
+        end
+    end
+end
+
+#-----------------------------------------------------------------------------# Burn-in coercion and scaling
+_coerce_burnin(::Nothing) = NoBurnin()
+_coerce_burnin(bi::AbstractBurnin) = bi
+
+_scale_burnin!(F, grid, ::NoBurnin) = nothing
+
+function _scale_burnin!(F, grid, bi::AbstractBurnin)
+    for j in axes(F, 2), i in axes(F, 1)
+        t_ig = grid.t_ignite[i, j]
+        if isfinite(t_ig)
+            F[i, j] *= bi(grid.t - t_ig)
         end
     end
 end

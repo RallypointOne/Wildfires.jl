@@ -15,7 +15,7 @@ using CairoMakie
 
 ## Compute a Rate of Spread
 
-Use the Rothermel (1972) model with one of the 13 standard NFFL fuel models:
+Use the Rothermel (1972) model with one of the 53 standard fuel models (13 NFFL + 40 Scott & Burgan):
 
 ```{julia}
 # Fuel moisture (fraction, 0-1) for each size class

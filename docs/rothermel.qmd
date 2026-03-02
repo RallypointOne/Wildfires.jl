@@ -8,6 +8,14 @@ engine: julia
 #| output: false
 using Wildfires
 using Wildfires.Rothermel
+using CairoMakie
+
+using Wildfires.Rothermel: GR1, GR2, GR3, GR4, GR5, GR6, GR7, GR8, GR9,
+    GS1, GS2, GS3, GS4,
+    SH1, SH2, SH3, SH4, SH5, SH6, SH7, SH8, SH9,
+    TU1, TU2, TU3, TU4, TU5,
+    TL1, TL2, TL3, TL4, TL5, TL6, TL7, TL8, TL9,
+    SB1, SB2, SB3, SB4
 
 # Helper: print docstring as markdown with headings bumped to ####
 function printdoc(x)
@@ -15,10 +23,13 @@ function printdoc(x)
     doc = replace(doc, r"^# "m => "#### ")
     println(doc)
 end
+
+function has_live_fuel(f)
+    sum(f.w) > f.w.d1 + f.w.d10 + f.w.d100
+end
 ```
 
 The `Rothermel` module implements the [Rothermel (1972)](https://www.fs.usda.gov/research/treesearch/32533) surface fire spread model, the foundational model used by most US wildfire behavior systems (BehavePlus, FARSITE, ELMFIRE, etc.).
-
 ## How It Works
 
 The model computes the **rate of spread** (m/min) of a surface fire given:
@@ -88,6 +99,132 @@ The 13 standard fuel models from [Anderson (1982)](https://www.fs.usda.gov/resea
 SHORT_GRASS
 ```
 
+## Scott & Burgan 40 Fuel Models
+
+The 40 additional fuel models from [Scott and Burgan (2005)](https://www.fs.usda.gov/research/treesearch/9521) extend the original 13 NFFL models to cover a wider range of vegetation types. Together with the NFFL models, there are **53 standard fire behavior fuel models**.
+
+The models are organized into six groups:
+
+- **GR** (Grass): 9 models for grasslands, from sparse short grass to very high load humid climate grass
+- **GS** (Grass-Shrub): 4 models for grass-shrub mixtures
+- **SH** (Shrub): 9 models for shrublands, from low-load dry climate to very high load humid climate
+- **TU** (Timber-Understory): 5 models for timber with understory fuels
+- **TL** (Timber Litter): 9 models for timber litter, from compact conifer to very high load broadleaf
+- **SB** (Slash-Blowdown): 4 models for logging slash and blowdown debris
+
+::: {.callout-tip}
+Models marked **Dynamic** transfer live herbaceous fuel to the dead category based on curing level (determined by live herbaceous moisture). The fuel loads listed are *pre-transfer* values.
+:::
+
+```{julia}
+#| echo: false
+#| output: asis
+sb40 = [
+    ("GR1", GR1, "D"), ("GR2", GR2, "D"), ("GR3", GR3, "D"),
+    ("GR4", GR4, "D"), ("GR5", GR5, "D"), ("GR6", GR6, "D"),
+    ("GR7", GR7, "D"), ("GR8", GR8, "D"), ("GR9", GR9, "D"),
+    ("GS1", GS1, "D"), ("GS2", GS2, "D"), ("GS3", GS3, "D"), ("GS4", GS4, "D"),
+    ("SH1", SH1, "D"), ("SH2", SH2, "S"), ("SH3", SH3, "S"),
+    ("SH4", SH4, "S"), ("SH5", SH5, "S"), ("SH6", SH6, "S"),
+    ("SH7", SH7, "S"), ("SH8", SH8, "S"), ("SH9", SH9, "D"),
+    ("TU1", TU1, "D"), ("TU2", TU2, "S"), ("TU3", TU3, "D"),
+    ("TU4", TU4, "S"), ("TU5", TU5, "S"),
+    ("TL1", TL1, "S"), ("TL2", TL2, "S"), ("TL3", TL3, "S"),
+    ("TL4", TL4, "S"), ("TL5", TL5, "S"), ("TL6", TL6, "S"),
+    ("TL7", TL7, "S"), ("TL8", TL8, "S"), ("TL9", TL9, "S"),
+    ("SB1", SB1, "S"), ("SB2", SB2, "S"), ("SB3", SB3, "S"), ("SB4", SB4, "S"),
+]
+
+println("| Constant | Type | Description | Depth (ft) | Mx |")
+println("|----------|------|-------------|------------|-----|")
+for (name, fuel, typ) in sb40
+    desc = replace(fuel.name, r"^SB40 \w+: " => "")
+    println("| `$name` | $typ | $desc | $(fuel.δ) | $(fuel.Mx) |")
+end
+```
+
+### Comparing SB40 Fuel Models
+
+Rate of spread at a reference condition (wind = 8 km/h, slope = 0, live herbaceous moisture 60%, live woody moisture 90%):
+
+```{julia}
+M_sb = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.60, wood=0.90)
+
+sb40_fuels = [
+    GR1, GR2, GR3, GR4, GR5, GR6, GR7, GR8, GR9,
+    GS1, GS2, GS3, GS4,
+    SH1, SH2, SH3, SH4, SH5, SH6, SH7, SH8, SH9,
+    TU1, TU2, TU3, TU4, TU5,
+    TL1, TL2, TL3, TL4, TL5, TL6, TL7, TL8, TL9,
+    SB1, SB2, SB3, SB4,
+]
+sb40_labels = [
+    "GR1","GR2","GR3","GR4","GR5","GR6","GR7","GR8","GR9",
+    "GS1","GS2","GS3","GS4",
+    "SH1","SH2","SH3","SH4","SH5","SH6","SH7","SH8","SH9",
+    "TU1","TU2","TU3","TU4","TU5",
+    "TL1","TL2","TL3","TL4","TL5","TL6","TL7","TL8","TL9",
+    "SB1","SB2","SB3","SB4",
+]
+
+sb_categories = vcat(
+    fill("Grass", 9),
+    fill("Grass-Shrub", 4),
+    fill("Shrub", 9),
+    fill("Timber-Understory", 5),
+    fill("Timber Litter", 9),
+    fill("Slash-Blowdown", 4),
+)
+
+sb_cat_colors = Dict(
+    "Grass" => :forestgreen,
+    "Grass-Shrub" => :yellowgreen,
+    "Shrub" => :goldenrod,
+    "Timber-Understory" => :peru,
+    "Timber Litter" => :sienna,
+    "Slash-Blowdown" => :slategray,
+)
+
+ros_sb = [
+    rate_of_spread(f, moisture=M_sb, wind=8.0, slope=0.0)
+    for f in sb40_fuels
+]
+sb_colors = [sb_cat_colors[c] for c in sb_categories]
+
+fig = Figure(size=(900, 400))
+ax = Axis(fig[1,1],
+    xlabel="Fuel Model",
+    ylabel="Rate of spread (m/min)",
+    title="Scott & Burgan 40 — Rate of Spread at 8 km/h Wind",
+    xticks=(1:40, sb40_labels),
+    xticklabelrotation=pi/3,
+    xticklabelsize=9)
+barplot!(ax, 1:40, ros_sb, color=sb_colors)
+
+sb_cat_names = ["Grass", "Grass-Shrub", "Shrub", "Timber-Understory", "Timber Litter", "Slash-Blowdown"]
+elems = [PolyElement(color=sb_cat_colors[c]) for c in sb_cat_names]
+Legend(fig[1,2], elems, sb_cat_names, framevisible=false)
+
+fig
+```
+
+### Fuel Bed Depth Comparison
+
+```{julia}
+depths = [f.δ for f in sb40_fuels]
+
+fig = Figure(size=(900, 350))
+ax = Axis(fig[1,1],
+    xlabel="Fuel Model",
+    ylabel="Fuel bed depth (ft)",
+    title="Scott & Burgan 40 — Fuel Bed Depth",
+    xticks=(1:40, sb40_labels),
+    xticklabelrotation=pi/3,
+    xticklabelsize=9)
+barplot!(ax, 1:40, depths, color=sb_colors)
+fig
+```
+
 ## Rate of Spread
 
 ```{julia}
@@ -105,8 +242,6 @@ rate_of_spread(SHORT_GRASS, moisture=M, wind=8.0, slope=0.0)
 ### Effect of Wind Speed
 
 ```{julia}
-using CairoMakie
-
 winds = 0:2:30
 rates = [
     rate_of_spread(SHORT_GRASS, moisture=M,
@@ -123,7 +258,7 @@ lines!(ax, collect(winds), rates)
 fig
 ```
 
-### Comparing All 13 Fuel Models
+### Comparing NFFL Models
 
 Rate of spread at a reference condition (wind = 8 km/h, slope = 0, dead fuel moisture 6–8%):
 
@@ -157,10 +292,6 @@ categories = [
     "Slash", "Slash", "Slash",
 ]
 colors = [cat_colors[c] for c in categories]
-
-function has_live_fuel(f)
-    sum(f.w) > f.w.d1 + f.w.d10 + f.w.d100
-end
 
 ros = [
     rate_of_spread(f,
@@ -288,4 +419,5 @@ fig
 
 - Rothermel, R.C. (1972). *A Mathematical Model for Predicting Fire Spread in Wildland Fuels.* Res. Paper INT-115, USDA Forest Service.
 - Anderson, H.E. (1982). *Aids to Determining Fuel Models for Estimating Fire Behavior.* Gen. Tech. Rep. INT-122, USDA Forest Service.
+- Scott, J.H. & Burgan, R.E. (2005). *Standard Fire Behavior Fuel Models: A Comprehensive Set for Use with Rothermel's Surface Fire Spread Model.* Gen. Tech. Rep. RMRS-GTR-153, USDA Forest Service.
 - Andrews, P.L. (2018). *The Rothermel Surface Fire Spread Model and Associated Developments.* Gen. Tech. Rep. RMRS-GTR-371, USDA Forest Service.

@@ -1,0 +1,371 @@
+---
+title: "Cellular Automata"
+engine: julia
+---
+
+```{julia}
+#| echo: false
+#| output: false
+using Wildfires
+using Wildfires.CellularAutomata
+using CairoMakie
+using Random: MersenneTwister
+```
+
+The `CellularAutomata` module implements a **stochastic, grid-based** fire spread model.  Each cell occupies one of four discrete states and transitions are governed by neighbor interactions and ignition probabilities.
+## How It Works
+
+### Cell States
+
+Each cell is in exactly one of four states:
+
+| State | Value | Meaning |
+|-------|-------|---------|
+| `UNBURNED` | 0 | Fuel available, not yet ignited |
+| `BURNING` | 1 | Actively on fire |
+| `BURNED` | 2 | Fuel consumed, fire passed |
+| `UNBURNABLE` | 3 | Cannot ignite (water, road, fuel break) |
+
+```{julia}
+(UNBURNED, BURNING, BURNED, UNBURNABLE)
+```
+
+### State Transitions
+
+At each time step, two transitions occur:
+
+1. **Spread**: Each `UNBURNED` cell adjacent to a `BURNING` cell rolls independently for ignition with probability `P[i,j] * w`, where `w` is a distance-based weight (1.0 for cardinal neighbors, reduced for diagonals).  The cell ignites on the first successful roll.
+
+2. **Burnout**: `BURNING` cells whose elapsed time exceeds the `residence_time` transition to `BURNED`.
+
+```
+UNBURNED ──(stochastic ignition)──▶ BURNING ──(burnout)──▶ BURNED
+                                        ▲
+UNBURNABLE: never transitions ──────────╳
+```
+
+## Neighborhoods
+
+Two neighborhood types control which cells can spread fire:
+
+| Type | Neighbors | Description |
+|------|-----------|-------------|
+| `Moore()` | 8 | Cardinal + diagonal (default) |
+| `VonNeumann()` | 4 | Cardinal only |
+
+For `Moore` neighborhoods, diagonal neighbors have a reduced ignition weight of `min(dx,dy) / hypot(dx,dy)` to account for the greater distance.
+
+## `CAGrid`
+
+The simulation grid stores per-cell states and ignition times:
+
+```{julia}
+grid = CAGrid(100, 100, dx=30.0)
+```
+
+```{julia}
+grid_vn = CAGrid(100, 100, dx=30.0, neighborhood=VonNeumann())
+```
+
+### Coordinates
+
+```{julia}
+xs = xcoords(grid)
+println("x: $(first(xs)) to $(last(xs)) m  ($(length(xs)) cells)")
+
+ys = ycoords(grid)
+println("y: $(first(ys)) to $(last(ys)) m  ($(length(ys)) cells)")
+```
+
+## Ignition
+
+```{julia}
+ignite!(grid, 1500.0, 1500.0, 100.0)
+grid
+```
+
+## Queries
+
+```{julia}
+burn_area(grid)  # m²
+```
+
+```{julia}
+count(burning(grid))  # number of actively burning cells
+```
+
+```{julia}
+count(burned(grid))  # number of burned-out cells (0 before any advance!)
+```
+
+## Advancing the Simulation
+
+The `advance!` function takes an ignition probability matrix `P` (values in [0, 1]) and a time step `dt`.  Each burning neighbor of an unburned cell independently attempts ignition.
+
+```{julia}
+rng = MersenneTwister(42)
+
+P = fill(0.6, size(grid))  # 60% base ignition probability
+
+for _ in 1:15
+    advance!(grid, P, 1.0, residence_time=20.0, rng=rng)
+end
+
+grid
+```
+
+### Plotting Cell States
+
+Since `CAGrid` stores discrete states, we convert them to integers for visualization:
+
+```{julia}
+const CA_COLORS = cgrad([:green, :red, :gray30, :steelblue], 4, categorical=true)
+
+function plot_ca!(ax, g; title="")
+    state_map = Int.(g.state)
+    xs = collect(xcoords(g))
+    ys = collect(ycoords(g))
+    heatmap!(ax, xs, ys, state_map', colormap=CA_COLORS, colorrange=(0, 3))
+    !isempty(title) && (ax.title = title)
+    ax
+end
+nothing
+```
+
+```{julia}
+fig = Figure()
+ax = Axis(fig[1, 1], title="t = $(grid.t) min", aspect=DataAspect(),
+    xlabel="x (m)", ylabel="y (m)")
+plot_ca!(ax, grid)
+fig
+```
+
+## Full Example
+
+Simulate fire spread with a spatially varying ignition probability and visualize snapshots:
+
+```{julia}
+g = CAGrid(200, 200, dx=15.0)
+ignite!(g, 1500.0, 1500.0, 50.0)
+
+# Higher ignition probability on the right side
+P = [0.2 + 0.6 * (j / 200) for i in 1:200, j in 1:200]
+
+rng = MersenneTwister(123)
+
+fig = Figure(size=(900, 280))
+times = [0, 15, 30]
+for (col, target_t) in enumerate(times)
+    while g.t < target_t
+        advance!(g, P, 1.0, residence_time=40.0, rng=rng)
+    end
+    t = round(g.t, digits=1)
+    ax = Axis(fig[1, col], title="t = $t min", aspect=DataAspect())
+    plot_ca!(ax, g)
+    hidedecorations!(ax)
+end
+fig
+```
+
+### Animation
+
+```{julia}
+g = CAGrid(200, 200, dx=15.0)
+ignite!(g, 1500.0, 1500.0, 50.0)
+P = fill(0.5, 200, 200)
+rng = MersenneTwister(7)
+
+fig = Figure(size=(500, 500))
+ax = Axis(fig[1, 1], aspect=DataAspect())
+hidedecorations!(ax)
+state_obs = Observable(Int.(g.state)')
+
+heatmap!(ax, collect(xcoords(g)), collect(ycoords(g)), state_obs,
+    colormap=CA_COLORS, colorrange=(0, 3))
+
+record(fig, joinpath(@__DIR__, "ca_spread.gif"), 1:50; framerate=10) do frame
+    advance!(g, P, 1.0, residence_time=30.0, rng=rng)
+    ax.title = "t = $(Int(g.t)) min"
+    state_obs[] = Int.(g.state)'
+end
+```
+
+![](ca_spread.gif)
+
+## Moore vs. VonNeumann
+
+The neighborhood type affects how quickly and in what shape fire spreads:
+
+```{julia}
+fig = Figure(size=(700, 300))
+for (col, (label, neigh)) in enumerate([
+    ("Moore (8 neighbors)", Moore()),
+    ("VonNeumann (4 neighbors)", VonNeumann()),
+])
+    g = CAGrid(100, 100, dx=15.0, neighborhood=neigh)
+    ignite!(g, 750.0, 750.0, 30.0)
+    P = fill(0.5, size(g))
+    rng = MersenneTwister(42)
+    for _ in 1:20
+        advance!(g, P, 1.0, residence_time=30.0, rng=rng)
+    end
+    ax = Axis(fig[1, col], title=label, aspect=DataAspect())
+    plot_ca!(ax, g)
+    hidedecorations!(ax)
+end
+fig
+```
+
+### Animation
+
+```{julia}
+g_moore = CAGrid(100, 100, dx=15.0, neighborhood=Moore())
+g_vn = CAGrid(100, 100, dx=15.0, neighborhood=VonNeumann())
+ignite!(g_moore, 750.0, 750.0, 30.0)
+ignite!(g_vn, 750.0, 750.0, 30.0)
+P = fill(0.5, 100, 100)
+rng_m = MersenneTwister(42)
+rng_v = MersenneTwister(42)
+
+fig = Figure(size=(700, 350))
+ax1 = Axis(fig[1, 1], title="Moore", aspect=DataAspect())
+ax2 = Axis(fig[1, 2], title="VonNeumann", aspect=DataAspect())
+hidedecorations!(ax1); hidedecorations!(ax2)
+
+xs = collect(xcoords(g_moore))
+ys = collect(ycoords(g_moore))
+obs_m = Observable(Int.(g_moore.state)')
+obs_v = Observable(Int.(g_vn.state)')
+
+heatmap!(ax1, xs, ys, obs_m, colormap=CA_COLORS, colorrange=(0, 3))
+heatmap!(ax2, xs, ys, obs_v, colormap=CA_COLORS, colorrange=(0, 3))
+
+record(fig, joinpath(@__DIR__, "ca_neighborhoods.gif"), 1:30; framerate=8) do frame
+    advance!(g_moore, P, 1.0, residence_time=40.0, rng=rng_m)
+    advance!(g_vn, P, 1.0, residence_time=40.0, rng=rng_v)
+    obs_m[] = Int.(g_moore.state)'
+    obs_v[] = Int.(g_vn.state)'
+end
+```
+
+![](ca_neighborhoods.gif)
+
+## Fuel Breaks
+
+Mark cells as `UNBURNABLE` to create barriers that block fire spread:
+
+```{julia}
+fig = Figure(size=(700, 300))
+
+# Without fuel break
+g1 = CAGrid(100, 100, dx=30.0)
+ignite!(g1, 1500.0, 1500.0, 60.0)
+P = fill(0.6, size(g1))
+rng = MersenneTwister(99)
+for _ in 1:30
+    advance!(g1, P, 1.0, residence_time=40.0, rng=rng)
+end
+ax1 = Axis(fig[1, 1], title="No fuel break", aspect=DataAspect())
+plot_ca!(ax1, g1)
+hidedecorations!(ax1)
+
+# With fuel break (vertical strip)
+g2 = CAGrid(100, 100, dx=30.0)
+ignite!(g2, 1500.0, 1500.0, 60.0)
+xs = collect(xcoords(g2))
+for j in eachindex(xs)
+    if 2000.0 <= xs[j] <= 2100.0
+        for i in 1:size(g2, 1)
+            set_unburnable!(g2, xs[j], ycoords(g2)[i], 1.0)
+        end
+    end
+end
+rng = MersenneTwister(99)
+for _ in 1:30
+    advance!(g2, P, 1.0, residence_time=40.0, rng=rng)
+end
+ax2 = Axis(fig[1, 2], title="With fuel break", aspect=DataAspect())
+plot_ca!(ax2, g2)
+hidedecorations!(ax2)
+fig
+```
+
+## Probability Field Effects
+
+The ignition probability field `P` controls how aggressively fire spreads.  Lower probabilities produce sparser, more stochastic fire perimeters:
+
+```{julia}
+fig = Figure(size=(900, 280))
+for (col, p_val) in enumerate([0.2, 0.5, 0.9])
+    g = CAGrid(100, 100, dx=15.0)
+    ignite!(g, 750.0, 750.0, 30.0)
+    P = fill(p_val, size(g))
+    rng = MersenneTwister(42)
+    for _ in 1:25
+        advance!(g, P, 1.0, residence_time=40.0, rng=rng)
+    end
+    ax = Axis(fig[1, col], title="P = $p_val", aspect=DataAspect())
+    plot_ca!(ax, g)
+    hidedecorations!(ax)
+end
+fig
+```
+
+## Burnout
+
+When a cell has been burning longer than the `residence_time`, it transitions to `BURNED` and stops spreading fire.  Shorter residence times mean faster burnout:
+
+```{julia}
+fig = Figure(size=(900, 280))
+for (col, rt) in enumerate([5.0, 15.0, 50.0])
+    g = CAGrid(100, 100, dx=15.0)
+    ignite!(g, 750.0, 750.0, 30.0)
+    P = fill(0.6, size(g))
+    rng = MersenneTwister(42)
+    for _ in 1:30
+        advance!(g, P, 1.0, residence_time=rt, rng=rng)
+    end
+    nb = count(burning(g))
+    nd = count(burned(g))
+    ax = Axis(fig[1, col],
+        title="residence_time = $rt\nburning=$nb, burned=$nd",
+        aspect=DataAspect())
+    plot_ca!(ax, g)
+    hidedecorations!(ax)
+end
+fig
+```
+
+### Animation
+
+```{julia}
+g = CAGrid(150, 150, dx=15.0)
+ignite!(g, 1125.0, 1125.0, 40.0)
+P = fill(0.6, 150, 150)
+rng = MersenneTwister(42)
+
+fig = Figure(size=(500, 500))
+ax = Axis(fig[1, 1], aspect=DataAspect())
+hidedecorations!(ax)
+
+xs = collect(xcoords(g))
+ys = collect(ycoords(g))
+obs = Observable(Int.(g.state)')
+
+heatmap!(ax, xs, ys, obs, colormap=CA_COLORS, colorrange=(0, 3))
+
+record(fig, joinpath(@__DIR__, "ca_burnout.gif"), 1:50; framerate=10) do frame
+    advance!(g, P, 1.0, residence_time=8.0, rng=rng)
+    nb = count(burning(g))
+    nd = count(burned(g))
+    ax.title = "t = $(Int(g.t)) min  (burning=$nb, burned=$nd)"
+    obs[] = Int.(g.state)'
+end
+```
+
+![](ca_burnout.gif)
+
+## References
+
+- Alexandridis, A., Vakalis, D., Siettos, C.I., & Bafas, G.V. (2008). *A cellular automata model for forest fire spread prediction.* Ecological Modelling, 203(3-4), 87-97.
+- Karafyllidis, I. & Thanailakis, A. (1997). *A model for predicting forest fire spreading using cellular automata.* Ecological Modelling, 99(1), 87-97.

@@ -372,6 +372,8 @@ function reinitialize!(g::LevelSetGrid{T}; iterations::Int=5) where {T}
     dτ = h / 2  # pseudo-timestep
     z = zero(T)
 
+    was_nonneg = φ .>= z
+
     for _ in 1:iterations
         φ_old = copy(φ)
         Threads.@threads for j in 1:nx
@@ -399,6 +401,16 @@ function reinitialize!(g::LevelSetGrid{T}; iterations::Int=5) where {T}
             end
         end
     end
+
+    # Update t_ignite for cells whose φ crossed from ≥ 0 to < 0 during reinitialization
+    t_ignite = g.t_ignite
+    t_now = g.t
+    for j in axes(φ, 2), i in axes(φ, 1)
+        if was_nonneg[i, j] && φ[i, j] < z && !isnan(t_ignite[i, j]) && isinf(t_ignite[i, j])
+            t_ignite[i, j] = t_now
+        end
+    end
+
     g
 end
 

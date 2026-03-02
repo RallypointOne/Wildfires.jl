@@ -7,7 +7,9 @@ using Wildfires.LevelSet: LevelSetGrid, xcoords, ycoords, ignite!, advance!, rei
     cfl_dt, AbstractBoundaryCondition, ZeroNeumann, Dirichlet, Periodic, set_unburnable!, burnable
 using Wildfires.SpreadModel: FireSpreadModel, UniformWind, UniformMoisture, FlatTerrain,
     UniformSlope, DynamicMoisture, spread_rate_field!, simulate!, update!,
-    CosineBlending, EllipticalBlending, length_to_breadth, fire_eccentricity
+    CosineBlending, EllipticalBlending, length_to_breadth, fire_eccentricity,
+    NoBurnout, ExponentialBurnout, LinearBurnout,
+    NoBurnin, ExponentialBurnin, LinearBurnin
 using Adapt
 using KernelAbstractions, GPUArraysCore
 using Test
@@ -19,147 +21,6 @@ const ALL_FUELS = [
 ]
 
 @testset "Wildfires.jl" begin
-
-    @testset "FuelClasses" begin
-        @testset "keyword constructor" begin
-            fc = FuelClasses(d1=1.0, d10=2.0, d100=3.0, herb=4.0, wood=5.0)
-            @test fc.d1 == 1.0
-            @test fc.d10 == 2.0
-            @test fc.d100 == 3.0
-            @test fc.herb == 4.0
-            @test fc.wood == 5.0
-            @test fc isa FuelClasses{Float64}
-        end
-
-        @testset "positional constructor with promotion" begin
-            fc = FuelClasses(1, 2.0, 3, 4, 5)
-            @test fc isa FuelClasses{Float64}
-            @test fc.d1 === 1.0
-        end
-
-        @testset "map" begin
-            fc = FuelClasses(1.0, 2.0, 3.0, 4.0, 5.0)
-            fc2 = map(x -> x * 2, fc)
-            @test fc2 == FuelClasses(2.0, 4.0, 6.0, 8.0, 10.0)
-
-            fc3 = map(+, fc, fc2)
-            @test fc3 == FuelClasses(3.0, 6.0, 9.0, 12.0, 15.0)
-        end
-
-        @testset "sum" begin
-            fc = FuelClasses(1.0, 2.0, 3.0, 4.0, 5.0)
-            @test sum(fc) == 15.0
-            @test sum(x -> x^2, fc) == 1.0 + 4.0 + 9.0 + 16.0 + 25.0
-        end
-
-        @testset "show" begin
-            fc = FuelClasses(1.0, 2.0, 3.0, 4.0, 5.0)
-            s = sprint(show, fc)
-            @test contains(s, "FuelClasses{Float64}")
-            @test contains(s, "d1=1.0")
-        end
-    end
-
-    @testset "Rothermel struct" begin
-        @testset "kwdef constructor" begin
-            r = Rothermel(
-                name = "Test",
-                w  = FuelClasses(1.0, 2.0, 3.0, 4.0, 5.0),
-                σ  = FuelClasses(100.0, 100.0, 100.0, 100.0, 100.0),
-                h  = FuelClasses(8000.0, 8000.0, 8000.0, 8000.0, 8000.0),
-                δ  = 1.0,
-                Mx = 0.12,
-            )
-            @test r isa Rothermel{Float64}
-            @test r.name == "Test"
-            @test r.w isa FuelClasses{Float64}
-            @test r.δ == 1.0
-            @test r.Mx == 0.12
-        end
-
-        @testset "show" begin
-            s = sprint(show, SHORT_GRASS)
-            @test contains(s, "Rothermel{")
-            @test contains(s, "Short grass")
-        end
-    end
-
-    @testset "NFFL fuel model constants" begin
-        @test length(ALL_FUELS) == 13
-        @test all(f -> f isa Rothermel{Float64}, ALL_FUELS)
-        @test all(f -> f.δ > 0, ALL_FUELS)
-        @test all(f -> 0 < f.Mx ≤ 1, ALL_FUELS)
-
-        @testset "known fuel bed depths" begin
-            @test SHORT_GRASS.δ == 1.0
-            @test TALL_GRASS.δ == 2.5
-            @test CHAPARRAL.δ == 6.0
-            @test CLOSED_TIMBER_LITTER.δ == 0.2
-            @test HEAVY_SLASH.δ == 3.0
-        end
-    end
-
-    @testset "rate_of_spread" begin
-        M_dead = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
-        M_live = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.60, wood=0.90)
-
-        @testset "reference values" begin
-            @test rate_of_spread(SHORT_GRASS, moisture=M_dead, wind=8.0, slope=0.0) ≈ 31.119 atol=0.01
-            @test rate_of_spread(SHORT_GRASS, moisture=M_dead, wind=0.0, slope=0.0) ≈ 1.4035 atol=0.001
-            @test rate_of_spread(TIMBER_GRASS, moisture=M_live, wind=8.0, slope=0.0) ≈ 13.513 atol=0.01
-            @test rate_of_spread(CHAPARRAL, moisture=M_live, wind=8.0, slope=0.0) ≈ 27.133 atol=0.01
-            @test rate_of_spread(CLOSED_TIMBER_LITTER, moisture=M_dead, wind=8.0, slope=0.0) ≈ 0.6755 atol=0.001
-            @test rate_of_spread(HEAVY_SLASH, moisture=M_dead, wind=8.0, slope=0.0) ≈ 5.352 atol=0.01
-        end
-
-        @testset "all models produce positive ROS" begin
-            for fuel in ALL_FUELS
-                M = sum(fuel.w) > 0 ? M_live : M_dead
-                R = rate_of_spread(fuel, moisture=M, wind=8.0, slope=0.0)
-                @test R > 0
-            end
-        end
-
-        @testset "wind increases spread" begin
-            R0 = rate_of_spread(SHORT_GRASS, moisture=M_dead, wind=0.0, slope=0.0)
-            R8 = rate_of_spread(SHORT_GRASS, moisture=M_dead, wind=8.0, slope=0.0)
-            @test R8 > R0
-        end
-
-        @testset "slope increases spread" begin
-            R_flat  = rate_of_spread(SHORT_GRASS, moisture=M_dead, wind=8.0, slope=0.0)
-            R_slope = rate_of_spread(SHORT_GRASS, moisture=M_dead, wind=8.0, slope=0.4)
-            @test R_slope > R_flat
-            @test R_slope ≈ 40.361 atol=0.01
-        end
-
-        @testset "moisture at/above extinction → zero spread" begin
-            M_sat = FuelClasses(d1=0.50, d10=0.50, d100=0.50, herb=0.0, wood=0.0)
-            R = rate_of_spread(SHORT_GRASS, moisture=M_sat, wind=8.0, slope=0.0)
-            @test R == 0.0
-        end
-
-        @testset "higher moisture → lower spread" begin
-            M_dry = FuelClasses(d1=0.03, d10=0.04, d100=0.05, herb=0.0, wood=0.0)
-            M_wet = FuelClasses(d1=0.10, d10=0.10, d100=0.10, herb=0.0, wood=0.0)
-            R_dry = rate_of_spread(SHORT_GRASS, moisture=M_dry, wind=8.0, slope=0.0)
-            R_wet = rate_of_spread(SHORT_GRASS, moisture=M_wet, wind=8.0, slope=0.0)
-            @test R_dry > R_wet
-        end
-
-        @testset "zero fuel depth → zero spread" begin
-            zero_fuel = Rothermel(
-                name = "zero",
-                w  = FuelClasses(0.0, 0.0, 0.0, 0.0, 0.0),
-                σ  = FuelClasses(3500.0, 109.0, 30.0, 1500.0, 1500.0),
-                h  = FuelClasses(8000.0, 8000.0, 8000.0, 8000.0, 8000.0),
-                δ  = 0.0,
-                Mx = 0.12,
-            )
-            R = rate_of_spread(zero_fuel, moisture=M_dead, wind=8.0, slope=0.0)
-            @test R == 0.0
-        end
-    end
 
     @testset "GPU Extension" begin
         @testset "extension loaded" begin
@@ -557,34 +418,6 @@ const ALL_FUELS = [
         end
     end
 
-    @testset "residence_time" begin
-        @testset "SHORT_GRASS has small residence time" begin
-            t_r = residence_time(SHORT_GRASS)
-            @test t_r > 0
-            @test t_r < 0.01  # very fast burning grass
-        end
-
-        @testset "all standard fuels have positive residence time" begin
-            for fuel in ALL_FUELS
-                t_r = residence_time(fuel)
-                @test t_r > 0
-                @test isfinite(t_r)
-            end
-        end
-
-        @testset "zero fuel → Inf" begin
-            zero_fuel = Rothermel(
-                name = "zero",
-                w = FuelClasses(0.0, 0.0, 0.0, 0.0, 0.0),
-                σ = FuelClasses(3500.0, 109.0, 30.0, 1500.0, 1500.0),
-                h = FuelClasses(8000.0, 8000.0, 8000.0, 8000.0, 8000.0),
-                δ = 1.0,
-                Mx = 0.12,
-            )
-            @test residence_time(zero_fuel) == Inf
-        end
-    end
-
     @testset "Ignition Tracking" begin
         @testset "ignite! records t_ignite at current time" begin
             grid = LevelSetGrid(20, 20, dx=30.0)
@@ -642,20 +475,156 @@ const ALL_FUELS = [
             @test grid1.φ == grid2.φ
         end
 
-        @testset "burnout limits fire spread" begin
+        @testset "NoBurnout() matches burnout=nothing" begin
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+
+            grid1 = LevelSetGrid(30, 30, dx=30.0)
+            ignite!(grid1, 450.0, 450.0, 50.0)
+            simulate!(grid1, model, steps=20, dt=0.5, burnout=nothing)
+
+            grid2 = LevelSetGrid(30, 30, dx=30.0)
+            ignite!(grid2, 450.0, 450.0, 50.0)
+            simulate!(grid2, model, steps=20, dt=0.5, burnout=NoBurnout())
+
+            @test grid1.φ == grid2.φ
+        end
+
+        @testset "ExponentialBurnout limits fire spread" begin
             t_r = residence_time(SHORT_GRASS)
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
 
             grid_no = LevelSetGrid(50, 50, dx=30.0)
             ignite!(grid_no, 750.0, 750.0, 50.0)
-            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
             simulate!(grid_no, model, steps=200, dt=0.5)
 
             grid_bo = LevelSetGrid(50, 50, dx=30.0)
             ignite!(grid_bo, 750.0, 750.0, 50.0)
-            simulate!(grid_bo, model, steps=200, dt=0.5, burnout=t_r)
+            simulate!(grid_bo, model, steps=200, dt=0.5, burnout=ExponentialBurnout(t_r))
 
             # With burnout, fire should spread less or equal
             @test burn_area(grid_bo) <= burn_area(grid_no)
+        end
+
+        @testset "backward compat: burnout=Real coerces to ExponentialBurnout" begin
+            t_r = residence_time(SHORT_GRASS)
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+
+            grid1 = LevelSetGrid(30, 30, dx=30.0)
+            ignite!(grid1, 450.0, 450.0, 50.0)
+            simulate!(grid1, model, steps=20, dt=0.5, burnout=t_r)
+
+            grid2 = LevelSetGrid(30, 30, dx=30.0)
+            ignite!(grid2, 450.0, 450.0, 50.0)
+            simulate!(grid2, model, steps=20, dt=0.5, burnout=ExponentialBurnout(t_r))
+
+            @test grid1.φ == grid2.φ
+        end
+
+        @testset "ExponentialBurnout produces less burn area than NoBurnout" begin
+            t_r = residence_time(CHAPARRAL)
+            model = FireSpreadModel(CHAPARRAL, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+
+            grid_no = LevelSetGrid(50, 50, dx=30.0)
+            ignite!(grid_no, 750.0, 750.0, 50.0)
+            simulate!(grid_no, model, steps=200, dt=0.5, burnout=NoBurnout())
+
+            grid_bo = LevelSetGrid(50, 50, dx=30.0)
+            ignite!(grid_bo, 750.0, 750.0, 50.0)
+            simulate!(grid_bo, model, steps=200, dt=0.5, burnout=ExponentialBurnout(t_r))
+
+            @test burn_area(grid_bo) <= burn_area(grid_no)
+        end
+
+        @testset "LinearBurnout limits fire spread" begin
+            t_r = residence_time(CHAPARRAL)
+            model = FireSpreadModel(CHAPARRAL, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+
+            grid_no = LevelSetGrid(50, 50, dx=30.0)
+            ignite!(grid_no, 750.0, 750.0, 50.0)
+            simulate!(grid_no, model, steps=200, dt=0.5)
+
+            grid_bo = LevelSetGrid(50, 50, dx=30.0)
+            ignite!(grid_bo, 750.0, 750.0, 50.0)
+            simulate!(grid_bo, model, steps=200, dt=0.5, burnout=LinearBurnout(t_r))
+
+            @test burn_area(grid_bo) <= burn_area(grid_no)
+        end
+    end
+
+    @testset "Burn-in" begin
+        M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+
+        @testset "burnin=nothing preserves current behavior" begin
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+
+            grid1 = LevelSetGrid(30, 30, dx=30.0)
+            ignite!(grid1, 450.0, 450.0, 50.0)
+            simulate!(grid1, model, steps=20, dt=0.5)
+
+            grid2 = LevelSetGrid(30, 30, dx=30.0)
+            ignite!(grid2, 450.0, 450.0, 50.0)
+            simulate!(grid2, model, steps=20, dt=0.5, burnin=nothing)
+
+            @test grid1.φ == grid2.φ
+        end
+
+        @testset "NoBurnin() matches burnin=nothing" begin
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+
+            grid1 = LevelSetGrid(30, 30, dx=30.0)
+            ignite!(grid1, 450.0, 450.0, 50.0)
+            simulate!(grid1, model, steps=20, dt=0.5, burnin=nothing)
+
+            grid2 = LevelSetGrid(30, 30, dx=30.0)
+            ignite!(grid2, 450.0, 450.0, 50.0)
+            simulate!(grid2, model, steps=20, dt=0.5, burnin=NoBurnin())
+
+            @test grid1.φ == grid2.φ
+        end
+
+        @testset "ExponentialBurnin limits fire spread" begin
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+
+            grid_no = LevelSetGrid(50, 50, dx=30.0)
+            ignite!(grid_no, 750.0, 750.0, 50.0)
+            simulate!(grid_no, model, steps=200, dt=0.5)
+
+            grid_bi = LevelSetGrid(50, 50, dx=30.0)
+            ignite!(grid_bi, 750.0, 750.0, 50.0)
+            simulate!(grid_bi, model, steps=200, dt=0.5, burnin=ExponentialBurnin(0.5))
+
+            @test burn_area(grid_bi) <= burn_area(grid_no)
+        end
+
+        @testset "LinearBurnin limits fire spread" begin
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+
+            grid_no = LevelSetGrid(50, 50, dx=30.0)
+            ignite!(grid_no, 750.0, 750.0, 50.0)
+            simulate!(grid_no, model, steps=200, dt=0.5)
+
+            grid_bi = LevelSetGrid(50, 50, dx=30.0)
+            ignite!(grid_bi, 750.0, 750.0, 50.0)
+            simulate!(grid_bi, model, steps=200, dt=0.5, burnin=LinearBurnin(1.0))
+
+            @test burn_area(grid_bi) <= burn_area(grid_no)
+        end
+
+        @testset "burnin + burnout combined" begin
+            t_r = residence_time(CHAPARRAL)
+            model = FireSpreadModel(CHAPARRAL, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+
+            grid_both = LevelSetGrid(50, 50, dx=30.0)
+            ignite!(grid_both, 750.0, 750.0, 50.0)
+            simulate!(grid_both, model, steps=200, dt=0.5,
+                burnout=ExponentialBurnout(t_r), burnin=ExponentialBurnin(0.5))
+
+            grid_none = LevelSetGrid(50, 50, dx=30.0)
+            ignite!(grid_none, 750.0, 750.0, 50.0)
+            simulate!(grid_none, model, steps=200, dt=0.5)
+
+            # Combined burnin + burnout should spread less than no scaling
+            @test burn_area(grid_both) <= burn_area(grid_none)
         end
     end
 

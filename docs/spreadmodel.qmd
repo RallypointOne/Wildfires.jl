@@ -310,9 +310,17 @@ Without `set_unburnable!`, the fire scar boundary would be treated as an active 
 
 ## Burnout
 
-By default, once a cell ignites it continues to contribute to fire spread indefinitely.  In reality, fuel is consumed and the flaming front passes.  The `burnout` keyword in `simulate!` models this: cells that have been burning longer than the **residence time** stop contributing to spread.
+By default, once a cell ignites it continues to contribute to fire spread indefinitely.  In reality, fuel is consumed and the flaming front passes.  The `burnout` keyword in `simulate!` models this by scaling the spread rate based on how long a cell has been burning.
 
-The residence time is computed from the Rothermel fuel model using Anderson's (1969) formula:
+Three burnout models are available:
+
+| Type | Formula | Behavior |
+|------|---------|----------|
+| `NoBurnout()` | `1.0` | Fire spreads indefinitely (default) |
+| `ExponentialBurnout(τ)` | `exp(-t/τ)` | Smooth exponential decay over residence time `τ` |
+| `LinearBurnout(τ)` | `max(0, 1 - t/τ)` | Linear ramp to zero over residence time `τ` |
+
+The residence time `τ` is computed from the Rothermel fuel model using Anderson's (1969) formula:
 
 $$t_r = \frac{384}{\sigma_{\text{char}} \cdot 60} \text{ [min]}$$
 
@@ -329,7 +337,7 @@ using Wildfires.Rothermel: residence_time
 
 ### Using Burnout in Simulation
 
-Pass `burnout=residence_time(fuel)` to `simulate!`:
+Pass a burnout model to `simulate!`:
 
 ```{julia}
 M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
@@ -345,12 +353,12 @@ ax1 = Axis(fig[1, 1], title="No burnout\n$(count(<(0), g1.φ)) cells burned", as
 fireplot!(ax1, g1)
 hidedecorations!(ax1)
 
-# With burnout
+# With exponential burnout
 g2 = LevelSetGrid(200, 200, dx=30.0)
 ignite!(g2, 3000.0, 3000.0, 50.0)
 t_r = residence_time(SHORT_GRASS)
-simulate!(g2, m1, steps=200, dt=0.5, burnout=t_r)
-ax2 = Axis(fig[1, 2], title="With burnout (t_r=$(round(t_r, sigdigits=3)) min)\n$(count(<(0), g2.φ)) cells burned", aspect=DataAspect())
+simulate!(g2, m1, steps=200, dt=0.5, burnout=ExponentialBurnout(t_r))
+ax2 = Axis(fig[1, 2], title="Exponential burnout (τ=$(round(t_r, sigdigits=3)) min)\n$(count(<(0), g2.φ)) cells burned", aspect=DataAspect())
 fireplot!(ax2, g2)
 hidedecorations!(ax2)
 fig

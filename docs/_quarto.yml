@@ -30,6 +30,7 @@ book:
         - rothermel.qmd
         - levelset.qmd
         - spreadmodel.qmd
+        - cellular-automata.qmd
         - gallery.qmd
         - gpu.qmd
         - pinn.qmd

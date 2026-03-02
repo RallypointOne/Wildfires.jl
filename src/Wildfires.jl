@@ -2,6 +2,8 @@ module Wildfires
 
 include("Rothermel.jl")
 include("LevelSet.jl")
+include("Components.jl")
+include("CellularAutomata.jl")
 include("SpreadModel.jl")
 include("PINNTypes.jl")
 
