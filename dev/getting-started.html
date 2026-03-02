@@ -207,6 +207,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="./cellular-automata.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Cellular Automata</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="./gallery.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Gallery</span></a>
   </div>
 </li>
@@ -306,7 +311,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <section id="compute-a-rate-of-spread" class="level2">
 <h2 class="anchored" data-anchor-id="compute-a-rate-of-spread">Compute a Rate of Spread</h2>
-<p>Use the Rothermel (1972) model with one of the 13 standard NFFL fuel models:</p>
+<p>Use the Rothermel (1972) model with one of the 53 standard fuel models (13 NFFL + 40 Scott &amp; Burgan):</p>
 <div id="4" class="cell" data-execution_count="1">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Fuel moisture (fraction, 0-1) for each size class</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>moisture <span class="op">=</span> <span class="fu">FuelClasses</span>(d1<span class="op">=</span><span class="fl">0.06</span>, d10<span class="op">=</span><span class="fl">0.07</span>, d100<span class="op">=</span><span class="fl">0.08</span>, herb<span class="op">=</span><span class="fl">0.0</span>, wood<span class="op">=</span><span class="fl">0.0</span>)</span>
