@@ -400,7 +400,7 @@
     "href": "spreadmodel.html#performance-float64-vs-float32",
     "title": "Spread Model",
     "section": "Performance: Float64 vs Float32",
-    "text": "Performance: Float64 vs Float32\nThe level set grid and all simulation operations support Float32 for reduced memory and potentially faster computation. To create a Float32 simulation, pass Float32 values to all constructors:\n\n\n\n\n\n\nNote\n\n\n\nThe LevelSetGrid constructor determines its element type via promote_type on all keyword arguments (dx, dy, x0, y0). The defaults are Float64, so you must pass Float32 values for all of them — e.g. LevelSetGrid(200, 200, dx=30f0, x0=0f0, y0=0f0).\n\n\n\nusing BenchmarkTools\n\nfunction run_simulation(::Type{T}, n=500) where T\n    grid = LevelSetGrid(n, n,\n        dx=T(10), x0=zero(T), y0=zero(T))\n    ignite!(grid, T(2500), T(2500), T(50))\n    F = fill(T(10), size(grid))\n    for _ in 1:200\n        advance!(grid, F, T(0.25))\n    end\n    reinitialize!(grid)\n    grid\nend\n\nb64 = @benchmark run_simulation(Float64)\nb32 = @benchmark run_simulation(Float32)\nnothing\n\n\n\n\nMetric\nFloat64\nFloat32\nRatio\n\n\n\n\nMedian time\n320.89 ms\n241.04 ms\n1.33x\n\n\nMemory\n397.1 MiB\n198.7 MiB\n2.00x",
+    "text": "Performance: Float64 vs Float32\nThe level set grid and all simulation operations support Float32 for reduced memory and potentially faster computation. To create a Float32 simulation, pass Float32 values to all constructors:\n\n\n\n\n\n\nNote\n\n\n\nThe LevelSetGrid constructor determines its element type via promote_type on all keyword arguments (dx, dy, x0, y0). The defaults are Float64, so you must pass Float32 values for all of them — e.g. LevelSetGrid(200, 200, dx=30f0, x0=0f0, y0=0f0).\n\n\n\nusing BenchmarkTools\n\nfunction run_simulation(::Type{T}, n=500) where T\n    grid = LevelSetGrid(n, n,\n        dx=T(10), x0=zero(T), y0=zero(T))\n    ignite!(grid, T(2500), T(2500), T(50))\n    F = fill(T(10), size(grid))\n    for _ in 1:200\n        advance!(grid, F, T(0.25))\n    end\n    reinitialize!(grid)\n    grid\nend\n\nb64 = @benchmark run_simulation(Float64)\nb32 = @benchmark run_simulation(Float32)\nnothing\n\n\n\n\nMetric\nFloat64\nFloat32\nRatio\n\n\n\n\nMedian time\n321.01 ms\n244.97 ms\n1.31x\n\n\nMemory\n397.1 MiB\n198.7 MiB\n2.00x",
     "crumbs": [
       "Docs",
       "<span class='chapter-number'>5</span>  <span class='chapter-title'>Spread Model</span>"
@@ -418,6 +418,116 @@
     ]
   },
   {
+    "objectID": "gallery.html",
+    "href": "gallery.html",
+    "title": "Gallery",
+    "section": "",
+    "text": "Directional Spread Models\nFire simulation visualizations showcasing different features of Wildfires.jl.\nCosine blending produces wider fires while the elliptical model (Anderson, 1983) creates more realistic elongated shapes.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Gallery</span>"
+    ]
+  },
+  {
+    "objectID": "gallery.html#wind-direction-rose",
+    "href": "gallery.html#wind-direction-rose",
+    "title": "Gallery",
+    "section": "Wind Direction Rose",
+    "text": "Wind Direction Rose\nEight wind directions with elliptical blending — the fire elongates in the wind direction.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Gallery</span>"
+    ]
+  },
+  {
+    "objectID": "gallery.html#calm-wind",
+    "href": "gallery.html#calm-wind",
+    "title": "Gallery",
+    "section": "Calm Wind",
+    "text": "Calm Wind\nNear-zero wind produces nearly circular spread, driven primarily by the base rate of spread.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Gallery</span>"
+    ]
+  },
+  {
+    "objectID": "gallery.html#burnout-ring",
+    "href": "gallery.html#burnout-ring",
+    "title": "Gallery",
+    "section": "Burnout Ring",
+    "text": "Burnout Ring\nWith burnout enabled, consumed fuel stops contributing to spread. The burnout-aware colormap shows actively burning cells (yellow/red) and consumed cells (black).",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Gallery</span>"
+    ]
+  },
+  {
+    "objectID": "gallery.html#slope-effect",
+    "href": "gallery.html#slope-effect",
+    "title": "Gallery",
+    "section": "Slope Effect",
+    "text": "Slope Effect\nFire spreads faster uphill due to radiative pre-heating of fuels above the flame.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Gallery</span>"
+    ]
+  },
+  {
+    "objectID": "gallery.html#dynamic-moisture",
+    "href": "gallery.html#dynamic-moisture",
+    "title": "Gallery",
+    "section": "Dynamic Moisture",
+    "text": "Dynamic Moisture\nDynamicMoisture models fire-induced fuel drying — radiative heat dries nearby fuel, creating a positive feedback loop that accelerates spread.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Gallery</span>"
+    ]
+  },
+  {
+    "objectID": "gallery.html#arrival-time-isochrones",
+    "href": "gallery.html#arrival-time-isochrones",
+    "title": "Gallery",
+    "section": "Arrival Time Isochrones",
+    "text": "Arrival Time Isochrones\nThe t_ignite field records when each cell ignited. White contour lines show fire front positions at equal time intervals.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Gallery</span>"
+    ]
+  },
+  {
+    "objectID": "gallery.html#multiple-ignition-points",
+    "href": "gallery.html#multiple-ignition-points",
+    "title": "Gallery",
+    "section": "Multiple Ignition Points",
+    "text": "Multiple Ignition Points\nThree fires ignited at staggered times merge into a single perimeter. Arrival time coloring reveals the merge pattern.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Gallery</span>"
+    ]
+  },
+  {
+    "objectID": "gallery.html#fuel-type-comparison",
+    "href": "gallery.html#fuel-type-comparison",
+    "title": "Gallery",
+    "section": "Fuel Type Comparison",
+    "text": "Fuel Type Comparison\nDifferent fuel models produce dramatically different spread rates and fire shapes under identical conditions.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Gallery</span>"
+    ]
+  },
+  {
+    "objectID": "gallery.html#hero-animation",
+    "href": "gallery.html#hero-animation",
+    "title": "Gallery",
+    "section": "Hero Animation",
+    "text": "Hero Animation\nElliptical spread with burnout on chaparral fuel under strong wind — also displayed on the landing page.",
+    "crumbs": [
+      "Docs",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Gallery</span>"
+    ]
+  },
+  {
     "objectID": "gpu.html",
     "href": "gpu.html",
     "title": "GPU Acceleration",
@@ -425,7 +535,7 @@
     "text": "Setup\nWildfires.jl supports GPU acceleration via a package extension backed by KernelAbstractions.jl. This enables backend-agnostic GPU execution on CUDA (NVIDIA), ROCm (AMD), Metal (Apple), and oneAPI (Intel) devices.\nThe GPU extension accelerates the compute-heavy stencil operations (advance!, reinitialize!) while spread rate computation stays on the CPU.\nLoad a GPU backend alongside KernelAbstractions and GPUArraysCore to activate the extension:\nThen load Wildfires as usual:",
     "crumbs": [
       "Docs",
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>GPU Acceleration</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>GPU Acceleration</span>"
     ]
   },
   {
@@ -436,7 +546,7 @@
     "text": "# NVIDIA\nusing CUDA, KernelAbstractions, GPUArraysCore\n\n# Apple Silicon\nusing Metal, KernelAbstractions, GPUArraysCore\n\n# AMD\nusing AMDGPU, KernelAbstractions, GPUArraysCore\n\nusing Wildfires\nusing Wildfires.LevelSet\nusing Wildfires.SpreadModel\nusing Wildfires.Rothermel",
     "crumbs": [
       "Docs",
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>GPU Acceleration</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>GPU Acceleration</span>"
     ]
   },
   {
@@ -447,7 +557,7 @@
     "text": "Usage\nThe workflow is: build your grid and model on the CPU, move to GPU with Adapt.adapt, simulate, then move back to CPU for plotting.\nusing Adapt\n\n# 1. Build on CPU\ngrid = LevelSetGrid(500, 500, dx=30.0)\nignite!(grid, 7500.0, 7500.0, 200.0)\n\nM = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)\nmodel = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())\n\n# 2. Move grid to GPU\ngpu_grid = Adapt.adapt(CuArray, grid)   # CuArray for CUDA, MtlArray for Metal, etc.\n\n# 3. Simulate (uses GPU kernels automatically)\nsimulate!(gpu_grid, model, steps=1000, dt=0.5)\n\n# 4. Move back to CPU for plotting\ncpu_grid = Adapt.adapt(Array, gpu_grid)\nfireplot(cpu_grid)\nThe Adapt.adapt call converts the φ array inside LevelSetGrid to the target array type. All other fields (scalars like dx, dy, t) remain on the CPU.",
     "crumbs": [
       "Docs",
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>GPU Acceleration</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>GPU Acceleration</span>"
     ]
   },
   {
@@ -458,7 +568,7 @@
     "text": "What Runs on the GPU\n\n\n\n\n\n\n\n\nOperation\nGPU?\nNotes\n\n\n\n\nadvance!\nYes\nGodunov upwind stencil — one thread per cell\n\n\nreinitialize!\nYes\nReinitialization stencil — 5 iterations, parallel within each\n\n\nDynamicMoisture update!\nYes\nElement-wise moisture update kernel\n\n\nspread_rate_field!\nNo\nComputed on CPU, uploaded to GPU (calls Rothermel model)\n\n\nignite!\nYes\nUses broadcasting — works on any array type\n\n\n\nThe spread_rate_field! function evaluates the FireSpreadModel at each cell, which involves branching logic in the Rothermel model that isn’t GPU-friendly. The extension handles this transparently: it copies φ to the CPU, computes F, and uploads the result back to the GPU.",
     "crumbs": [
       "Docs",
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>GPU Acceleration</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>GPU Acceleration</span>"
     ]
   },
   {
@@ -469,7 +579,7 @@
     "text": "Type Parameterization\nLevelSetGrid and DynamicMoisture are parameterized on their array type:\n\ngrid = LevelSetGrid(20, 20, dx=30.0)\ntypeof(grid)\n\nLevelSetGrid{Float64, Matrix{Float64}, ZeroNeumann}\n\n\nOn the GPU this becomes LevelSetGrid{Float64, CuMatrix{Float64}} (or MtlMatrix, etc.). The GPU extension methods dispatch on LevelSetGrid{T, &lt;:AbstractGPUArray}, so CPU code paths are completely unaffected.",
     "crumbs": [
       "Docs",
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>GPU Acceleration</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>GPU Acceleration</span>"
     ]
   },
   {
@@ -480,7 +590,7 @@
     "text": "DynamicMoisture on GPU\nIf your model uses DynamicMoisture, the d1 moisture array also lives on the GPU. The extension provides a GPU kernel for update! that runs the drying/recovery computation in parallel.\nFor spread rate computation, the extension temporarily copies d1 back to the CPU (since the Rothermel model requires scalar indexing).\ndm = DynamicMoisture(grid, M)\ngpu_dm = Adapt.adapt(CuArray, dm)  # d1 array moves to GPU",
     "crumbs": [
       "Docs",
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>GPU Acceleration</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>GPU Acceleration</span>"
     ]
   },
   {
@@ -491,7 +601,7 @@
     "text": "Tips\n\nFloat32 for extra speed: GPU hardware is typically much faster with Float32. Create a Float32 grid with LevelSetGrid(n, n, dx=30f0, x0=0f0, y0=0f0) and ensure your FuelClasses and model parameters match.\nCFL condition: The same CFL stability requirement applies on GPU — dt &lt; dx / max(F).\nPlotting: Makie requires CPU arrays. The fireplot and convert_arguments recipes automatically call collect() on φ, but it’s more efficient to Adapt.adapt(Array, gpu_grid) once rather than repeatedly plotting a GPU grid.\nMemory: Each advance! call allocates a copy of φ for the stencil read buffer. For very large grids, monitor GPU memory usage.",
     "crumbs": [
       "Docs",
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>GPU Acceleration</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>GPU Acceleration</span>"
     ]
   },
   {
@@ -502,7 +612,7 @@
     "text": "Dependencies\nThe GPU extension is triggered by two weak dependencies:\n\n\n\n\n\n\n\nPackage\nPurpose\n\n\n\n\nKernelAbstractions\nBackend-agnostic @kernel macro for GPU compute\n\n\nGPUArraysCore\nProvides AbstractGPUArray for dispatch\n\n\n\nThese are not installed by default. Install your GPU backend package (e.g. CUDA.jl) which brings in both as transitive dependencies.",
     "crumbs": [
       "Docs",
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>GPU Acceleration</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>GPU Acceleration</span>"
     ]
   },
   {
@@ -513,7 +623,7 @@
     "text": "Overview\nThe PINN (Physics-Informed Neural Network) solver provides an alternative to the finite-difference level set method. Instead of discretizing the PDE on a grid, a neural network \\(\\varphi_\\theta(x, y, t)\\) is trained to satisfy the Hamilton-Jacobi fire spread equation:\n\\[\n\\frac{\\partial \\varphi}{\\partial t} + F(x,y,t)\\lvert\\nabla \\varphi\\rvert = 0\n\\]\nwhere \\(F\\) is the spread rate from a FireSpreadModel or any callable \\((t, x, y) \\to R\\).",
     "crumbs": [
       "Docs",
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>PINN Solver</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>PINN Solver</span>"
     ]
   },
   {
@@ -524,7 +634,7 @@
     "text": "Hard Initial Condition Constraint\nThe PINN uses a solution decomposition that exactly satisfies the initial condition:\n\\[\n\\tilde\\varphi(x,y,t) = \\frac{\\text{IC}(x,y)}{L} + \\tau(t) \\cdot \\text{NN}_\\theta(x_n, y_n, t_n)\n\\]\nwhere \\(\\tau(t) = (t - t_{\\min}) / (t_{\\max} - t_{\\min})\\) is zero at \\(t = t_{\\min}\\), ensuring \\(\\tilde\\varphi(x,y,t_{\\min}) = \\text{IC}(x,y)/L\\) exactly. This eliminates the need for an IC loss term and lets all training focus on learning the PDE dynamics.\n\n\nAdvantages\n\nMesh-free: Evaluate \\(\\varphi\\) at any continuous \\((x, y, t)\\) – no grid interpolation needed\nContinuous in time: Query the fire state at any \\(t\\) without stepping through intermediate time steps\nExact initial condition: Hard constraint guarantees perfect IC fit\nData assimilation ready: Optional observation loss term for incorporating satellite/sensor data\n\n\n\nRequirements\nThe PINN solver is a package extension – it only loads when the ML dependencies are available:\nusing Wildfires\nusing Lux, ComponentArrays, ForwardDiff, Zygote, Optimization, OptimizationOptimisers",
     "crumbs": [
       "Docs",
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>PINN Solver</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>PINN Solver</span>"
     ]
   },
   {
@@ -535,7 +645,7 @@
     "text": "Quick Start\n\n# Set up a fire scenario\ngrid = LevelSetGrid(20, 20, dx=50.0)\nignite!(grid, 500.0, 500.0, 80.0)\n\n# Simple constant spread model for fast training\nconst_spread = (t, x, y) -&gt; 5.0\n\n# Configure PINN\nconfig = PINNConfig(\n    hidden_dims = [32, 32],\n    n_interior = 500,\n    n_boundary = 100,\n    max_epochs = 3000,\n    learning_rate = 1e-3,\n    resample_every = 500,\n)\n\n# Train\nsol = train_pinn(grid, const_spread, (0.0, 10.0);\n                 config=config, rng=MersenneTwister(123), verbose=false)\n\nsol\n\nPINNSolution{Lux}(epochs=3001, final_loss=0.0001157)\n\n\n\nTraining Loss\n\nfig = Figure(size=(600, 300))\nax = Axis(fig[1, 1], xlabel=\"Epoch\", ylabel=\"Loss\", yscale=log10,\n    title=\"PINN Training Loss\")\nlines!(ax, sol.loss_history, color=:steelblue)\nfig",
     "crumbs": [
       "Docs",
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>PINN Solver</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>PINN Solver</span>"
     ]
   },
   {
@@ -546,7 +656,7 @@
     "text": "PINN Predictions\nThe PINNSolution is callable – query \\(\\varphi\\) at any point:\n\n# Single point evaluation\nsol(5.0, 500.0, 500.0)\n\n-48.06566849824875\n\n\nEvaluate on the full grid at a specific time with predict_on_grid:\n\nfig = Figure(size=(800, 300))\nfor (col, t) in enumerate([0.0, 5.0, 10.0])\n    φ = predict_on_grid(sol, grid, t)\n    ax = Axis(fig[1, col], title=\"PINN t = $t min\", aspect=DataAspect())\n    heatmap!(ax, collect(xcoords(grid)), collect(ycoords(grid)), φ, colormap=:RdYlGn)\n    contour!(ax, collect(xcoords(grid)), collect(ycoords(grid)), φ, levels=[0.0],\n        color=:black, linewidth=2)\n    hidedecorations!(ax)\nend\nfig\n\n\n\n\nOr update a LevelSetGrid in place with predict_on_grid!:\n\ngrid_pinn = LevelSetGrid(20, 20, dx=50.0)\npredict_on_grid!(grid_pinn, sol, 5.0)\ngrid_pinn\n\nLevelSetGrid{Float64} 20×20 (t=5.0, burned=68/400)",
     "crumbs": [
       "Docs",
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>PINN Solver</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>PINN Solver</span>"
     ]
   },
   {
@@ -557,7 +667,7 @@
     "text": "Comparison with Finite Differences\nThe PINN solution can be compared against the standard finite-difference solver. Note that PINNs are an approximate method – accuracy improves with larger networks, more collocation points, and longer training:\n\n# Finite-difference reference with constant F = 5.0 m/min\ngrid_fd = LevelSetGrid(20, 20, dx=50.0)\nignite!(grid_fd, 500.0, 500.0, 80.0)\nF = fill(5.0, size(grid_fd))\nfor _ in 1:20\n    advance!(grid_fd, F, 0.5)\nend\n\n# PINN prediction at the same time\ngrid_pinn = LevelSetGrid(20, 20, dx=50.0)\npredict_on_grid!(grid_pinn, sol, 10.0)\n\nfig = Figure(size=(700, 300))\n\nax1 = Axis(fig[1, 1], title=\"Finite Differences (t=10)\", aspect=DataAspect())\nfireplot!(ax1, grid_fd)\nhidedecorations!(ax1)\n\nax2 = Axis(fig[1, 2], title=\"PINN (t=10)\", aspect=DataAspect())\nfireplot!(ax2, grid_pinn)\nhidedecorations!(ax2)\n\nfig",
     "crumbs": [
       "Docs",
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>PINN Solver</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>PINN Solver</span>"
     ]
   },
   {
@@ -568,7 +678,7 @@
     "text": "Configuration\nPINNConfig controls all training hyperparameters:\n\n\n\n\n\n\n\n\nParameter\nDefault\nDescription\n\n\n\n\nhidden_dims\n[64, 64, 64]\nHidden layer sizes\n\n\nactivation\n:tanh\nActivation function\n\n\nn_interior\n5000\nPDE collocation points\n\n\nn_boundary\n500\nBoundary condition points\n\n\nlambda_pde\n1.0\nPDE loss weight\n\n\nlambda_bc\n1.0\nBC loss weight\n\n\nlambda_data\n1.0\nData loss weight\n\n\nlearning_rate\n1e-3\nAdam learning rate\n\n\nmax_epochs\n10000\nMaximum training epochs\n\n\nresample_every\n500\nResample collocation points every N epochs\n\n\nlbfgs_epochs\n0\nL-BFGS refinement iterations after Adam (0 = disabled)\n\n\nimportance_sampling\nfalse\nConcentrate collocation points near fire front\n\n\nfloat32\nfalse\nUse Float32 for NN weights (halves memory)\n\n\n\n\nTuning Hyperparameters\nNetwork size (hidden_dims): Start with [32, 32] for quick experiments and scale up to [64, 64, 64] or larger for production. Wider/deeper networks fit complex fire fronts better but train slower. If the loss plateaus early, try increasing network capacity.\nCollocation points (n_interior, n_boundary): More points improve accuracy but slow each epoch. A good rule of thumb: use at least 10x the number of grid cells for n_interior. n_boundary can be ~10% of n_interior.\nLearning rate: The default 1e-3 works well with Adam for most cases. If the loss oscillates, reduce to 1e-4. If training is very slow, try 3e-3 briefly.\nLoss weights (lambda_pde, lambda_bc, lambda_data): The defaults of 1.0 for all terms are a reasonable starting point. If the fire front bleeds through boundaries, increase lambda_bc (e.g., 10.0). When using observations, increase lambda_data (e.g., 5.0–10.0) to tighten the fit to observed perimeters.\nResampling (resample_every): Periodically resampling collocation points prevents overfitting to a fixed set of training locations. The default of 500 epochs works well; lower values (e.g., 100) can help if the loss stagnates.\nL-BFGS refinement (lbfgs_epochs): After Adam converges to the right neighborhood, L-BFGS can polish the solution with second-order curvature information. Typical values are 100–500 iterations. Requires passing the optimizer explicitly:\nusing OptimizationOptimJL\n\nconfig = PINNConfig(max_epochs=5000, lbfgs_epochs=200)\nsol = train_pinn(grid, model, tspan;\n                 config=config, lbfgs_optimizer=OptimizationOptimJL.LBFGS())\nImportance sampling (importance_sampling): When enabled, half the collocation points are sampled uniformly and half are concentrated near the initial fire front (where \\(|\\varphi|\\) is small). This focuses training capacity on the region that matters most. Enable it when the loss plateaus or the fire front is poorly resolved relative to the domain size.\nFloat32 weights (float32): Halves NN memory and can speed up forward/backward passes. Collocation points remain Float64 for spatial accuracy. Try this when memory is tight or training is slow. May reduce precision slightly.",
     "crumbs": [
       "Docs",
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>PINN Solver</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>PINN Solver</span>"
     ]
   },
   {
@@ -579,7 +689,7 @@
     "text": "Loss Function\nThe total loss is a weighted sum of three terms:\n\\[\n\\mathcal{L} = \\lambda_{\\text{pde}} \\mathcal{L}_{\\text{pde}} + \\lambda_{\\text{bc}} \\mathcal{L}_{\\text{bc}} + \\lambda_{\\text{data}} \\mathcal{L}_{\\text{data}}\n\\]\n\nPDE residual (\\(\\mathcal{L}_{\\text{pde}}\\)): Enforces the Hamilton-Jacobi equation at random interior points\nBoundary condition (\\(\\mathcal{L}_{\\text{bc}}\\)): Penalizes burned regions (\\(\\varphi &lt; 0\\)) at the domain boundary\nData loss (\\(\\mathcal{L}_{\\text{data}}\\)): Optional – fits to observed fire perimeter data\n\nThe initial condition is enforced exactly through the hard constraint decomposition (no IC loss term needed).",
     "crumbs": [
       "Docs",
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>PINN Solver</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>PINN Solver</span>"
     ]
   },
   {
@@ -590,7 +700,7 @@
     "text": "Data Assimilation\nPass observations as a tuple of vectors (t, x, y, phi) to incorporate fire perimeter data:\n# Example: observations at t=10 along a known fire boundary\nobs_t = fill(10.0, 50)\nobs_x = rand(400.0:800.0, 50)\nobs_y = rand(400.0:800.0, 50)\nobs_phi = zeros(50)  # on the fire front (phi = 0)\n\nsol = train_pinn(grid, model, (0.0, 20.0);\n                 observations=(obs_t, obs_x, obs_y, obs_phi))\nObservation format details:\n\nt: Time in minutes (same units as the simulation time span)\nx, y: Spatial coordinates in meters (same coordinate system as the LevelSetGrid)\nphi: Target level set value. Use 0.0 for points on the fire front, negative for burned, positive for unburned.\nObservations at multiple times are supported — just vary the t values.\nAs few as 20–50 well-placed perimeter points can significantly improve the solution. Points along the fire front (phi = 0) are most informative.",
     "crumbs": [
       "Docs",
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>PINN Solver</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>PINN Solver</span>"
     ]
   },
   {
@@ -601,7 +711,7 @@
     "text": "References\n\nRaissi, M., Perdikaris, P., & Karniadakis, G. E. (2019). Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations. Journal of Computational Physics, 378, 686-707.\nOsher, S. & Sethian, J.A. (1988). Fronts propagating with curvature-dependent speed. J. Computational Physics, 79(1), 12-49.",
     "crumbs": [
       "Docs",
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>PINN Solver</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>PINN Solver</span>"
     ]
   },
   {
@@ -612,7 +722,7 @@
     "text": "Types",
     "crumbs": [
       "API",
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>API</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>API</span>"
     ]
   },
   {
@@ -623,7 +733,7 @@
     "text": "AbstractPINNConfig\n\n\nAbstractPINNConfig\nSupertype for PINN training configurations. Subtypes select the solver backend:\n\nPINNConfig — custom Lux solver with hard IC constraint\nNeuralPDEConfig — NeuralPDE.jl / ModelingToolkit solver\n\n\n\n\n\nNeuralPDEConfig\n\n\nNeuralPDEConfig(; kwargs...)\nTraining hyperparameters for the NeuralPDE.jl PINN solver.\nUses ModelingToolkit symbolic PDE definition with PhysicsInformedNN discretization. IC and BC are enforced as soft constraints (loss terms).\nRequires NeuralPDE and ModelingToolkit to be loaded (triggers package extension).\n\nKeyword Arguments\n\nhidden_dims::Vector{Int} - Hidden layer sizes (default [16, 16])\nactivation::Symbol - Activation function (default :σ)\nstrategy::Symbol - Training strategy: :grid, :stochastic (default :grid)\ngrid_step::Float64 - Grid spacing for GridTraining (default 0.1)\nmax_epochs::Int - Maximum training iterations (default 1000)\noptimizer::Symbol - Optimizer: :lbfgs, :bfgs (default :lbfgs)\nlearning_rate::Float64 - Learning rate for Adam (default 1e-2)\n\n\nExamples\nconfig = NeuralPDEConfig(hidden_dims=[32, 32], max_epochs=2000)\nsol = train_pinn(grid, model, tspan; config=config)\n\n\n\n\n\n\nPINNConfig\n\n\nPINNConfig(; kwargs...)\nTraining hyperparameters for the custom Lux-based PINN solver.\nThe initial condition is enforced exactly via a hard constraint decomposition (no IC loss term or IC collocation points needed).\n\nKeyword Arguments\n\nhidden_dims::Vector{Int} - Hidden layer sizes (default [64, 64, 64])\nactivation::Symbol - Activation function (default :tanh)\nn_interior::Int - PDE collocation points (default 5000)\nn_boundary::Int - Boundary condition points (default 500)\nlambda_pde::Float64 - PDE loss weight (default 1.0)\nlambda_bc::Float64 - BC loss weight (default 1.0)\nlambda_data::Float64 - Data loss weight (default 1.0)\nlearning_rate::Float64 - Adam learning rate (default 1e-3)\nmax_epochs::Int - Maximum training epochs (default 10000)\nresample_every::Int - Resample collocation points every N epochs (default 500)\nlbfgs_epochs::Int - L-BFGS refinement epochs after Adam (default 0, disabled)\nimportance_sampling::Bool - Concentrate points near fire front (default false)\nfloat32::Bool - Use Float32 for NN weights (default false)\n\n\nExamples\nconfig = PINNConfig(hidden_dims=[128, 128], max_epochs=10000)\n\n\n\n\n\n\nPINNSolution\n\n\nPINNSolution\nTrained PINN model. Callable as sol(t, x, y) to evaluate the level set function.\n\nFields\n\nmodel - Neural network or callable evaluator\nparameters - Trained parameters\nstate - Model state (backend-specific)\nconfig::AbstractPINNConfig - Training configuration\nloss_history::Vector{Float64} - Loss at each epoch\ndomain::NamedTuple - (tspan, xspan, yspan, phi_scale) for input normalization\ngrid_ic - Initial condition grid\n\n\nExamples\nphi = sol(10.0, 500.0, 500.0)  # evaluate at t=10, x=500, y=500",
     "crumbs": [
       "API",
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>API</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>API</span>"
     ]
   },
   {
@@ -634,7 +744,7 @@
     "text": "Functions\n\n\nfiregif\n\n\nfiregif(path, trace::Trace, grid::LevelSetGrid; residence_time=nothing, framerate=15, frontcolor=:black, frontlinewidth=2.0)\nCreate an animated GIF of fire spread from a Trace recorded during simulate!.\nUses the same visualization style as fireplot!.\nRequires Makie (or a backend like CairoMakie / GLMakie) to be loaded.\n\nExamples\nusing CairoMakie\n\ngrid = LevelSetGrid(200, 200, dx=30.0)\nignite!(grid, 3000.0, 3000.0, 50.0)\ntrace = Trace(grid, 5)\nsimulate!(grid, model, steps=100, trace=trace)\n\nfiregif(\"fire.gif\", trace, grid)\nfiregif(\"fire.gif\", trace, grid; residence_time=0.005)\n\n\n\n\n\nfireplot\n\n\nfireplot(grid::LevelSetGrid; residence_time=nothing, frontcolor=:black, frontlinewidth=2.0)\nPlot a LevelSetGrid as a heatmap with the fire front (φ = 0) overlaid as a contour line. Returns a Makie.Figure.\nWhen residence_time is provided, uses a burnout-aware colormap where burned cells transition from yellow (just ignited) → red → black (burnt out) and unburned cells transition from white (near front) → green (far away).\nWithout residence_time, falls back to a symmetric φ heatmap with :RdYlGn colormap.\nRequires Makie (or a backend like CairoMakie / GLMakie) to be loaded.\n\nExamples\nusing CairoMakie\ngrid = LevelSetGrid(100, 100, dx=30.0)\nignite!(grid, 1500.0, 1500.0, 100.0)\nfireplot(grid)\nfireplot(grid; residence_time=0.005)\n\n\n\n\n\nfireplot! {#fireplot!}\n\n\nfireplot!(ax, grid::LevelSetGrid; residence_time=nothing, frontcolor=:black, frontlinewidth=2.0)\nIn-place version of fireplot: draws into an existing Axis.\nRequires Makie (or a backend like CairoMakie / GLMakie) to be loaded.\n\n\n\n\npredict_on_grid\n\n\npredict_on_grid(sol::PINNSolution, grid::LevelSet.LevelSetGrid, t)\nEvaluate the trained PINN on every cell center of grid at time t. Returns a matrix of phi values with the same dimensions as grid.\n\n\n\n\npredict_on_grid! {#predict_on_grid!}\n\n\npredict_on_grid!(grid::LevelSet.LevelSetGrid, sol::PINNSolution, t)\nIn-place version of predict_on_grid: updates grid.phi and grid.t.\n\n\n\n\ntrain_pinn\n\n\ntrain_pinn(grid, model, tspan; config=PINNConfig(), ...)\ntrain_pinn(grid, model, tspan, config; ...)\nTrain a Physics-Informed Neural Network to solve the fire spread level set PDE.\nThe PINN learns a function phi_theta(x, y, t) satisfying:\ndphi/dt + F(x,y,t)|nabla phi| = 0\nwhere F is the spread rate from the FireSpreadModel.\nThe solver backend is selected by the config type:\n\nPINNConfig — custom Lux solver with hard IC constraint (requires Lux)\nNeuralPDEConfig — NeuralPDE.jl symbolic solver (requires NeuralPDE)\n\n\nArguments\n\ngrid - LevelSetGrid providing domain geometry and initial condition\nmodel - Callable model(t, x, y) -&gt; spread_rate (e.g. FireSpreadModel)\ntspan - Time interval (t_start, t_end)\nconfig - PINNConfig or NeuralPDEConfig with training hyperparameters\nobservations - Optional (t, x, y, phi) tuple of observation data (Lux backend only)\nlbfgs_optimizer - Optimizer for L-BFGS refinement phase, e.g. OptimizationOptimJL.LBFGS() (Lux backend only, requires lbfgs_epochs &gt; 0 in config)\n\n\n\nReturns\nA PINNSolution callable as sol(t, x, y).\n\nExamples\n# Custom Lux backend (default)\nsol = train_pinn(grid, model, (0.0, 50.0))\n\n# NeuralPDE backend\nsol = train_pinn(grid, model, (0.0, 50.0); config=NeuralPDEConfig())",
     "crumbs": [
       "API",
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>API</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>API</span>"
     ]
   },
   {
@@ -645,7 +755,7 @@
     "text": "Simulation Diverges or Produces NaN\nCommon issues and how to resolve them.\nSymptom: φ values grow unbounded or become NaN after a few steps.\nCause: The time step dt violates the CFL condition.\nFix:",
     "crumbs": [
       "Resources",
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Troubleshooting</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Troubleshooting</span>"
     ]
   },
   {
@@ -656,7 +766,7 @@
     "text": "Use automatic time stepping (the default): simulate!(grid, model, steps=100). This computes a stable dt each step.\nIf using a fixed dt, ensure it satisfies dt ≤ cfl * min(dx, dy) / max(F). Reduce dt or use a smaller cfl (e.g., 0.3).\nCheck that the spread rate field F doesn’t contain unreasonably large values. Spread rates above ~100 m/min are extreme even for crown fires.",
     "crumbs": [
       "Resources",
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Troubleshooting</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Troubleshooting</span>"
     ]
   },
   {
@@ -667,7 +777,7 @@
     "text": "Fire Doesn’t Spread\nSymptom: The fire perimeter stays at the ignition point.\nPossible causes:\n\nFuel moisture too high: If moisture exceeds the extinction threshold for the fuel model, the Rothermel rate of spread is zero. Check rate_of_spread(fuel, moisture=m) with your moisture values.\nSpread rate is zero: Evaluate model(t, x, y) at several points to verify non-zero output.\nNot enough steps: With small cfl and large dx, each step may advance the front by less than one cell. Increase steps or reduce dx.",
     "crumbs": [
       "Resources",
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Troubleshooting</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Troubleshooting</span>"
     ]
   },
   {
@@ -678,7 +788,7 @@
     "text": "Unexpected Fire Shape\nSymptom: Fire spreads in unexpected directions or has artifacts.\nPossible causes:\n\nWind direction convention: Wind direction is the direction the wind blows from, in radians. 0.0 = from the east, π/2 = from the north. Fire spreads opposite to the wind-from direction.\nAspect convention: Aspect is the downslope direction in radians. Fire spreads uphill (opposite to aspect).\nReinitialization too infrequent: If reinit_every is too large, φ drifts from a signed distance function and the upwind scheme becomes inaccurate. Try reinit_every=5.\nGrid resolution too coarse: With large dx, the fire front is poorly resolved. Try halving dx to see if artifacts disappear.",
     "crumbs": [
       "Resources",
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Troubleshooting</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Troubleshooting</span>"
     ]
   },
   {
@@ -689,7 +799,7 @@
     "text": "PINN Loss Plateaus\nSymptom: Training loss stops decreasing well above expected values.\nPossible causes:\n\nNetwork too small: Increase hidden_dims (e.g., from [32, 32] to [64, 64, 64]).\nLearning rate too high: Reduce learning_rate to 1e-4 or 3e-4.\nToo few collocation points: Increase n_interior. Use at least 10x the number of grid cells.\nLoss weight imbalance: If one loss term dominates, the others are undertrained. Check individual loss components and adjust lambda_pde, lambda_bc, lambda_data.\nStale collocation points: Decrease resample_every (e.g., 100) so the network sees diverse training locations.\nTry importance sampling: Set importance_sampling=true to concentrate points near the fire front.\nTry L-BFGS refinement: After Adam, L-BFGS can push the loss lower. Set lbfgs_epochs=200 and pass lbfgs_optimizer=OptimizationOptimJL.LBFGS().",
     "crumbs": [
       "Resources",
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Troubleshooting</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Troubleshooting</span>"
     ]
   },
   {
@@ -700,7 +810,7 @@
     "text": "PINN Fire Front Bleeds Through Boundaries\nSymptom: The PINN predicts φ &lt; 0 (burned) at the domain boundary.\nFix: Increase the boundary loss weight, e.g., lambda_bc=10.0.",
     "crumbs": [
       "Resources",
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Troubleshooting</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Troubleshooting</span>"
     ]
   },
   {
@@ -711,7 +821,7 @@
     "text": "Out of Memory (GPU)\nSymptom: GPU OOM error during simulation.\nPossible causes:\n\nGrid too large for GPU memory: Reduce grid size or use Float32 to halve memory usage.\nMany time steps without clearing: Each advance! call allocates a copy of φ. Julia’s garbage collector may lag behind. Call GC.gc(false) periodically or use CUDA.reclaim() for CUDA-based runs.",
     "crumbs": [
       "Resources",
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Troubleshooting</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Troubleshooting</span>"
     ]
   },
   {
@@ -722,7 +832,7 @@
     "text": "Package Extension Not Loading\nSymptom: PINNConfig, train_pinn, or GPU functions are not defined.\nFix: Package extensions only load when their trigger packages are imported in the same session:\n# For PINN:\nusing Lux, ComponentArrays, ForwardDiff, Zygote, Optimization, OptimizationOptimisers\n\n# For GPU:\nusing KernelAbstractions, CUDA  # or AMDGPU, Metal, etc.\n\n# Then:\nusing Wildfires\nThe trigger packages must be loaded before or at the same time as Wildfires.",
     "crumbs": [
       "Resources",
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Troubleshooting</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Troubleshooting</span>"
     ]
   },
   {
@@ -733,7 +843,7 @@
     "text": "Changelog",
     "crumbs": [
       "Resources",
-      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Changelog</span>"
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Changelog</span>"
     ]
   },
   {
@@ -744,7 +854,7 @@
     "text": "v0.1.0\nInitial release of Wildfires.jl.\n\nFeatures\n\nRothermel model: Full implementation of the Rothermel (1972) surface fire spread model with all 13 NFFL fuel models from Anderson (1982)\nLevel set method: 2D fire front propagation using a level set approach with Godunov upwind scheme and reinitialization\nComposable spread model: FireSpreadModel with pluggable components (UniformWind, UniformMoisture, DynamicMoisture, FlatTerrain, GriddedTerrain)\nGPU acceleration: Backend-agnostic GPU support (CUDA, Metal, ROCm) via KernelAbstractions.jl package extension for advance!, reinitialize!, and moisture update kernels\nPINN solver: Physics-informed neural network extension for level set equation solving with hard IC constraints (via Lux.jl)\nMakie integration: fireplot recipe and convert_arguments for direct plotting of LevelSetGrid\nQuarto documentation: Full documentation site with getting started guide, API reference, and GPU/PINN pages",
     "crumbs": [
       "Resources",
-      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Changelog</span>"
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Changelog</span>"
     ]
   }
 ]
