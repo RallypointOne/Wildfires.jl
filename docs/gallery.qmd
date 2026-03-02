@@ -1,0 +1,308 @@
+---
+title: "Gallery"
+engine: julia
+---
+
+```{julia}
+#| echo: false
+#| output: false
+using Wildfires
+using Wildfires.Rothermel
+using Wildfires.Rothermel: residence_time
+using Wildfires.LevelSet
+using Wildfires.SpreadModel
+using CairoMakie
+
+M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+```
+
+Fire simulation visualizations showcasing different features of Wildfires.jl.
+
+## Directional Spread Models
+
+Cosine blending produces wider fires while the elliptical model (Anderson, 1983) creates more realistic elongated shapes.
+
+```{julia}
+#| echo: false
+grids_dir = LevelSetGrid[]
+traces_dir = Trace[]
+for dir in [CosineBlending(), EllipticalBlending()]
+    g = LevelSetGrid(150, 150, dx=30.0)
+    ignite!(g, 2250.0, 2250.0, 50.0)
+    model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain(), dir)
+    tr = Trace(g, 3)
+    simulate!(g, model, steps=120, dt=0.5, trace=tr)
+    push!(grids_dir, g)
+    push!(traces_dir, tr)
+end
+
+v = maximum(traces_dir) do tr
+    φ = tr.stack[end][2]
+    max(abs(minimum(φ)), abs(maximum(φ)))
+end
+
+titles_dir = ["Cosine Blending", "Elliptical Blending"]
+fig = Figure(size=(700, 350))
+axes_dir = [Axis(fig[1, i], aspect=DataAspect()) for i in 1:2]
+foreach(hidedecorations!, axes_dir)
+
+nframes = minimum(length(tr.stack) for tr in traces_dir)
+record(fig, joinpath(@__DIR__, "gallery_directional.gif"), 1:nframes; framerate=15) do idx
+    for (i, (ax, tr, g)) in enumerate(zip(axes_dir, traces_dir, grids_dir))
+        empty!(ax)
+        t, φ = tr.stack[idx]
+        ax.title = "$(titles_dir[i])\nt = $(round(t, digits=1)) min"
+        xs = collect(xcoords(g))
+        ys = collect(ycoords(g))
+        heatmap!(ax, xs, ys, φ; colormap=:RdYlGn, colorrange=(-v, v))
+        contour!(ax, xs, ys, φ; levels=[0.0], color=:black, linewidth=2.0)
+    end
+end
+nothing
+```
+
+![](gallery_directional.gif){fig-align="center"}
+
+## Wind Direction Rose
+
+Eight wind directions with elliptical blending — the fire elongates in the wind direction.
+
+```{julia}
+#| echo: false
+directions = [0, π/4, π/2, 3π/4, π, 5π/4, 3π/2, 7π/4]
+labels = ["E (0°)", "NE (45°)", "N (90°)", "NW (135°)",
+          "W (180°)", "SW (225°)", "S (270°)", "SE (315°)"]
+
+fig = Figure(size=(800, 400))
+for (idx, (dir, label)) in enumerate(zip(directions, labels))
+    row = (idx - 1) ÷ 4 + 1
+    col = (idx - 1) % 4 + 1
+    g = LevelSetGrid(100, 100, dx=30.0)
+    ignite!(g, 1500.0, 1500.0, 50.0)
+    model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0, direction=dir),
+        UniformMoisture(M), FlatTerrain(), EllipticalBlending())
+    simulate!(g, model, steps=80, dt=0.5)
+    ax = Axis(fig[row, col], title=label, aspect=DataAspect())
+    fireplot!(ax, g)
+    hidedecorations!(ax)
+end
+fig
+```
+
+## Calm Wind
+
+Near-zero wind produces nearly circular spread, driven primarily by the base rate of spread.
+
+```{julia}
+#| echo: false
+g = LevelSetGrid(100, 100, dx=30.0)
+ignite!(g, 1500.0, 1500.0, 50.0)
+model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=0.5), UniformMoisture(M), FlatTerrain())
+tr = Trace(g, 3)
+simulate!(g, model, steps=80, dt=0.5, trace=tr)
+firegif(joinpath(@__DIR__, "gallery_calm.gif"), tr, g)
+nothing
+```
+
+![](gallery_calm.gif){fig-align="center"}
+
+## Burnout Ring
+
+With burnout enabled, consumed fuel stops contributing to spread. The burnout-aware colormap shows actively burning cells (yellow/red) and consumed cells (black).
+
+```{julia}
+#| echo: false
+g = LevelSetGrid(150, 150, dx=30.0)
+ignite!(g, 2250.0, 2250.0, 50.0)
+t_r = residence_time(CHAPARRAL)
+model = FireSpreadModel(CHAPARRAL, UniformWind(speed=8.0), UniformMoisture(M),
+    FlatTerrain(), EllipticalBlending())
+tr = Trace(g, 3)
+simulate!(g, model, steps=150, dt=0.5, trace=tr, burnout=t_r)
+firegif(joinpath(@__DIR__, "gallery_burnout.gif"), tr, g; residence_time=t_r)
+nothing
+```
+
+![](gallery_burnout.gif){fig-align="center"}
+
+## Slope Effect
+
+Fire spreads faster uphill due to radiative pre-heating of fuels above the flame.
+
+```{julia}
+#| echo: false
+slopes = [0.0, 0.3, 0.6]
+slope_labels = ["Flat", "Slope = 0.3", "Slope = 0.6"]
+
+grids_slope = LevelSetGrid[]
+traces_slope = Trace[]
+for s in slopes
+    g = LevelSetGrid(100, 100, dx=30.0)
+    ignite!(g, 1500.0, 1500.0, 50.0)
+    model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=5.0), UniformMoisture(M),
+        UniformSlope(slope=s))
+    tr = Trace(g, 3)
+    simulate!(g, model, steps=100, dt=0.5, trace=tr)
+    push!(grids_slope, g)
+    push!(traces_slope, tr)
+end
+
+v = maximum(traces_slope) do tr
+    φ = tr.stack[end][2]
+    max(abs(minimum(φ)), abs(maximum(φ)))
+end
+
+fig = Figure(size=(900, 300))
+axes_slope = [Axis(fig[1, i], aspect=DataAspect()) for i in 1:3]
+foreach(hidedecorations!, axes_slope)
+
+nframes = minimum(length(tr.stack) for tr in traces_slope)
+record(fig, joinpath(@__DIR__, "gallery_slope.gif"), 1:nframes; framerate=15) do idx
+    for (i, (ax, tr, g)) in enumerate(zip(axes_slope, traces_slope, grids_slope))
+        empty!(ax)
+        t, φ = tr.stack[idx]
+        ax.title = "$(slope_labels[i])\nt = $(round(t, digits=1)) min"
+        xs = collect(xcoords(g))
+        ys = collect(ycoords(g))
+        heatmap!(ax, xs, ys, φ; colormap=:RdYlGn, colorrange=(-v, v))
+        contour!(ax, xs, ys, φ; levels=[0.0], color=:black, linewidth=2.0)
+    end
+end
+nothing
+```
+
+![](gallery_slope.gif){fig-align="center"}
+
+## Dynamic Moisture
+
+`DynamicMoisture` models fire-induced fuel drying — radiative heat dries nearby fuel, creating a positive feedback loop that accelerates spread.
+
+```{julia}
+#| echo: false
+g_s = LevelSetGrid(100, 100, dx=30.0)
+ignite!(g_s, 1500.0, 1500.0, 50.0)
+model_s = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+tr_s = Trace(g_s, 3)
+simulate!(g_s, model_s, steps=120, dt=0.5, trace=tr_s)
+
+g_d = LevelSetGrid(100, 100, dx=30.0)
+ignite!(g_d, 1500.0, 1500.0, 50.0)
+dm = DynamicMoisture(g_d, M, dry_rate=0.1, recovery_rate=0.001)
+model_d = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), dm, FlatTerrain())
+tr_d = Trace(g_d, 3)
+simulate!(g_d, model_d, steps=120, dt=0.5, trace=tr_d)
+
+traces_moist = [tr_s, tr_d]
+grids_moist = [g_s, g_d]
+moist_labels = ["Static Moisture", "Dynamic Moisture"]
+
+v = maximum(traces_moist) do tr
+    φ = tr.stack[end][2]
+    max(abs(minimum(φ)), abs(maximum(φ)))
+end
+
+fig = Figure(size=(700, 350))
+axes_moist = [Axis(fig[1, i], aspect=DataAspect()) for i in 1:2]
+foreach(hidedecorations!, axes_moist)
+
+nframes = minimum(length(tr.stack) for tr in traces_moist)
+record(fig, joinpath(@__DIR__, "gallery_moisture.gif"), 1:nframes; framerate=15) do idx
+    for (i, (ax, tr, g)) in enumerate(zip(axes_moist, traces_moist, grids_moist))
+        empty!(ax)
+        t, φ = tr.stack[idx]
+        ax.title = "$(moist_labels[i])\nt = $(round(t, digits=1)) min"
+        xs = collect(xcoords(g))
+        ys = collect(ycoords(g))
+        heatmap!(ax, xs, ys, φ; colormap=:RdYlGn, colorrange=(-v, v))
+        contour!(ax, xs, ys, φ; levels=[0.0], color=:black, linewidth=2.0)
+    end
+end
+nothing
+```
+
+![](gallery_moisture.gif){fig-align="center"}
+
+## Arrival Time Isochrones
+
+The `t_ignite` field records when each cell ignited. White contour lines show fire front positions at equal time intervals.
+
+```{julia}
+#| echo: false
+g = LevelSetGrid(150, 150, dx=30.0)
+ignite!(g, 2250.0, 2250.0, 50.0)
+model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M),
+    FlatTerrain(), EllipticalBlending())
+simulate!(g, model, steps=200, dt=0.5)
+
+t_arr = map(t -> isfinite(t) ? t : NaN, g.t_ignite)
+xs = collect(xcoords(g))
+ys = collect(ycoords(g))
+
+fig = Figure(size=(550, 450))
+ax = Axis(fig[1, 1], title="Arrival Time Isochrones", aspect=DataAspect(),
+    xlabel="x (m)", ylabel="y (m)")
+hm = heatmap!(ax, xs, ys, t_arr; colormap=:inferno, nan_color=:gray95)
+contour!(ax, xs, ys, t_arr; color=:white, levels=10, linewidth=1.5)
+Colorbar(fig[1, 2], hm, label="Ignition time (min)")
+fig
+```
+
+## Multiple Ignition Points
+
+Three fires ignited at staggered times merge into a single perimeter. Arrival time coloring reveals the merge pattern.
+
+```{julia}
+#| echo: false
+g = LevelSetGrid(200, 200, dx=30.0)
+ignite!(g, 2000.0, 3000.0, 50.0)
+model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=5.0), UniformMoisture(M),
+    FlatTerrain(), EllipticalBlending())
+simulate!(g, model, steps=30, dt=0.5)
+ignite!(g, 3500.0, 2000.0, 50.0)
+simulate!(g, model, steps=30, dt=0.5)
+ignite!(g, 3000.0, 4500.0, 50.0)
+simulate!(g, model, steps=90, dt=0.5)
+
+t_arr = map(t -> isfinite(t) ? t : NaN, g.t_ignite)
+xs = collect(xcoords(g))
+ys = collect(ycoords(g))
+
+fig = Figure(size=(550, 450))
+ax = Axis(fig[1, 1], title="Multiple Ignition Points", aspect=DataAspect(),
+    xlabel="x (m)", ylabel="y (m)")
+hm = heatmap!(ax, xs, ys, t_arr; colormap=:inferno, nan_color=:gray95)
+contour!(ax, xs, ys, t_arr; color=:white, levels=10, linewidth=1.5)
+Colorbar(fig[1, 2], hm, label="Ignition time (min)")
+fig
+```
+
+## Fuel Type Comparison
+
+Different fuel models produce dramatically different spread rates and fire shapes under identical conditions.
+
+```{julia}
+#| echo: false
+fuels = [SHORT_GRASS, CHAPARRAL, TIMBER_UNDERSTORY, TALL_GRASS]
+fuel_labels = ["Short Grass", "Chaparral", "Timber Understory", "Tall Grass"]
+
+fig = Figure(size=(700, 700))
+for (idx, (fuel, label)) in enumerate(zip(fuels, fuel_labels))
+    row = (idx - 1) ÷ 2 + 1
+    col = (idx - 1) % 2 + 1
+    g = LevelSetGrid(100, 100, dx=30.0)
+    ignite!(g, 1500.0, 1500.0, 50.0)
+    model = FireSpreadModel(fuel, UniformWind(speed=8.0), UniformMoisture(M),
+        FlatTerrain(), EllipticalBlending())
+    simulate!(g, model, steps=100, dt=0.5)
+    ax = Axis(fig[row, col], title=label, aspect=DataAspect())
+    fireplot!(ax, g)
+    hidedecorations!(ax)
+end
+fig
+```
+
+## Hero Animation
+
+Elliptical spread with burnout on chaparral fuel under strong wind — also displayed on the [landing page](index.qmd).
+
+![](hero.gif){fig-align="center" width="500"}

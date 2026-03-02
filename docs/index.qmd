@@ -3,6 +3,29 @@ title: "Wildfires.jl"
 engine: julia
 ---
 
+```{julia}
+#| echo: false
+#| output: false
+using Wildfires
+using Wildfires.Rothermel
+using Wildfires.Rothermel: residence_time
+using Wildfires.LevelSet
+using Wildfires.SpreadModel
+using CairoMakie
+
+M_hero = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+grid_hero = LevelSetGrid(200, 200, dx=30.0)
+ignite!(grid_hero, 3000.0, 3000.0, 50.0)
+t_r_hero = residence_time(CHAPARRAL)
+model_hero = FireSpreadModel(CHAPARRAL, UniformWind(speed=12.0), UniformMoisture(M_hero),
+    FlatTerrain(), EllipticalBlending())
+trace_hero = Trace(grid_hero, 3)
+simulate!(grid_hero, model_hero, steps=200, dt=0.5, trace=trace_hero, burnout=t_r_hero)
+firegif(joinpath(@__DIR__, "hero.gif"), trace_hero, grid_hero; residence_time=t_r_hero)
+```
+
+![](hero.gif){fig-align="center" width="500"}
+
 Welcome to the documentation for **Wildfires.jl**.
 
 ## Overview
