@@ -414,6 +414,19 @@ The `simulate!` function accepts several keyword arguments that control numerica
 | `dt` | `nothing` | Time step in minutes.  When `nothing`, computed automatically via the CFL condition each step. |
 | `cfl` | `0.5` | Safety factor for the CFL condition (`dt = cfl * min(dx,dy) / max(F)`).  Only used when `dt=nothing`. |
 | `reinit_every` | `10` | Reinitialization frequency.  Every N steps, the level set is restored to a signed distance function. |
+| `solver` | `Godunov()` | Numerical solver for the level set equation.  See [Solvers](levelset.qmd#solvers). |
+| `curvature` | `0.0` | Curvature regularization coefficient.  When > 0, smooths the fire front via `F_eff = max(F - b·κ, 0)`.  See [Curvature](levelset.qmd#curvature-regularization). |
+| `reinit` | `IterativeReinit()` | Reinitialization method.  `IterativeReinit()` (default) or `NewtonReinit()` for machine-precision signed distance.  See [Reinitialization](levelset.qmd#reinitialization). |
+
+**`solver`**: Controls the numerical scheme for advancing the level set.  `Godunov()` (default) uses first-order upwind differencing with forward Euler.  `Superbee()` uses a second-order Superbee flux limiter with RK2 (Heun's method) for sharper fire fronts.  `WENO5()` uses a 5th-order WENO scheme with SSP-RK3 for the highest accuracy.  See the [Solvers](levelset.qmd#solvers) section for details.
+
+```julia
+simulate!(grid, model, steps=100)                          # Godunov (default)
+simulate!(grid, model, steps=100, solver=Superbee())       # 2nd-order TVD
+simulate!(grid, model, steps=100, solver=WENO5())          # 5th-order WENO
+simulate!(grid, model, steps=100, curvature=5.0)           # curvature smoothing
+simulate!(grid, model, steps=100, reinit=NewtonReinit())   # Newton reinit
+```
 
 **`cfl`**: The default `0.5` is conservative — it uses half the maximum stable time step.  Values closer to `1.0` are faster but risk instability if the spread rate field changes rapidly.  If you see oscillations or divergence, lower this value.
 

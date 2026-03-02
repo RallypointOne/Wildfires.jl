@@ -110,9 +110,33 @@ end
 grid
 ```
 
-### Godunov's Upwind Scheme
+## Solvers
 
-The `advance!` function computes $|\nabla\phi|$ using **Godunov's upwind scheme**, a monotone numerical flux for Hamilton-Jacobi equations.  The idea is to use one-sided (upwind) finite differences that respect the direction information is traveling — toward the fire front.
+The `advance!` function accepts an optional solver argument that controls the numerical scheme for evolving the level set equation.  Three solvers are available:
+
+| Solver | Order | Time Stepping | Stencil | Use Case |
+|--------|-------|---------------|---------|----------|
+| `Godunov()` | 1st | Forward Euler | 1-cell | Default — robust, simple, good for most cases |
+| `Superbee()` | 2nd | RK2 (Heun) | 2-cell | Sharper fronts, less numerical diffusion |
+| `WENO5()` | 5th | SSP-RK3 | 3-cell | Highest accuracy, sharpest front resolution |
+
+```{julia}
+# Explicit solver selection (Godunov is the default)
+advance!(grid, F, 0.5, Godunov())
+
+# Second-order Superbee
+grid2 = LevelSetGrid(100, 100, dx=30.0)
+ignite!(grid2, 1500.0, 1500.0, 100.0)
+F2 = fill(10.0, size(grid2))
+advance!(grid2, F2, 0.5, Superbee())
+grid2
+```
+
+When no solver is specified, `advance!(grid, F, dt)` defaults to `Godunov()` for backward compatibility.
+
+### `Godunov()` — First-Order Upwind
+
+The default solver computes $|\nabla\phi|$ using **Godunov's upwind scheme**, a monotone numerical flux for Hamilton-Jacobi equations.  The idea is to use one-sided (upwind) finite differences that respect the direction information is traveling — toward the fire front.
 
 At each cell, four one-sided differences are computed:
 
@@ -131,6 +155,93 @@ Then $|\nabla\phi| \approx \sqrt{\hat{D}_x^2 + \hat{D}_y^2}$ and the update is:
 $$\phi^{n+1}_{i,j} = \phi^n_{i,j} - \Delta t \; F_{i,j} \; \sqrt{\hat{D}_x^2 + \hat{D}_y^2}$$
 
 This selection rule ensures that only **upstream** information influences the update, preventing oscillations that would occur with central differences.  At domain boundaries, the one-sided differences that would require out-of-bounds data are set to zero (implicit zero-Neumann / reflective boundary condition).
+
+### `Superbee()` — Second-Order TVD
+
+The `Superbee` solver converts the Hamilton-Jacobi equation into advection form and applies a **Superbee flux limiter** with **RK2 (Heun's method)** time stepping, following the approach used in [ELMFIRE](https://github.com/lautenberger/elmfire).  This produces sharper fire fronts with less numerical diffusion than the first-order Godunov scheme.
+
+**How it works:**
+
+1. Compute the front normal $\hat{n} = \nabla\phi / |\nabla\phi|$ via central differences
+2. Set advection velocities $u_x = F \cdot n_x$, $u_y = F \cdot n_y$
+3. Apply the Superbee flux limiter to compute limited gradients $\partial\phi/\partial x$, $\partial\phi/\partial y$
+4. Advance with RK2 (Heun's method):
+    - **Stage 1**: Forward Euler $\phi^* = \phi^n - \Delta t \, (u_x \, \partial\phi/\partial x + u_y \, \partial\phi/\partial y)$
+    - **Stage 2**: Recompute from $\phi^*$, then average: $\phi^{n+1} = \tfrac{1}{2}(\phi^n + \phi^{**})$
+
+The Superbee limiter is **total variation diminishing (TVD)**, preventing spurious oscillations while maintaining second-order accuracy at smooth regions.  It uses a 2-cell stencil (accessing `φ[i±2, j±2]`), wider than Godunov's 1-cell stencil.
+
+**Parameters:**
+
+```julia
+Superbee(phi_clamp=100.0, grad_clamp=1000.0)
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `phi_clamp` | `100.0` | Clamp `φ` values to `[-phi_clamp, phi_clamp]` after each RK stage |
+| `grad_clamp` | `1000.0` | Clamp flux-limited gradients to prevent runaway values |
+
+These guards prevent numerical blowup when the level set field develops steep gradients or large values far from the front.
+
+### `WENO5()` — Fifth-Order WENO
+
+The `WENO5` solver uses the **Jiang-Shu WENO5** (Weighted Essentially Non-Oscillatory) reconstruction for spatial derivatives with **SSP-RK3** (Strong Stability Preserving Runge-Kutta) time stepping.  This provides 5th-order accuracy in smooth regions while maintaining sharp resolution near discontinuities.
+
+**How it works:**
+
+1. Compute left-biased ($D^-$) and right-biased ($D^+$) WENO5 derivatives in each direction using a 6-point stencil
+2. Each WENO5 derivative blends three candidate 3rd-order stencils weighted by smoothness indicators — smooth regions get near-optimal weights, while oscillatory regions suppress offending stencils
+3. Apply the Godunov numerical Hamiltonian (same as first-order) to combine derivatives
+4. Advance with SSP-RK3 (Shu-Osher form):
+    - **Stage 1**: $\phi_1 = \phi^n + \Delta t \cdot L(\phi^n)$
+    - **Stage 2**: $\phi_2 = \tfrac{3}{4}\phi^n + \tfrac{1}{4}(\phi_1 + \Delta t \cdot L(\phi_1))$
+    - **Stage 3**: $\phi^{n+1} = \tfrac{1}{3}\phi^n + \tfrac{2}{3}(\phi_2 + \Delta t \cdot L(\phi_2))$
+
+The 3-cell stencil (accessing `φ[i±3, j±3]`) is the widest of the three solvers.
+
+**Parameters:**
+
+```julia
+WENO5(phi_clamp=100.0)
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `phi_clamp` | `100.0` | Clamp `φ` values to `[-phi_clamp, phi_clamp]` after each RK stage |
+
+### Comparing Solvers
+
+```{julia}
+using Wildfires.SpreadModel
+using Wildfires.Rothermel: SHORT_GRASS, FuelClasses
+
+M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+
+fig = Figure(size=(900, 300))
+for (col, (label, solver)) in enumerate([
+    ("Godunov (1st order)", Godunov()),
+    ("Superbee (2nd order TVD)", Superbee()),
+    ("WENO5 (5th order)", WENO5()),
+])
+    g = LevelSetGrid(200, 200, dx=30.0)
+    ignite!(g, 3000.0, 3000.0, 50.0)
+    simulate!(g, model, steps=100, dt=0.5, solver=solver)
+    ax = Axis(fig[1, col], title=label, aspect=DataAspect())
+    fireplot!(ax, g)
+    hidedecorations!(ax)
+end
+fig
+```
+
+::: {.callout-tip}
+## When to use which solver
+
+- **`Godunov()`** is the safe default — it's simple, robust, and sufficient for most simulations.
+- **`Superbee()`** is worth trying when you need sharper fire front resolution, especially for high-resolution grids or when comparing against observed fire perimeters.  It requires roughly 2x the computation per time step (two RK stages + wider stencil).
+- **`WENO5()`** provides the highest accuracy and sharpest fronts, but at roughly 3x the cost of Godunov (three RK stages + wider stencil).  Best for high-resolution research simulations.
+:::
 
 ### CFL Condition
 
@@ -154,8 +265,10 @@ cfl_dt(grid, F; cfl=1.0)  # less conservative
 The [`simulate!`](spreadmodel.qmd#simulation-parameters) function uses automatic CFL-limited time stepping by default.  Pass an explicit `dt` to override:
 
 ```julia
-simulate!(grid, model, steps=100)           # auto CFL (recommended)
-simulate!(grid, model, steps=100, dt=0.5)   # fixed dt (user must ensure stability)
+simulate!(grid, model, steps=100)                          # auto CFL (recommended)
+simulate!(grid, model, steps=100, dt=0.5)                  # fixed dt
+simulate!(grid, model, steps=100, solver=Superbee())       # 2nd-order solver
+simulate!(grid, model, steps=100, solver=WENO5())          # 5th-order solver
 ```
 
 ## Reinitialization
@@ -166,6 +279,51 @@ Over many time steps, `φ` can drift away from a true signed distance function (
 reinitialize!(grid)
 grid
 ```
+
+Two reinitialization methods are available:
+
+| Method | Accuracy | Cost | Use Case |
+|--------|----------|------|----------|
+| `IterativeReinit(iterations=5)` | Approximate | Low | Default — fast, good enough for most simulations |
+| `NewtonReinit(upsample=8)` | Machine-precision | Higher | Research — exact signed distance restoration |
+
+### `NewtonReinit` — Newton Closest-Point
+
+The Newton method produces machine-precision signed distance fields by:
+
+1. Building a cubic interpolant of `φ` using `Interpolations.jl`
+2. Locating zero-contour sample points via Newton projection
+3. Building a KD-tree for efficient nearest-neighbor queries
+4. Computing exact signed distance from each grid point to the nearest interface point
+
+```julia
+reinitialize!(grid, NewtonReinit())
+reinitialize!(grid, NewtonReinit(upsample=16, maxiters=30))
+```
+
+In `simulate!`, pass the `reinit` keyword:
+
+```julia
+simulate!(grid, model, steps=100, reinit=NewtonReinit())
+```
+
+## Curvature Regularization
+
+The `curvature` keyword in `simulate!` adds curvature-dependent speed regularization:
+
+$$F_{\text{eff}} = \max(F - b \cdot \kappa, 0)$$
+
+where $b$ is the curvature coefficient and $\kappa$ is the mean curvature of the level set.  This smooths the fire front by reducing speed at convex bulges and increasing it at concave indentations.
+
+```julia
+simulate!(grid, model, steps=100, curvature=5.0)
+```
+
+The mean curvature is computed via central differences:
+
+$$\kappa = \frac{\phi_{xx}\phi_y^2 - 2\phi_x\phi_y\phi_{xy} + \phi_{yy}\phi_x^2}{(\phi_x^2 + \phi_y^2)^{3/2}}$$
+
+When `curvature > 0`, the CFL time step also enforces the parabolic constraint $\Delta t \leq \Delta x^2 / (2b)$.  For typical fire simulation parameters, this is never the bottleneck.
 
 ## Plotting
 
@@ -229,3 +387,5 @@ fig
 
 - Osher, S. & Sethian, J.A. (1988). *Fronts propagating with curvature-dependent speed.* J. Computational Physics, 79(1), 12–49.
 - Mallet, V., Keyes, D.E., & Fendell, F.E. (2009). *Modeling wildland fire propagation with level set methods.* Computers & Mathematics with Applications.
+- Lautenberger, C. (2013). *Wildland fire modeling with an Eulerian level set method and automated calibration.* Fire Safety Journal, 62, 289–298. (ELMFIRE — Superbee flux limiter approach)
+- Jiang, G.-S. & Peng, D. (2000). *Weighted ENO schemes for Hamilton-Jacobi equations.* SIAM J. Scientific Computing, 21(6), 2126–2143. (WENO5 for level set methods)

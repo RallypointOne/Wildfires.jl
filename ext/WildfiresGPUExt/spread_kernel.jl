@@ -41,7 +41,10 @@ end
 #-----------------------------------------------------------------------------# GPU simulate!
 
 function SpreadModel.simulate!(grid::LevelSetGrid{T, <:AbstractGPUArray}, model;
-                               steps::Int=100, dt=nothing, cfl=0.5, reinit_every::Int=10, burnout=nothing, burnin=nothing, trace=nothing, progress::Bool=false) where {T}
+                               steps::Int=100, dt=nothing, cfl=0.5, reinit_every::Int=10, burnout=nothing, burnin=nothing, trace=nothing, progress::Bool=false, solver::LevelSet.AbstractSolver=LevelSet.Godunov(), curvature=0.0, reinit::LevelSet.AbstractReinitMethod=LevelSet.IterativeReinit()) where {T}
+    solver isa LevelSet.Superbee && error("Superbee solver is not yet supported on GPU. Use Godunov() or run on CPU.")
+    solver isa LevelSet.WENO5 && error("WENO5 solver is not yet supported on GPU. Use Godunov() or run on CPU.")
+    reinit isa LevelSet.NewtonReinit && error("NewtonReinit is not yet supported on GPU. Use IterativeReinit() or run on CPU.")
     bo = SpreadModel._coerce_burnout(burnout)
     bi = SpreadModel._coerce_burnin(burnin)
     F_gpu = similar(grid.φ)
@@ -50,10 +53,10 @@ function SpreadModel.simulate!(grid::LevelSetGrid{T, <:AbstractGPUArray}, model;
         SpreadModel.spread_rate_field!(F_gpu, model, grid)
         _gpu_scale_burnout!(F_gpu, grid, bo)
         _gpu_scale_burnin!(F_gpu, grid, bi)
-        step_dt = dt === nothing ? LevelSet.cfl_dt(grid, F_gpu; cfl=cfl) : dt
+        step_dt = dt === nothing ? LevelSet.cfl_dt(grid, F_gpu; cfl=cfl, curvature=curvature) : dt
         SpreadModel.update!(model, grid, step_dt)
-        LevelSet.advance!(grid, F_gpu, step_dt)
-        step % reinit_every == 0 && LevelSet.reinitialize!(grid)
+        LevelSet.advance!(grid, F_gpu, step_dt, solver)
+        step % reinit_every == 0 && LevelSet.reinitialize!(grid, reinit)
         trace !== nothing && step % trace.every == 0 && SpreadModel._record!(trace, grid)
         progress && step % max(1, steps ÷ 100) == 0 && SpreadModel._print_progress(step, steps, grid)
     end

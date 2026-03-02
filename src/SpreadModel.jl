@@ -8,10 +8,15 @@ export UniformWind, UniformMoisture, UniformSlope, FlatTerrain, DynamicMoisture
 export FireSpreadModel, spread_rate_field!, simulate!, fire_loss, update!
 export AbstractDirectionalModel, CosineBlending, EllipticalBlending
 export length_to_breadth, fire_eccentricity
+export AbstractSolver, Godunov, Superbee, WENO5
+export AbstractReinitMethod, IterativeReinit, NewtonReinit
 export Trace
 
 using ..Rothermel: Rothermel as RothermelModel, FuelClasses, rate_of_spread
-using ..LevelSet: LevelSetGrid, xcoords, ycoords, ignite!, advance!, reinitialize!, cfl_dt
+using ..LevelSet: LevelSetGrid, xcoords, ycoords, ignite!, advance!, reinitialize!, cfl_dt,
+    AbstractSolver, Godunov, Superbee, WENO5,
+    AbstractReinitMethod, IterativeReinit, NewtonReinit,
+    _curvature, _phi_safe
 using ..Components: AbstractWind, AbstractMoisture, AbstractTerrain,
     AbstractSpotting, AbstractSuppression, AbstractBurnout, AbstractBurnin,
     NoBurnout, ExponentialBurnout, LinearBurnout,
@@ -284,7 +289,7 @@ end
 
 #-----------------------------------------------------------------------------# simulate!
 """
-    simulate!(grid::LevelSetGrid, model; steps=100, dt=nothing, cfl=0.5, reinit_every=10, burnout=nothing, burnin=nothing, trace=nothing, progress=false)
+    simulate!(grid::LevelSetGrid, model; steps=100, dt=nothing, cfl=0.5, reinit_every=10, burnout=nothing, burnin=nothing, trace=nothing, progress=false, solver=Godunov(), curvature=0.0, reinit=IterativeReinit())
 
 Run the level set simulation using a `FireSpreadModel` to compute spread rates.
 
@@ -312,6 +317,18 @@ Available models: [`NoBurnin`](@ref) (default, instant full intensity),
 [`ExponentialBurnin(τ)`](@ref) (exponential ramp-up), [`LinearBurnin(τ)`](@ref) (linear ramp-up).
 
 The total scaling at each cell is `burnin(t) * burnout(t)`.
+
+# Curvature Regularization
+
+Pass `curvature > 0` to penalize high curvature of the fire front.  The effective
+spread rate becomes `max(F - b·κ, 0)` where `b` is the curvature coefficient and
+`κ` is the mean curvature at each cell.  This smooths the fire front by reducing
+speed at convex bulges and increasing it at concave indentations.
+
+# Reinitialization
+
+Pass `reinit` as an [`AbstractReinitMethod`](@ref) to select the reinitialization
+algorithm: [`IterativeReinit`](@ref) (default) or [`NewtonReinit`](@ref).
 
 # Trace
 
@@ -341,6 +358,12 @@ simulate!(grid, model, steps=100, burnout=ExponentialBurnout(residence_time(SHOR
 # With burn-in (prevents instant propagation from freshly ignited cells)
 simulate!(grid, model, steps=100, burnin=ExponentialBurnin(0.5))
 
+# With curvature regularization
+simulate!(grid, model, steps=100, curvature=5.0)
+
+# With Newton reinitialization
+simulate!(grid, model, steps=100, reinit=NewtonReinit())
+
 # With trace for animation
 trace = Trace(grid, 10)
 simulate!(grid, model, steps=100, trace=trace)
@@ -349,7 +372,7 @@ simulate!(grid, model, steps=100, trace=trace)
 simulate!(grid, model, steps=1000, progress=true)
 ```
 """
-function simulate!(grid::LevelSetGrid, model; steps::Int=100, dt=nothing, cfl=0.5, reinit_every::Int=10, burnout=nothing, burnin=nothing, trace=nothing, progress::Bool=false)
+function simulate!(grid::LevelSetGrid, model; steps::Int=100, dt=nothing, cfl=0.5, reinit_every::Int=10, burnout=nothing, burnin=nothing, trace=nothing, progress::Bool=false, solver::AbstractSolver=Godunov(), curvature=0.0, reinit::AbstractReinitMethod=IterativeReinit())
     bo = _coerce_burnout(burnout)
     bi = _coerce_burnin(burnin)
     F = similar(grid.φ)
@@ -357,10 +380,11 @@ function simulate!(grid::LevelSetGrid, model; steps::Int=100, dt=nothing, cfl=0.
         spread_rate_field!(F, model, grid)
         _scale_burnout!(F, grid, bo)
         _scale_burnin!(F, grid, bi)
-        step_dt = dt === nothing ? cfl_dt(grid, F; cfl=cfl) : dt
+        curvature > 0 && _apply_curvature!(F, grid, curvature)
+        step_dt = dt === nothing ? cfl_dt(grid, F; cfl=cfl, curvature=curvature) : dt
         update!(model, grid, step_dt)
-        advance!(grid, F, step_dt)
-        step % reinit_every == 0 && reinitialize!(grid)
+        advance!(grid, F, step_dt, solver)
+        step % reinit_every == 0 && reinitialize!(grid, reinit)
         trace !== nothing && step % trace.every == 0 && _record!(trace, grid)
         progress && step % max(1, steps ÷ 100) == 0 && _print_progress(step, steps, grid)
     end
@@ -403,6 +427,19 @@ function _scale_burnin!(F, grid, bi::AbstractBurnin)
         if isfinite(t_ig)
             F[i, j] *= bi(grid.t - t_ig)
         end
+    end
+end
+
+#-----------------------------------------------------------------------------# Curvature regularization
+function _apply_curvature!(F, grid, b)
+    φ = grid.φ
+    ny, nx = size(φ)
+    dx, dy = grid.dx, grid.dy
+    bc = grid.bc
+    z = zero(eltype(F))
+    for j in 1:nx, i in 1:ny
+        κ = _curvature(φ, i, j, ny, nx, dx, dy, bc)
+        F[i, j] = max(F[i, j] - b * κ, z)
     end
 end
 
