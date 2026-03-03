@@ -244,32 +244,31 @@ This is useful for representing water bodies, roads, fuel breaks, and pre-existi
 
 ```{julia}
 M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=0.0), UniformMoisture(M), FlatTerrain())
 
 fig = Figure(size=(700, 300))
 
 # Without fuel break
 g1 = LevelSetGrid(200, 200, dx=30.0)
 ignite!(g1, 3000.0, 3000.0, 50.0)
-m1 = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
-simulate!(g1, m1, steps=100, dt=0.5)
+simulate!(g1, model, steps=200, dt=0.5)
 ax1 = Axis(fig[1, 1], title="No fuel break", aspect=DataAspect())
 fireplot!(ax1, g1)
 hidedecorations!(ax1)
 
-# With fuel break (unburnable strip)
+# With fuel break (unburnable vertical strip)
 g2 = LevelSetGrid(200, 200, dx=30.0)
 ignite!(g2, 3000.0, 3000.0, 50.0)
-# Mark a vertical strip as unburnable
 xs = xcoords(g2)
 for j in eachindex(xs)
-    if 3400.0 <= xs[j] <= 3500.0
+    if 3300.0 <= xs[j] <= 3420.0
         g2.t_ignite[:, j] .= NaN
     end
 end
-m2 = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
-simulate!(g2, m2, steps=100, dt=0.5)
+simulate!(g2, model, steps=200, dt=0.5)
 ax2 = Axis(fig[1, 2], title="With fuel break", aspect=DataAspect())
 fireplot!(ax2, g2)
+vspan!(ax2, 3300.0, 3420.0, color=(:black, 0.15))
 hidedecorations!(ax2)
 fig
 ```
