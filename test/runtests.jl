@@ -11,7 +11,10 @@ using Wildfires.SpreadModel: FireSpreadModel, UniformWind, UniformMoisture, Flat
     UniformSlope, DynamicMoisture, spread_rate_field!, simulate!, update!,
     CosineBlending, EllipticalBlending, length_to_breadth, fire_eccentricity,
     NoBurnout, ExponentialBurnout, LinearBurnout,
-    NoBurnin, ExponentialBurnin, LinearBurnin
+    NoBurnin, ExponentialBurnin, LinearBurnin,
+    directional_speed
+using Wildfires.ArrivalTime: estimate_arrival_times, isochrones, perimeter_to_grid,
+    hausdorff_distance, jaccard_index, sorensen_dice, area_error
 using Adapt
 using KernelAbstractions, GPUArraysCore
 using Test
@@ -969,6 +972,247 @@ const ALL_FUELS = [
             model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
             simulate!(grid, model, steps=10, dt=0.5)
             @test grid.t ≈ 5.0
+        end
+    end
+
+    @testset "Arrival Time Estimation" begin
+        @testset "circular fire: arrival times proportional to distance" begin
+            grid = LevelSetGrid(80, 80, dx=20.0)
+            ignite!(grid, 800.0, 800.0, 300.0)
+            T = estimate_arrival_times(grid, 800.0, 800.0, 100.0)
+            # Ignition point should have arrival time ≈ 0
+            xs = collect(xcoords(grid))
+            ys = collect(ycoords(grid))
+            ci = argmin(abs.(ys .- 800.0))
+            cj = argmin(abs.(xs .- 800.0))
+            @test T[ci, cj] ≈ 0.0
+            # Unburned cells should be Inf
+            for j in axes(T, 2), i in axes(T, 1)
+                if grid.φ[i, j] >= 0
+                    @test isinf(T[i, j])
+                else
+                    @test isfinite(T[i, j])
+                end
+            end
+            # Arrival times should increase with distance from center
+            near_r = T[ci, cj + 3]
+            far_r = T[ci, cj + 10]
+            @test near_r < far_r
+        end
+
+        @testset "isochrones are nested" begin
+            grid = LevelSetGrid(80, 80, dx=20.0)
+            ignite!(grid, 800.0, 800.0, 300.0)
+            T = estimate_arrival_times(grid, 800.0, 800.0, 100.0)
+            snaps = isochrones(grid, T, [25.0, 50.0, 75.0, 100.0])
+            @test length(snaps) == 4
+            # Each subsequent snapshot should have >= burned area
+            areas = [burn_area(s) for s in snaps]
+            for k in 2:length(areas)
+                @test areas[k] >= areas[k - 1]
+            end
+            # First snapshot should have some burn
+            @test areas[1] > 0
+        end
+
+        @testset "forward simulation comparison" begin
+            M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=0.0), UniformMoisture(M), FlatTerrain())
+            grid = LevelSetGrid(60, 60, dx=30.0)
+            ignite!(grid, 900.0, 900.0, 50.0)
+            simulate!(grid, model, steps=100, dt=0.5)
+            duration = grid.t
+
+            T = estimate_arrival_times(grid, 900.0, 900.0, duration)
+            # Isochrones at full duration should closely match final perimeter
+            snap_full = isochrones(grid, T, [duration])
+            J = jaccard_index(snap_full[1], grid)
+            @test J > 0.8
+            # Mid-time isochrone should have less area than full
+            snaps = isochrones(grid, T, [duration / 2, duration])
+            @test burn_area(snaps[1]) < burn_area(snaps[2])
+        end
+
+        @testset "estimate_arrival_times with model weights" begin
+            grid = LevelSetGrid(60, 60, dx=20.0)
+            ignite!(grid, 600.0, 600.0, 200.0)
+            const_model = (t, x, y) -> 5.0
+            T1 = estimate_arrival_times(grid, 600.0, 600.0, 100.0)
+            T2 = estimate_arrival_times(grid, 600.0, 600.0, 100.0; model=const_model, normalize=true)
+            # With uniform model, results should be similar (same relative distances)
+            # Both should have same burned/unburned pattern
+            for j in axes(T1, 2), i in axes(T1, 1)
+                @test isinf(T1[i, j]) == isinf(T2[i, j])
+            end
+        end
+
+        @testset "directional_speed function" begin
+            M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0, direction=0.0),
+                                    UniformMoisture(M), FlatTerrain())
+            # Wind direction=0.0 pushes fire in -x direction (push = (-1, 0))
+            # Head-fire normal aligns with push direction
+            R_head = directional_speed(model, 0.0, 0.0, 0.0, -1.0, 0.0)
+            # Isotropic rate (model call returns head-fire rate)
+            R_iso = model(0.0, 0.0, 0.0)
+            @test R_head ≈ R_iso  # head-fire rate matches isotropic call
+            # Flanking direction (perpendicular to wind push)
+            R_flank = directional_speed(model, 0.0, 0.0, 0.0, 0.0, 1.0)
+            @test R_flank < R_head  # flanking is slower than head fire
+            @test R_flank > 0       # flanking is still positive
+        end
+
+        @testset "directional awareness: wind" begin
+            M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+            # Wind direction=0.0 pushes fire in -x direction (lower j)
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0, direction=0.0),
+                                    UniformMoisture(M), FlatTerrain())
+            grid = LevelSetGrid(80, 80, dx=20.0)
+            ignite!(grid, 800.0, 800.0, 300.0)
+            T = estimate_arrival_times(grid, 800.0, 800.0, 100.0; model=model, normalize=true)
+            xs = collect(xcoords(grid))
+            ys = collect(ycoords(grid))
+            ci = argmin(abs.(ys .- 800.0))
+            cj = argmin(abs.(xs .- 800.0))
+            # Downwind cell (west = lower j) should arrive earlier than
+            # crosswind cell (north/south = different i) at same distance
+            offset = 5
+            if isfinite(T[ci, cj - offset]) && isfinite(T[ci + offset, cj])
+                @test T[ci, cj - offset] < T[ci + offset, cj]
+            end
+        end
+
+        @testset "directional awareness: slope" begin
+            M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+            # Slope aspect=π pushes fire uphill in +x direction (higher j)
+            model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=0.0),
+                                    UniformMoisture(M), UniformSlope(slope=0.6, aspect=π))
+            grid = LevelSetGrid(80, 80, dx=20.0)
+            ignite!(grid, 800.0, 800.0, 300.0)
+            T = estimate_arrival_times(grid, 800.0, 800.0, 100.0; model=model, normalize=true)
+            xs = collect(xcoords(grid))
+            ys = collect(ycoords(grid))
+            ci = argmin(abs.(ys .- 800.0))
+            cj = argmin(abs.(xs .- 800.0))
+            # Uphill (east = higher j) should arrive earlier than cross-slope (north/south)
+            offset = 5
+            if isfinite(T[ci, cj + offset]) && isfinite(T[ci + offset, cj])
+                @test T[ci, cj + offset] < T[ci + offset, cj]
+            end
+        end
+
+        @testset "normalize keyword" begin
+            grid = LevelSetGrid(60, 60, dx=20.0)
+            ignite!(grid, 600.0, 600.0, 200.0)
+            duration = 100.0
+            # normalize=true: values in [0, time_of_max_extent]
+            T_norm = estimate_arrival_times(grid, 600.0, 600.0, duration; normalize=true)
+            finite_vals = filter(isfinite, T_norm)
+            @test minimum(finite_vals) ≈ 0.0
+            @test maximum(finite_vals) ≈ duration
+            # normalize=false: raw distances (meters for no model)
+            T_raw = estimate_arrival_times(grid, 600.0, 600.0, duration; normalize=false)
+            finite_raw = filter(isfinite, T_raw)
+            @test minimum(finite_raw) ≈ 0.0
+            # Raw distances should be in meters, not normalized to duration
+            @test maximum(finite_raw) != duration  # not the same as normalized
+        end
+
+        @testset "backward compatibility: model=nothing" begin
+            grid = LevelSetGrid(60, 60, dx=20.0)
+            ignite!(grid, 600.0, 600.0, 200.0)
+            # Default model=nothing should produce normalized results (same as before)
+            T = estimate_arrival_times(grid, 600.0, 600.0, 100.0)
+            finite_vals = filter(isfinite, T)
+            @test minimum(finite_vals) ≈ 0.0
+            @test maximum(finite_vals) ≈ 100.0  # normalized to duration
+        end
+    end
+
+    @testset "Perimeter to Grid" begin
+        @testset "square polygon round-trip" begin
+            verts = [(100.0, 100.0), (300.0, 100.0), (300.0, 300.0), (100.0, 300.0)]
+            grid = perimeter_to_grid(verts, 50, 50; dx=5.0)
+            # Center of polygon should be burned
+            xs = collect(xcoords(grid))
+            ys = collect(ycoords(grid))
+            ci = argmin(abs.(ys .- 200.0))
+            cj = argmin(abs.(xs .- 200.0))
+            @test grid.φ[ci, cj] < 0
+            # Far outside should be unburned
+            @test grid.φ[1, 1] > 0
+            # Should have some burned area
+            @test burn_area(grid) > 0
+        end
+
+        @testset "triangle polygon" begin
+            verts = [(0.0, 0.0), (200.0, 0.0), (100.0, 200.0)]
+            grid = perimeter_to_grid(verts, 40, 40; dx=8.0)
+            @test burn_area(grid) > 0
+            # Centroid should be inside
+            xs = collect(xcoords(grid))
+            ys = collect(ycoords(grid))
+            ci = argmin(abs.(ys .- 66.0))
+            cj = argmin(abs.(xs .- 100.0))
+            @test grid.φ[ci, cj] < 0
+        end
+    end
+
+    @testset "Validation Metrics" begin
+        @testset "identical grids: perfect scores" begin
+            grid = LevelSetGrid(30, 30, dx=30.0)
+            ignite!(grid, 450.0, 450.0, 100.0)
+            @test jaccard_index(grid, grid) ≈ 1.0
+            @test sorensen_dice(grid, grid) ≈ 1.0
+            @test area_error(grid, grid) ≈ 0.0
+            @test hausdorff_distance(grid, grid) ≈ 0.0
+        end
+
+        @testset "no overlap: zero scores" begin
+            grid_a = LevelSetGrid(40, 40, dx=30.0)
+            ignite!(grid_a, 200.0, 200.0, 50.0)
+            grid_b = LevelSetGrid(40, 40, dx=30.0)
+            ignite!(grid_b, 1000.0, 1000.0, 50.0)
+            @test jaccard_index(grid_a, grid_b) ≈ 0.0
+            @test sorensen_dice(grid_a, grid_b) ≈ 0.0
+        end
+
+        @testset "partial overlap gives intermediate scores" begin
+            grid_a = LevelSetGrid(50, 50, dx=30.0)
+            ignite!(grid_a, 750.0, 750.0, 200.0)
+            grid_b = LevelSetGrid(50, 50, dx=30.0)
+            ignite!(grid_b, 750.0, 750.0, 250.0)
+            J = jaccard_index(grid_a, grid_b)
+            D = sorensen_dice(grid_a, grid_b)
+            @test 0.0 < J < 1.0
+            @test 0.0 < D < 1.0
+            @test D > J  # Sorensen-Dice >= Jaccard for same overlap
+        end
+
+        @testset "area_error sign" begin
+            grid_small = LevelSetGrid(30, 30, dx=30.0)
+            ignite!(grid_small, 450.0, 450.0, 50.0)
+            grid_large = LevelSetGrid(30, 30, dx=30.0)
+            ignite!(grid_large, 450.0, 450.0, 200.0)
+            @test area_error(grid_large, grid_small) > 0  # large has more area
+            @test area_error(grid_small, grid_large) < 0  # small has less area
+        end
+
+        @testset "hausdorff_distance bounded" begin
+            grid_a = LevelSetGrid(50, 50, dx=30.0)
+            ignite!(grid_a, 750.0, 750.0, 200.0)
+            grid_b = LevelSetGrid(50, 50, dx=30.0)
+            ignite!(grid_b, 750.0, 750.0, 250.0)
+            d = hausdorff_distance(grid_a, grid_b)
+            @test 0.0 < d < 200.0  # should be roughly 50m (the radius difference)
+        end
+
+        @testset "no burned cells" begin
+            grid_a = LevelSetGrid(10, 10, dx=30.0)
+            grid_b = LevelSetGrid(10, 10, dx=30.0)
+            @test jaccard_index(grid_a, grid_b) ≈ 1.0  # both empty = perfect agreement
+            @test sorensen_dice(grid_a, grid_b) ≈ 1.0
+            @test area_error(grid_a, grid_b) ≈ 0.0
         end
     end
 

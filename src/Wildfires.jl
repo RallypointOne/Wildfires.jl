@@ -5,7 +5,13 @@ include("LevelSet.jl")
 include("Components.jl")
 include("CellularAutomata.jl")
 include("SpreadModel.jl")
+include("ArrivalTime.jl")
 include("PINNTypes.jl")
+
+using .ArrivalTime: estimate_arrival_times, isochrones, perimeter_to_grid,
+    hausdorff_distance, jaccard_index, sorensen_dice, area_error
+export estimate_arrival_times, isochrones, perimeter_to_grid
+export hausdorff_distance, jaccard_index, sorensen_dice, area_error
 
 using .PINNTypes: AbstractPINNConfig, PINNConfig, NeuralPDEConfig, PINNSolution
 export AbstractPINNConfig, PINNConfig, NeuralPDEConfig, PINNSolution

@@ -5,7 +5,7 @@ export AbstractSpotting, AbstractSuppression, AbstractBurnout, AbstractBurnin
 export NoBurnout, ExponentialBurnout, LinearBurnout
 export NoBurnin, ExponentialBurnin, LinearBurnin
 export UniformWind, UniformMoisture, UniformSlope, FlatTerrain, DynamicMoisture
-export FireSpreadModel, spread_rate_field!, simulate!, fire_loss, update!
+export FireSpreadModel, spread_rate_field!, simulate!, fire_loss, update!, directional_speed
 export AbstractDirectionalModel, CosineBlending, EllipticalBlending
 export length_to_breadth, fire_eccentricity
 export AbstractSolver, Godunov, Superbee, WENO5
@@ -87,6 +87,28 @@ function update!(model::FireSpreadModel, grid::LevelSetGrid, dt)
     update!(model.wind, grid, dt)
     update!(model.moisture, grid, dt)
     update!(model.terrain, grid, dt)
+end
+
+#-----------------------------------------------------------------------------# directional_speed
+"""
+    directional_speed(model::FireSpreadModel, t, x, y, nx, ny)
+
+Compute the direction-dependent spread rate [m/min] for the given fire propagation
+direction `(nx, ny)`.
+
+`(nx, ny)` is the unit normal of the fire front (same convention as `∇φ/|∇φ|` in
+[`spread_rate_field!`](@ref)).  The spread rate varies with the angle between the
+propagation direction and the combined wind/slope push direction, using the model's
+`directional` blending strategy ([`CosineBlending`](@ref) or [`EllipticalBlending`](@ref)).
+
+### Examples
+```julia
+model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+directional_speed(model, 0.0, 100.0, 100.0, 1.0, 0.0)  # speed in +x direction
+```
+"""
+function directional_speed(model::FireSpreadModel, t, x, y, nx, ny)
+    _directional_rate(model, model.directional, t, x, y, nx, ny)
 end
 
 #-----------------------------------------------------------------------------# spread_rate_field!

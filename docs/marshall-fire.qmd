@@ -1,0 +1,336 @@
+---
+title: "Case Study: Marshall Fire"
+engine: julia
+---
+
+```{julia}
+#| echo: false
+#| output: false
+using Wildfires
+using Wildfires.Rothermel
+using Wildfires.LevelSet
+using Wildfires.SpreadModel
+using CairoMakie
+using Dates
+using Rasters, ArchGDAL, GeoSurrogates
+import GeoJSON as GJ
+import GeoInterface as GI
+
+const DATADIR = joinpath(@__DIR__, "data", "marshall")
+include(joinpath(DATADIR, "manifest.jl"))
+```
+
+The [Marshall Fire](https://en.wikipedia.org/wiki/Marshall_Fire) ignited on December 30, 2021 near Boulder, Colorado during an extreme Chinook wind event. Sustained winds of 100+ mph drove the fire through grassland into suburban neighborhoods, burning over 6,000 acres and destroying more than 1,000 homes in just a few hours. It remains the most destructive wildfire in Colorado history by structure count.
+
+This case study demonstrates how to integrate real geospatial data sources with Wildfires.jl's component interface to simulate the Marshall Fire's early spread.
+
+## Loading Geospatial Data
+
+Pre-processed [LANDFIRE](https://landfire.gov) terrain rasters and [HRRR](https://rapidrefresh.noaa.gov/hrrr/) wind data are stored as GeoTIFF files. We load them with [Rasters.jl](https://github.com/rafaqz/Rasters.jl) and wrap them with `GeoSurrogates.RasterWrap` for fast bilinear interpolation.
+
+```{julia}
+# Load LANDFIRE terrain rasters
+slope_raster     = Raster(joinpath(DATADIR, "slope.tif"))
+aspect_raster    = Raster(joinpath(DATADIR, "aspect.tif"))
+elevation_raster = Raster(joinpath(DATADIR, "elevation.tif"))
+
+# Wrap with bilinear interpolation for smooth spatial lookups
+slope_wrap = RasterWrap(slope_raster)
+aspect_wrap = RasterWrap(aspect_raster)
+elevation_wrap = RasterWrap(elevation_raster)
+nothing
+```
+
+```{julia}
+#| echo: false
+# Terrain elevation plot
+fig = Figure(size=(650, 400))
+ax = Axis(fig[1, 1], title="Terrain Elevation (m)", aspect=DataAspect(),
+    xlabel="Longitude", ylabel="Latitude")
+xs = collect(lookup(elevation_raster, X))
+ys = collect(lookup(elevation_raster, Y))
+hm = heatmap!(ax, xs, ys, Matrix(elevation_raster)'; colormap=:terrain)
+Colorbar(fig[1, 2], hm, label="Elevation (m)")
+
+# Mark ignition point
+scatter!(ax, [IGNITION_POINT.lon], [IGNITION_POINT.lat];
+    color=:red, markersize=12, marker=:star5, strokewidth=1, strokecolor=:black)
+text!(ax, IGNITION_POINT.lon + 0.003, IGNITION_POINT.lat;
+    text="Ignition", fontsize=11, color=:red)
+
+fig
+```
+
+## HRRR Wind Field
+
+HRRR provides hourly u/v wind components at ~3 km resolution. We load three snapshots (17:00–19:00 UTC) and build a `WindField` that interpolates in both space and time.
+
+```{julia}
+struct WindField
+    times::Vector{DateTime}
+    u_wraps::Vector{<:RasterWrap}
+    v_wraps::Vector{<:RasterWrap}
+end
+
+function load_wind_field(datadir, hours, times)
+    u_wraps = [RasterWrap(Raster(joinpath(datadir, "wind_u_$(lpad(h, 2, '0')).tif"))) for h in hours]
+    v_wraps = [RasterWrap(Raster(joinpath(datadir, "wind_v_$(lpad(h, 2, '0')).tif"))) for h in hours]
+    WindField(times, u_wraps, v_wraps)
+end
+
+function wind_uv(wf::WindField, lon, lat, dt::DateTime)
+    times = wf.times
+    if dt <= first(times)
+        u = predict(wf.u_wraps[1], (lon, lat))
+        v = predict(wf.v_wraps[1], (lon, lat))
+        return (u=u, v=v)
+    elseif dt >= last(times)
+        u = predict(wf.u_wraps[end], (lon, lat))
+        v = predict(wf.v_wraps[end], (lon, lat))
+        return (u=u, v=v)
+    end
+    i = searchsortedlast(times, dt)
+    t1, t2 = times[i], times[i + 1]
+    alpha = Dates.value(dt - t1) / Dates.value(t2 - t1)
+    u = (1 - alpha) * predict(wf.u_wraps[i], (lon, lat)) + alpha * predict(wf.u_wraps[i + 1], (lon, lat))
+    v = (1 - alpha) * predict(wf.v_wraps[i], (lon, lat)) + alpha * predict(wf.v_wraps[i + 1], (lon, lat))
+    return (u=u, v=v)
+end
+
+wind_field = load_wind_field(DATADIR, [17, 18, 19], WIND_TIMES)
+nothing
+```
+
+## Custom Components
+
+To plug real data into the simulation, we define custom `AbstractWind` and `AbstractTerrain` subtypes. These convert from the simulation's local meter-based grid to geographic (lon/lat) coordinates for spatial lookups.
+
+```{julia}
+struct MarshallWind <: AbstractWind
+    field::WindField
+    start_time::DateTime
+    lon0::Float64
+    lat0::Float64
+    adjustment::Float64  # 10m wind → midflame adjustment
+end
+
+function (w::MarshallWind)(t, x, y)
+    lon = w.lon0 + x / M_PER_DEG_LON
+    lat = w.lat0 + y / M_PER_DEG_LAT
+    dt = w.start_time + Second(round(Int, t * 60))
+    uv = wind_uv(w.field, lon, lat, dt)
+    speed_kmh = hypot(uv.u, uv.v) * 3.6 * w.adjustment
+    direction = atan(uv.u, uv.v)  # FROM direction (meteorological convention)
+    return (speed_kmh, direction)
+end
+
+struct MarshallTerrain <: AbstractTerrain
+    slp_wrap::RasterWrap
+    asp_wrap::RasterWrap
+    lon0::Float64
+    lat0::Float64
+end
+
+function (t::MarshallTerrain)(_, x, y)
+    lon = t.lon0 + x / M_PER_DEG_LON
+    lat = t.lat0 + y / M_PER_DEG_LAT
+    slp_deg = predict(t.slp_wrap, (lon, lat))
+    slope = tan(deg2rad(clamp(slp_deg, 0.0, 80.0)))
+    aspect = deg2rad(predict(t.asp_wrap, (lon, lat)))
+    return (slope, aspect)
+end
+nothing
+```
+
+## Simulation
+
+We set up a level set grid covering the Marshall Fire extent (~8.7 km x 6.3 km at 30 m resolution) and run a 2-hour simulation using short grass fuel with the Chinook wind field.
+
+```{julia}
+# Grid setup: 290 x 210 cells at 30m
+nx, ny = 290, 210
+dx = 30.0
+
+# Offsets so ignition point (0, 0) maps to IGNITION_POINT in lon/lat
+x0 = -(IGNITION_POINT.lon - EXTENT.X[1]) * M_PER_DEG_LON
+y0 = -(IGNITION_POINT.lat - EXTENT.Y[1]) * M_PER_DEG_LAT
+
+g = LevelSetGrid(nx, ny, dx=dx, x0=x0, y0=y0)
+ignite!(g, 0.0, 0.0, 60.0)
+
+# Components
+wind = MarshallWind(wind_field, DateTime(2021, 12, 30, 17), IGNITION_POINT.lon, IGNITION_POINT.lat, 0.36)
+terrain = MarshallTerrain(slope_wrap, aspect_wrap, IGNITION_POINT.lon, IGNITION_POINT.lat)
+moisture = UniformMoisture(FuelClasses(d1=0.03, d10=0.04, d100=0.05, herb=0.30, wood=0.50))
+
+model = FireSpreadModel(SHORT_GRASS, wind, moisture, terrain, EllipticalBlending())
+
+# Run simulation with trace for animation (auto CFL time stepping)
+trace = Trace(g, 5)
+simulate!(g, model, steps=600, trace=trace)
+println("Simulation complete: t = $(round(g.t, digits=1)) min, burned = $(count(<(0), g.φ)) cells")
+```
+
+## Animation
+
+```{julia}
+#| echo: false
+# Load observed perimeter (MultiPolygon with multiple rings)
+perimeter_fc = GJ.read(read(joinpath(DATADIR, "perimeter.geojson")))
+perim_geom = GI.geometry(first(perimeter_fc))
+perim_coords = GI.coordinates(perim_geom)
+
+# Convert all polygon outer rings to grid meters
+perim_rings = Vector{Tuple{Vector{Float64}, Vector{Float64}}}()
+for polygon in perim_coords
+    ring = first(polygon)  # outer ring
+    px = [(c[1] - IGNITION_POINT.lon) * M_PER_DEG_LON for c in ring]
+    py = [(c[2] - IGNITION_POINT.lat) * M_PER_DEG_LAT for c in ring]
+    push!(perim_rings, (px, py))
+end
+
+# Compute colorrange (filter non-finite values)
+v = maximum(trace.stack) do (t, phi)
+    vals = filter(isfinite, phi)
+    isempty(vals) ? 1.0 : max(abs(minimum(vals)), abs(maximum(vals)))
+end
+v = isfinite(v) ? v : 1.0
+
+fig = Figure(size=(700, 500))
+ax = Axis(fig[1, 1], aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)")
+
+xs_grid = collect(xcoords(g))
+ys_grid = collect(ycoords(g))
+
+nframes = length(trace.stack)
+record(fig, joinpath(@__DIR__, "marshall_fire.gif"), 1:nframes; framerate=15) do idx
+    empty!(ax)
+    t, phi = trace.stack[idx]
+    ax.title = "Marshall Fire Simulation — t = $(round(t, digits=1)) min"
+    heatmap!(ax, xs_grid, ys_grid, phi'; colormap=:RdYlGn, colorrange=(-v, v))
+    contour!(ax, xs_grid, ys_grid, phi'; levels=[0.0], color=:yellow, linewidth=2.0)
+    for (px, py) in perim_rings
+        lines!(ax, px, py; color=:white, linewidth=2.0, linestyle=:dash)
+    end
+end
+nothing
+```
+
+Fire spread animation with the observed perimeter (dashed white) overlaid:
+
+![](marshall_fire.gif){fig-align="center"}
+
+## Results
+
+```{julia}
+#| echo: false
+fig = Figure(size=(700, 500))
+ax = Axis(fig[1, 1], title="Simulated vs. Observed Perimeter",
+    aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)")
+
+# Final state heatmap
+t_final, phi_final = trace.stack[end]
+heatmap!(ax, xs_grid, ys_grid, phi_final'; colormap=:RdYlGn, colorrange=(-v, v))
+
+# Simulated fire front
+contour!(ax, xs_grid, ys_grid, phi_final'; levels=[0.0], color=:yellow, linewidth=2.5, label="Simulated (t=$(round(t_final, digits=0)) min)")
+
+# Observed perimeter (all rings)
+for (i, (px, py)) in enumerate(perim_rings)
+    lines!(ax, px, py; color=:white, linewidth=2.5, linestyle=:dash,
+        label=(i == 1 ? "Observed" : nothing))
+end
+
+axislegend(ax, position=:lt)
+fig
+```
+
+## Arrival Time Estimation
+
+After simulation, we can reconstruct when the fire arrived at each burned cell using `estimate_arrival_times`. With a `FireSpreadModel`, the Dijkstra shortest-path solver uses **direction-dependent spread rates** — edges aligned with the wind/slope push direction get lower travel costs than crosswind or backing edges, producing physically realistic arrival times.
+
+```{julia}
+using Wildfires.ArrivalTime: estimate_arrival_times
+
+T = estimate_arrival_times(g, 0.0, 0.0, g.t; model=model)
+max_arrival = maximum(filter(isfinite, T))
+println("Max arrival time: $(round(max_arrival, digits=1)) min")
+```
+
+```{julia}
+#| echo: false
+# Static arrival time heatmap with isochrone contours
+T_plot = copy(T')
+T_plot[isinf.(T_plot)] .= NaN
+
+fig = Figure(size=(700, 500))
+ax = Axis(fig[1, 1], title="Estimated Fire Arrival Times",
+    aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)")
+
+hm = heatmap!(ax, xs_grid, ys_grid, T_plot; colormap=:inferno, nan_color=:gray90)
+Colorbar(fig[1, 2], hm, label="Arrival Time (min)")
+
+# Isochrone contours every 15 minutes
+iso_levels = collect(15.0:15.0:floor(max_arrival))
+if !isempty(iso_levels)
+    contour!(ax, xs_grid, ys_grid, T'; levels=iso_levels, color=(:white, 0.6), linewidth=1.0)
+end
+
+# Observed perimeter
+for (i, (px, py)) in enumerate(perim_rings)
+    lines!(ax, px, py; color=:cyan, linewidth=2.0, linestyle=:dash,
+        label=(i == 1 ? "Observed" : nothing))
+end
+
+axislegend(ax, position=:lt)
+fig
+```
+
+The arrival time field shows the asymmetric fire spread driven by the Chinook winds — the fire reaches the downwind edge much earlier than crosswind areas at the same distance from ignition.
+
+```{julia}
+#| echo: false
+# Animated arrival time reconstruction
+frame_times = range(0, max_arrival, length=60)
+iso_interval = 15.0
+
+fig = Figure(size=(700, 500))
+ax = Axis(fig[1, 1], aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)")
+
+record(fig, joinpath(@__DIR__, "marshall_arrival.gif"), 1:length(frame_times); framerate=15) do idx
+    empty!(ax)
+    t = frame_times[idx]
+    ax.title = "Arrival Time Reconstruction — t = $(round(t, digits=1)) min"
+
+    # Show cells arrived by time t, colored by arrival time
+    masked = copy(T')
+    for i in eachindex(masked)
+        if masked[i] > t || !isfinite(masked[i])
+            masked[i] = NaN
+        end
+    end
+
+    heatmap!(ax, xs_grid, ys_grid, masked;
+        colormap=:inferno, colorrange=(0, max_arrival), nan_color=(:gray90, 0.3))
+
+    # Past isochrone contours
+    past_levels = collect(iso_interval:iso_interval:t)
+    if !isempty(past_levels)
+        contour!(ax, xs_grid, ys_grid, T'; levels=past_levels, color=(:white, 0.5), linewidth=1.0)
+    end
+
+    # Observed perimeter
+    for (px, py) in perim_rings
+        lines!(ax, px, py; color=:cyan, linewidth=2.0, linestyle=:dash)
+    end
+end
+nothing
+```
+
+Arrival time reconstruction showing the fire front propagating through the burn scar:
+
+![](marshall_arrival.gif){fig-align="center"}
+
+::: {.callout-note}
+This simulation uses simplified assumptions (uniform short grass fuel, constant moisture, 10m-to-midflame wind adjustment of 0.36) and covers only the first ~2 hours of a fire that burned for over 24 hours. The real Marshall Fire's rapid spread was intensified by extremely dry conditions (record low humidity), decades of grass accumulation in the wildland-urban interface, and structure-to-structure ignition in neighborhoods — factors not captured in this basic Rothermel surface fire model.
+:::

@@ -33,6 +33,7 @@ book:
         - spreadmodel.qmd
         - cellular-automata.qmd
         - gallery.qmd
+        - marshall-fire.qmd
         - gpu.qmd
         - pinn.qmd
     - part: "API"
