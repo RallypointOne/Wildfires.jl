@@ -29,6 +29,7 @@ book:
         - getting-started.qmd
         - rothermel.qmd
         - levelset.qmd
+        - components.qmd
         - spreadmodel.qmd
         - cellular-automata.qmd
         - gallery.qmd

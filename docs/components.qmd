@@ -1,0 +1,266 @@
+---
+title: "Components"
+engine: julia
+code-fold: true
+---
+
+```{julia}
+#| echo: false
+#| output: false
+using Wildfires
+using Wildfires.Rothermel
+using Wildfires.LevelSet
+using Wildfires.SpreadModel
+using CairoMakie
+
+function printdoc(x)
+    doc = string(Docs.doc(x))
+    doc = replace(doc, r"^# "m => "#### ")
+    println(doc)
+end
+```
+
+The `Components` module defines the abstract interfaces and concrete types used by `SpreadModel` to represent wind, moisture, terrain, burnout, burn-in, and directional spread.  Each component is a callable struct with signature `(t, x, y)` that returns the relevant physical quantity at a given time and location.
+
+## Abstract Interfaces
+
+Every component category has an abstract supertype.  Custom components subtype these and implement the callable interface.
+
+| Abstract Type | Signature | Returns |
+|---------------|-----------|---------|
+| `AbstractWind` | `wind(t, x, y)` | `(speed, direction)` — speed [km/h], direction FROM [rad] |
+| `AbstractMoisture` | `moisture(t, x, y)` | `FuelClasses` — moisture fractions per size class |
+| `AbstractTerrain` | `terrain(t, x, y)` | `(slope, aspect)` — slope [fraction], aspect [rad] |
+| `AbstractBurnout` | `burnout(t_burning)` | `Float64 ∈ [0, 1]` — spread intensity scale factor |
+| `AbstractBurnin` | `burnin(t_burning)` | `Float64 ∈ [0, 1]` — spread intensity ramp-up |
+
+Future interfaces include `AbstractSpotting` (ember transport) and `AbstractSuppression` (fireline construction).
+
+## Wind
+
+```{julia}
+#| echo: false
+#| output: asis
+printdoc(UniformWind)
+```
+
+```{julia}
+#| code-fold: false
+wind = UniformWind(speed=8.0, direction=π/4)
+wind(0.0, 0.0, 0.0)  # (speed, direction)
+```
+
+To create a spatially varying wind field, subtype `AbstractWind`:
+
+```{julia}
+#| code-fold: false
+struct GradientWind <: AbstractWind
+    base_speed::Float64
+    gradient::Float64    # speed increase per meter in x
+    direction::Float64
+end
+
+function (w::GradientWind)(t, x, y)
+    speed = w.base_speed + w.gradient * x
+    (speed, w.direction)
+end
+```
+
+## Moisture
+
+```{julia}
+#| echo: false
+#| output: asis
+printdoc(UniformMoisture)
+```
+
+```{julia}
+#| code-fold: false
+M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+moist = UniformMoisture(M)
+moist(0.0, 0.0, 0.0)
+```
+
+### Dynamic Moisture
+
+```{julia}
+#| echo: false
+#| output: asis
+printdoc(DynamicMoisture)
+```
+
+```{julia}
+#| code-fold: false
+grid = LevelSetGrid(100, 100, dx=30.0)
+ignite!(grid, 1500.0, 1500.0, 200.0)
+M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+dm = DynamicMoisture(grid, M, dry_rate=0.1, recovery_rate=0.001)
+dm(0.0, 1500.0, 1500.0)  # moisture at ignition point
+```
+
+## Terrain
+
+```{julia}
+#| echo: false
+#| output: asis
+printdoc(FlatTerrain)
+```
+
+```{julia}
+#| code-fold: false
+FlatTerrain()(0.0, 0.0, 0.0)  # (slope, aspect)
+```
+
+```{julia}
+#| echo: false
+#| output: asis
+printdoc(UniformSlope)
+```
+
+```{julia}
+#| code-fold: false
+slope = UniformSlope(slope=0.3, aspect=0.0)
+slope(0.0, 0.0, 0.0)
+```
+
+## Burnout
+
+Burnout models scale the spread rate of already-burning cells to simulate fuel exhaustion.
+
+| Type | Behavior |
+|------|----------|
+| `NoBurnout()` | No decay — fire spreads at full intensity indefinitely |
+| `ExponentialBurnout(τ)` | Intensity decays as `exp(-t/τ)` |
+| `LinearBurnout(τ)` | Intensity decreases linearly to zero over `τ` minutes |
+
+```{julia}
+t = 0:0.001:0.05
+bo_exp = ExponentialBurnout(0.01)
+bo_lin = LinearBurnout(0.02)
+
+fig = Figure(size=(600, 300))
+ax = Axis(fig[1, 1], xlabel="Time since ignition (min)", ylabel="Spread intensity",
+    title="Burnout Models")
+lines!(ax, collect(t), bo_exp.(t), label="Exponential (τ=0.01)")
+lines!(ax, collect(t), bo_lin.(t), label="Linear (τ=0.02)")
+hlines!(ax, [1.0], color=:gray, linestyle=:dash, label="No burnout")
+axislegend(ax, position=:rt)
+fig
+```
+
+## Burn-in
+
+Burn-in models ramp up spread intensity after ignition, preventing freshly ignited cells from immediately propagating fire in all directions.
+
+| Type | Behavior |
+|------|----------|
+| `NoBurnin()` | Full intensity immediately upon ignition |
+| `ExponentialBurnin(τ)` | Ramps as `1 - exp(-t/τ)` |
+| `LinearBurnin(τ)` | Linear ramp from `0` to `1` over `τ` minutes |
+
+```{julia}
+t = 0:0.01:5.0
+bi_exp = ExponentialBurnin(1.0)
+bi_lin = LinearBurnin(2.0)
+
+fig = Figure(size=(600, 300))
+ax = Axis(fig[1, 1], xlabel="Time since ignition (min)", ylabel="Spread intensity",
+    title="Burn-in Models")
+lines!(ax, collect(t), bi_exp.(t), label="Exponential (τ=1.0)")
+lines!(ax, collect(t), bi_lin.(t), label="Linear (τ=2.0)")
+hlines!(ax, [1.0], color=:gray, linestyle=:dash, label="No burn-in")
+axislegend(ax, position=:rb)
+fig
+```
+
+## Directional Spread
+
+Directional models control how the head-fire rate of spread varies with angle from the push direction (combined wind + slope vector).
+
+```{julia}
+#| echo: false
+#| output: asis
+printdoc(CosineBlending)
+```
+
+```{julia}
+#| echo: false
+#| output: asis
+printdoc(EllipticalBlending)
+```
+
+### Comparison
+
+```{julia}
+M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+
+g_cos = LevelSetGrid(150, 150, dx=30.0)
+ignite!(g_cos, 2250.0, 2250.0, 200.0)
+m_cos = FireSpreadModel(SHORT_GRASS, UniformWind(speed=10.0), UniformMoisture(M), FlatTerrain())
+simulate!(g_cos, m_cos, steps=200)
+
+g_ell = LevelSetGrid(150, 150, dx=30.0)
+ignite!(g_ell, 2250.0, 2250.0, 200.0)
+m_ell = FireSpreadModel(SHORT_GRASS, UniformWind(speed=10.0), UniformMoisture(M), FlatTerrain(), EllipticalBlending())
+simulate!(g_ell, m_ell, steps=200)
+
+fig = Figure(size=(700, 300))
+ax1 = Axis(fig[1, 1], title="CosineBlending (default)", aspect=DataAspect())
+ax2 = Axis(fig[1, 2], title="EllipticalBlending", aspect=DataAspect())
+heatmap!(ax1, burned(g_cos))
+heatmap!(ax2, burned(g_ell))
+fig
+```
+
+### Length-to-Breadth Ratio
+
+```{julia}
+#| echo: false
+#| output: asis
+printdoc(length_to_breadth)
+```
+
+```{julia}
+U = 0:0.1:10.0
+
+fig = Figure(size=(600, 300))
+ax = Axis(fig[1, 1], xlabel="Wind speed (m/s)", ylabel="Length-to-breadth ratio",
+    title="Fire Shape vs. Wind Speed")
+lines!(ax, collect(U), length_to_breadth.(U, formula=:anderson), label="Anderson (1983)")
+lines!(ax, collect(U), length_to_breadth.(U, formula=:green), label="Green (1983)")
+axislegend(ax, position=:lt)
+fig
+```
+
+## Custom Components
+
+All components follow the same pattern: subtype the abstract type and implement the callable interface.
+
+```{julia}
+#| code-fold: false
+#| eval: false
+struct MyWindField <: AbstractWind
+    data::Matrix{Float64}
+    dx::Float64
+    dy::Float64
+end
+
+function (w::MyWindField)(t, x, y)
+    # Look up wind from gridded data
+    i = clamp(round(Int, y / w.dy), 1, size(w.data, 1))
+    j = clamp(round(Int, x / w.dx), 1, size(w.data, 2))
+    speed = w.data[i, j]
+    direction = 0.0  # always from north
+    (speed, direction)
+end
+```
+
+For dynamic components that evolve with the fire, implement `update!`:
+
+```{julia}
+#| code-fold: false
+#| eval: false
+function SpreadModel.update!(w::MyWindField, grid::LevelSetGrid, dt)
+    # Update wind field based on fire state
+end
+```

@@ -1,6 +1,7 @@
 ---
 title: "Rothermel"
 engine: julia
+code-fold: true
 ---
 
 ```{julia}
@@ -30,6 +31,7 @@ end
 ```
 
 The `Rothermel` module implements the [Rothermel (1972)](https://www.fs.usda.gov/research/treesearch/32533) surface fire spread model, the foundational model used by most US wildfire behavior systems (BehavePlus, FARSITE, ELMFIRE, etc.).
+
 ## How It Works
 
 The model computes the **rate of spread** (m/min) of a surface fire given:
@@ -50,20 +52,9 @@ The fuel model is a **static landscape property** while moisture, wind, and slop
 A container for values across the five Rothermel fuel size classes.
 
 ```{julia}
+#| echo: false
 #| output: asis
 printdoc(FuelClasses)
-```
-
-**Supported operations:**
-
-```{julia}
-fc = FuelClasses(d1=1.0, d10=2.0, d100=3.0, herb=4.0, wood=5.0)
-
-sum(fc)
-```
-
-```{julia}
-map(x -> 2x, fc)
 ```
 
 ### `Rothermel`
@@ -71,6 +62,7 @@ map(x -> 2x, fc)
 The fuel model struct parameterized by the Rothermel (1972) equations.
 
 ```{julia}
+#| echo: false
 #| output: asis
 printdoc(typeof(SHORT_GRASS))
 ```
@@ -228,6 +220,7 @@ fig
 ## Rate of Spread
 
 ```{julia}
+#| echo: false
 #| output: asis
 printdoc(rate_of_spread)
 ```
@@ -235,6 +228,7 @@ printdoc(rate_of_spread)
 ### Example
 
 ```{julia}
+#| code-fold: false
 M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
 rate_of_spread(SHORT_GRASS, moisture=M, wind=8.0, slope=0.0)
 ```
