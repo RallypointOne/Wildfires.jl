@@ -189,6 +189,31 @@ for polygon in perim_coords
     push!(perim_rings, (px, py))
 end
 
+# Build grid from observed perimeter for arrival time estimation
+function _pip(qx, qy, px, py)
+    n, inside, j = length(px), false, length(px)
+    for i in 1:n
+        if ((py[i] > qy) != (py[j] > qy)) &&
+           (qx < (px[j] - px[i]) * (qy - py[i]) / (py[j] - py[i]) + px[i])
+            inside = !inside
+        end
+        j = i
+    end
+    return inside
+end
+
+obs_grid = LevelSetGrid(nx, ny, dx=dx, x0=x0, y0=y0)
+xs_grid = collect(xcoords(obs_grid))
+ys_grid = collect(ycoords(obs_grid))
+for j in axes(obs_grid.φ, 2), i in axes(obs_grid.φ, 1)
+    for (px, py) in perim_rings
+        if _pip(xs_grid[j], ys_grid[i], px, py)
+            obs_grid.φ[i, j] = -1.0
+            break
+        end
+    end
+end
+
 # Compute colorrange (filter non-finite values)
 v = maximum(trace.stack) do (t, phi)
     vals = filter(isfinite, phi)
@@ -198,9 +223,6 @@ v = isfinite(v) ? v : 1.0
 
 fig = Figure(size=(700, 500))
 ax = Axis(fig[1, 1], aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)")
-
-xs_grid = collect(xcoords(g))
-ys_grid = collect(ycoords(g))
 
 nframes = length(trace.stack)
 record(fig, joinpath(@__DIR__, "marshall_fire.gif"), 1:nframes; framerate=15) do idx
@@ -247,12 +269,12 @@ fig
 
 ## Arrival Time Estimation
 
-After simulation, we can reconstruct when the fire arrived at each burned cell using `estimate_arrival_times`. With a `FireSpreadModel`, the Dijkstra shortest-path solver uses **direction-dependent spread rates** — edges aligned with the wind/slope push direction get lower travel costs than crosswind or backing edges, producing physically realistic arrival times.
+Using the observed fire perimeter as the burn scar, we reconstruct when the fire arrived at each cell using `estimate_arrival_times`. With a `FireSpreadModel`, the Dijkstra shortest-path solver uses **direction-dependent spread rates** — edges aligned with the wind/slope push direction get lower travel costs than crosswind or backing edges, producing physically realistic arrival times.
 
 ```{julia}
 using Wildfires.ArrivalTime: estimate_arrival_times
 
-T = estimate_arrival_times(g, 0.0, 0.0, g.t; model=model)
+T = estimate_arrival_times(obs_grid, 0.0, 0.0, g.t; model=model)
 max_arrival = maximum(filter(isfinite, T))
 println("Max arrival time: $(round(max_arrival, digits=1)) min")
 ```
