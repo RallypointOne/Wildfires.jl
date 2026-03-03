@@ -21,7 +21,7 @@ function Makie.convert_arguments(P::Type{<:Union{Makie.Heatmap,Makie.Contour,Mak
 end
 
 #-----------------------------------------------------------------------------# Burnout colormap
-const _FIRE_CMAP = Makie.cgrad([:black, :red, :yellow, :white, :green], [0.0, 0.25, 0.5, 0.75, 1.0])
+const _FIRE_CMAP = Makie.cgrad([:black, :red, :yellow, :gray, :green], [0.0, 0.25, 0.5, 0.6, 1.0])
 
 # Build a [-1, 1] value matrix: burned → negative, unburned → positive
 function _fire_values(φ, t_ignite, t_now, t_r)
