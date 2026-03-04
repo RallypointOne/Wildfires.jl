@@ -2,8 +2,9 @@
 using Dates
 
 # 15-minute HRRR wind snapshots (17:00–19:00 UTC, Dec 30 2021)
-const WIND_TIMES = [DateTime("2021-12-30T$(h):$(lpad(m, 2, '0')):00") for h in 17:19 for m in (0, 15, 30, 45) if !(h == 19 && m > 0)]
-const WIND_SUFFIXES = [lpad(h, 2, '0') * lpad(m, 2, '0') for h in 17:19 for m in (0, 15, 30, 45) if !(h == 19 && m > 0)]
+const _WIND_HM = [(h, m) for h in 17:19 for m in (0, 15, 30, 45) if !(h == 19 && m > 0)]
+const WIND_TIMES = [DateTime("2021-12-30T$(h):$(lpad(m, 2, '0')):00") for (h, m) in _WIND_HM]
+const WIND_SUFFIXES = [lpad(h, 2, '0') * lpad(m, 2, '0') for (h, m) in _WIND_HM]
 
 const EXTENT = (X=(-105.233, -105.131), Y=(39.929, 39.986))
 const IGNITION_POINT = (lon=-105.231, lat=39.955)

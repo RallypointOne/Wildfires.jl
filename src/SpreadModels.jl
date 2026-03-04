@@ -212,7 +212,7 @@ function _push_direction(model::RothermelModel, t, x, y, nx, ny)
     pmag = hypot(px, py)
 
     cos_theta = pmag == 0 ? one(px) : (nx * px + ny * py) / pmag
-    return (; R_head, R_base, speed, cos_theta)
+    return (; R_head, R_base, speed, cos_theta, fuel, moist)
 end
 
 # Cosine blending: R = R_base + (R_head - R_base) * max(0, cos θ)
@@ -259,13 +259,11 @@ end
 # backing (θ=π), with smooth elliptical flanks.
 function _directional_rate(model::RothermelModel, dir::EllipticalBlending,
         t, x, y, nx, ny)
-    (; R_head, R_base, cos_theta) = _push_direction(model, t, x, y, nx, ny)
+    (; R_head, R_base, cos_theta, fuel, moist) = _push_direction(model, t, x, y, nx, ny)
     R_head == 0 && return 0.0
     R_head ≈ R_base && return R_head
 
     # Effective wind speed accounts for both wind and slope
-    fuel = _resolve_fuel(model.fuel, t, x, y)
-    moist = model.moisture(t, x, y)
     U_eff_kmh = _effective_wind_speed(fuel, moist, R_head, R_base)
     U_eff_ms = U_eff_kmh / 3.6
     LB = length_to_breadth(U_eff_ms; formula=dir.formula)
