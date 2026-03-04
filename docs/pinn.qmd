@@ -9,7 +9,7 @@ freeze: auto
 #| output: false
 using Wildfires
 using Wildfires.LevelSet
-using Wildfires.SpreadModel
+using Wildfires.SpreadModels
 using Wildfires.Rothermel
 using Lux, ComponentArrays, ForwardDiff, Zygote, Optimization, OptimizationOptimisers
 using CairoMakie
@@ -25,7 +25,7 @@ $$
 \frac{\partial \varphi}{\partial t} + F(x,y,t)\lvert\nabla \varphi\rvert = 0
 $$
 
-where $F$ is the spread rate from a `FireSpreadModel` or any callable $(t, x, y) \to R$.
+where $F$ is the spread rate from a `RothermelModel` or any callable $(t, x, y) \to R$.
 
 ### Hard Initial Condition Constraint
 

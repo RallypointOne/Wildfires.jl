@@ -9,7 +9,7 @@ engine: julia
 using Wildfires
 using Wildfires.Rothermel
 using Wildfires.LevelSet
-using Wildfires.SpreadModel
+using Wildfires.SpreadModels
 using CairoMakie
 ```
 
@@ -29,10 +29,10 @@ See the [Rothermel](rothermel.qmd) page for details on fuel models and parameter
 
 ## Build a Fire Spread Model
 
-The `SpreadModel` module lets you compose a `FireSpreadModel` from pluggable wind, moisture, and terrain components:
+The `SpreadModels` module lets you compose a `RothermelModel` from pluggable wind, moisture, and terrain components:
 
 ```{julia}
-model = FireSpreadModel(
+model = RothermelModel(
     SHORT_GRASS,                     # fuel model
     UniformWind(speed=8.0),          # 8 km/h wind
     UniformMoisture(moisture),       # uniform moisture from above

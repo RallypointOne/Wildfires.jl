@@ -8,7 +8,7 @@ export AbstractSpotting, AbstractSuppression, AbstractBurnout, AbstractBurnin
 export NoBurnout, ExponentialBurnout, LinearBurnout
 export NoBurnin, ExponentialBurnin, LinearBurnin
 export UniformWind, UniformMoisture, FlatTerrain, UniformSlope, DynamicMoisture
-export AbstractDirectionalModel, CosineBlending, EllipticalBlending
+export AbstractBlendingMode, CosineBlending, EllipticalBlending
 export length_to_breadth, fire_eccentricity
 export update!
 
@@ -18,9 +18,15 @@ export update!
 
 Supertype for wind field components.
 
-Subtypes must be callable as `wind(t, x, y) -> (speed, direction)` where
-`speed` is midflame wind speed [km/h] and `direction` is the direction the
-wind blows FROM [radians].
+## Interface
+
+Subtypes must be callable as `wind(t, x, y) -> (speed, direction)` where:
+- `speed` — midflame wind speed [km/h]
+- `direction` — direction the wind blows FROM [radians]
+
+Optionally implement [`update!`](@ref)`(wind, grid, dt)` for time-varying fields.
+
+Concrete types: [`UniformWind`](@ref).
 """
 abstract type AbstractWind end
 
@@ -29,7 +35,13 @@ abstract type AbstractWind end
 
 Supertype for fuel moisture components.
 
+## Interface
+
 Subtypes must be callable as `moisture(t, x, y) -> FuelClasses`.
+
+Optionally implement [`update!`](@ref)`(moisture, grid, dt)` for fire-responsive moisture.
+
+Concrete types: [`UniformMoisture`](@ref), [`DynamicMoisture`](@ref).
 """
 abstract type AbstractMoisture end
 
@@ -38,8 +50,15 @@ abstract type AbstractMoisture end
 
 Supertype for terrain/topography components.
 
-Subtypes must be callable as `terrain(t, x, y) -> (slope, aspect)` where
-`slope` is rise/run [fraction] and `aspect` is the downslope direction [radians].
+## Interface
+
+Subtypes must be callable as `terrain(t, x, y) -> (slope, aspect)` where:
+- `slope` — rise/run [fraction]
+- `aspect` — downslope direction [radians]
+
+Optionally implement [`update!`](@ref)`(terrain, grid, dt)` for dynamic terrain.
+
+Concrete types: [`FlatTerrain`](@ref), [`UniformSlope`](@ref).
 """
 abstract type AbstractTerrain end
 
@@ -48,8 +67,13 @@ abstract type AbstractTerrain end
 
 Supertype for ember transport / spot fire ignition components.
 
+## Interface
+
 Subtypes must implement `spot!(grid, model, dt)` which checks for lofted firebrands
 and ignites new spot fires ahead of the main front.
+
+!!! note
+    Reserved for future use — not yet connected to `simulate!`.
 """
 abstract type AbstractSpotting end
 
@@ -58,8 +82,13 @@ abstract type AbstractSpotting end
 
 Supertype for fire suppression components (fireline construction, retardant drops, etc.).
 
+## Interface
+
 Subtypes must implement `suppress!(grid, model, dt)` which modifies the grid to
 reflect suppression actions (e.g., creating unburnable barriers or reducing spread rates).
+
+!!! note
+    Reserved for future use — not yet connected to `simulate!`.
 """
 abstract type AbstractSuppression end
 
@@ -329,14 +358,22 @@ end
 
 #--------------------------------------------------------------------------------# Directional Spread Models
 """
-    AbstractDirectionalModel
+    AbstractBlendingMode
 
-Supertype for directional fire spread models that determine how the head-fire
-rate varies with angle from the push direction.
+Supertype for directional fire spread models that control how the spread rate
+varies with angle relative to the dominant push direction (wind + slope).
 
-Subtypes: [`CosineBlending`](@ref), [`EllipticalBlending`](@ref).
+"Blending" refers to the interpolation scheme that computes the spread rate at
+an arbitrary angle `θ` from the push direction, given the head-fire rate
+`R_head` (maximum, aligned with push) and a base rate `R_base` (no wind/slope).
+
+- [`CosineBlending`](@ref) — uses a cosine weighting: `R(θ) = R_base + (R_head - R_base) · max(0, cos θ)`.
+  Simple but produces fires wider than typically observed.
+- [`EllipticalBlending`](@ref) — uses an elliptical fire shape (Anderson 1983) parameterized
+  by the length-to-breadth ratio and eccentricity derived from wind speed. Produces
+  the narrow, elongated fire shapes seen in real fires under wind.
 """
-abstract type AbstractDirectionalModel end
+abstract type AbstractBlendingMode end
 
 """
     CosineBlending()
@@ -349,7 +386,7 @@ The spread rate at angle `θ` from the push direction is:
 
 This produces fires that are somewhat wider than observed in practice.
 """
-struct CosineBlending <: AbstractDirectionalModel end
+struct CosineBlending <: AbstractBlendingMode end
 
 """
     EllipticalBlending(; formula=:anderson)
@@ -370,7 +407,7 @@ the rear focus (as in the Anderson/Richards fire ellipse convention).
 
 ### Examples
 ```julia
-model = FireSpreadModel(
+model = RothermelModel(
     SHORT_GRASS,
     UniformWind(speed=8.0),
     UniformMoisture(FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)),
@@ -379,7 +416,7 @@ model = FireSpreadModel(
 )
 ```
 """
-struct EllipticalBlending <: AbstractDirectionalModel
+struct EllipticalBlending <: AbstractBlendingMode
     formula::Symbol
 end
 EllipticalBlending(; formula::Symbol=:anderson) = EllipticalBlending(formula)

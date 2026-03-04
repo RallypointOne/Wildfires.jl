@@ -10,7 +10,7 @@ code-fold: true
 using Wildfires
 using Wildfires.Rothermel
 using Wildfires.LevelSet
-using Wildfires.SpreadModel
+using Wildfires.SpreadModels
 using CairoMakie
 
 function printdoc(x)
@@ -20,7 +20,7 @@ function printdoc(x)
 end
 ```
 
-The `Components` module defines the abstract interfaces and concrete types used by `SpreadModel` to represent wind, moisture, terrain, burnout, burn-in, and directional spread.  Each component is a callable struct with signature `(t, x, y)` that returns the relevant physical quantity at a given time and location.
+The `Components` module defines the abstract interfaces and concrete types used by `SpreadModels` to represent wind, moisture, terrain, burnout, burn-in, and directional spread.  Each component is a callable struct with signature `(t, x, y)` that returns the relevant physical quantity at a given time and location.
 
 ## Abstract Interfaces
 
@@ -31,10 +31,15 @@ Every component category has an abstract supertype.  Custom components subtype t
 | `AbstractWind` | `wind(t, x, y)` | `(speed, direction)` — speed [km/h], direction FROM [rad] |
 | `AbstractMoisture` | `moisture(t, x, y)` | `FuelClasses` — moisture fractions per size class |
 | `AbstractTerrain` | `terrain(t, x, y)` | `(slope, aspect)` — slope [fraction], aspect [rad] |
-| `AbstractBurnout` | `burnout(t_burning)` | `Float64 ∈ [0, 1]` — spread intensity scale factor |
+| `AbstractBurnout` | `burnout(t_burning)` | `Float64 ∈ [0, 1]` — spread intensity decay |
 | `AbstractBurnin` | `burnin(t_burning)` | `Float64 ∈ [0, 1]` — spread intensity ramp-up |
+| `AbstractBlendingMode` | *(used internally by `RothermelModel`)* | Directional interpolation of spread rate |
+| `AbstractSpotting` | `spot!(grid, model, dt)` | Ignites new spot fires from lofted embers |
+| `AbstractSuppression` | `suppress!(grid, model, dt)` | Modifies grid to reflect suppression actions |
 
-Future interfaces include `AbstractSpotting` (ember transport) and `AbstractSuppression` (fireline construction).
+::: {.callout-note}
+`AbstractSpotting` and `AbstractSuppression` are defined but not yet connected to `simulate!`. They are reserved for future use.
+:::
 
 ## Wind
 
@@ -173,9 +178,9 @@ axislegend(ax, position=:rb)
 fig
 ```
 
-## Directional Spread
+## Directional Spread (Blending Modes)
 
-Directional models control how the head-fire rate of spread varies with angle from the push direction (combined wind + slope vector).
+Blending modes (`AbstractBlendingMode`) control how the spread rate is interpolated across angles relative to the push direction (combined wind + slope vector). Given the head-fire rate `R_head` (maximum, aligned with push) and a base rate `R_base` (no wind/slope), the blending mode computes the effective spread rate at any angle `θ` from the push direction.
 
 ```{julia}
 #| echo: false
@@ -196,12 +201,12 @@ M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
 
 g_cos = LevelSetGrid(150, 150, dx=30.0)
 ignite!(g_cos, 2250.0, 2250.0, 200.0)
-m_cos = FireSpreadModel(SHORT_GRASS, UniformWind(speed=10.0), UniformMoisture(M), FlatTerrain())
+m_cos = RothermelModel(SHORT_GRASS, UniformWind(speed=10.0), UniformMoisture(M), FlatTerrain())
 simulate!(g_cos, m_cos, steps=200)
 
 g_ell = LevelSetGrid(150, 150, dx=30.0)
 ignite!(g_ell, 2250.0, 2250.0, 200.0)
-m_ell = FireSpreadModel(SHORT_GRASS, UniformWind(speed=10.0), UniformMoisture(M), FlatTerrain(), EllipticalBlending())
+m_ell = RothermelModel(SHORT_GRASS, UniformWind(speed=10.0), UniformMoisture(M), FlatTerrain(), EllipticalBlending())
 simulate!(g_ell, m_ell, steps=200)
 
 fig = Figure(size=(700, 300))
@@ -260,7 +265,7 @@ For dynamic components that evolve with the fire, implement `update!`:
 ```{julia}
 #| code-fold: false
 #| eval: false
-function SpreadModel.update!(w::MyWindField, grid::LevelSetGrid, dt)
+function SpreadModels.update!(w::MyWindField, grid::LevelSetGrid, dt)
     # Update wind field based on fire state
 end
 ```

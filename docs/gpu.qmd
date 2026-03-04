@@ -8,7 +8,7 @@ engine: julia
 #| output: false
 using Wildfires
 using Wildfires.LevelSet
-using Wildfires.SpreadModel
+using Wildfires.SpreadModels
 using Wildfires.Rothermel
 using Adapt
 ```
@@ -37,7 +37,7 @@ Then load Wildfires as usual:
 ```julia
 using Wildfires
 using Wildfires.LevelSet
-using Wildfires.SpreadModel
+using Wildfires.SpreadModels
 using Wildfires.Rothermel
 ```
 
@@ -53,7 +53,7 @@ grid = LevelSetGrid(500, 500, dx=30.0)
 ignite!(grid, 7500.0, 7500.0, 200.0)
 
 M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
-model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+model = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
 
 # 2. Move grid to GPU
 gpu_grid = Adapt.adapt(CuArray, grid)   # CuArray for CUDA, MtlArray for Metal, etc.
@@ -78,7 +78,7 @@ The `Adapt.adapt` call converts the `φ` array inside `LevelSetGrid` to the targ
 | `spread_rate_field!` | No | Computed on CPU, uploaded to GPU (calls Rothermel model) |
 | `ignite!` | Yes | Uses broadcasting — works on any array type |
 
-The `spread_rate_field!` function evaluates the `FireSpreadModel` at each cell, which involves branching logic in the Rothermel model that isn't GPU-friendly.  The extension handles this transparently: it copies `φ` to the CPU, computes `F`, and uploads the result back to the GPU.
+The `spread_rate_field!` function evaluates the `RothermelModel` at each cell, which involves branching logic in the Rothermel model that isn't GPU-friendly.  The extension handles this transparently: it copies `φ` to the CPU, computes `F`, and uploads the result back to the GPU.
 
 ## Type Parameterization
 

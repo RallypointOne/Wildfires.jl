@@ -10,7 +10,7 @@ using Wildfires
 using Wildfires.Rothermel
 using Wildfires.Rothermel: residence_time
 using Wildfires.LevelSet
-using Wildfires.SpreadModel
+using Wildfires.SpreadModels
 using CairoMakie
 
 M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
@@ -29,7 +29,7 @@ traces_dir = Trace[]
 for dir in [CosineBlending(), EllipticalBlending()]
     g = LevelSetGrid(150, 150, dx=30.0)
     ignite!(g, 2250.0, 2250.0, 50.0)
-    model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain(), dir)
+    model = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain(), dir)
     tr = Trace(g, 3)
     simulate!(g, model, steps=120, dt=0.5, trace=tr)
     push!(grids_dir, g)
@@ -79,7 +79,7 @@ for (idx, (dir, label)) in enumerate(zip(directions, labels))
     col = (idx - 1) % 4 + 1
     g = LevelSetGrid(100, 100, dx=30.0)
     ignite!(g, 1500.0, 1500.0, 50.0)
-    model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0, direction=dir),
+    model = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0, direction=dir),
         UniformMoisture(M), FlatTerrain(), EllipticalBlending())
     simulate!(g, model, steps=80, dt=0.5)
     ax = Axis(fig[row, col], title=label, aspect=DataAspect())
@@ -97,7 +97,7 @@ Near-zero wind produces nearly circular spread, driven primarily by the base rat
 #| echo: false
 g = LevelSetGrid(100, 100, dx=30.0)
 ignite!(g, 1500.0, 1500.0, 50.0)
-model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=0.5), UniformMoisture(M), FlatTerrain())
+model = RothermelModel(SHORT_GRASS, UniformWind(speed=0.5), UniformMoisture(M), FlatTerrain())
 tr = Trace(g, 3)
 simulate!(g, model, steps=80, dt=0.5, trace=tr)
 firegif(joinpath(@__DIR__, "gallery_calm.gif"), tr, g)
@@ -115,7 +115,7 @@ With burnout enabled, consumed fuel stops contributing to spread. The burnout-aw
 g = LevelSetGrid(150, 150, dx=30.0)
 ignite!(g, 2250.0, 2250.0, 50.0)
 t_r = residence_time(CHAPARRAL)
-model = FireSpreadModel(CHAPARRAL, UniformWind(speed=8.0), UniformMoisture(M),
+model = RothermelModel(CHAPARRAL, UniformWind(speed=8.0), UniformMoisture(M),
     FlatTerrain(), EllipticalBlending())
 tr = Trace(g, 3)
 simulate!(g, model, steps=150, dt=0.5, trace=tr, burnout=ExponentialBurnout(t_r))
@@ -139,7 +139,7 @@ traces_slope = Trace[]
 for s in slopes
     g = LevelSetGrid(100, 100, dx=30.0)
     ignite!(g, 1500.0, 1500.0, 50.0)
-    model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=5.0), UniformMoisture(M),
+    model = RothermelModel(SHORT_GRASS, UniformWind(speed=5.0), UniformMoisture(M),
         UniformSlope(slope=s))
     tr = Trace(g, 3)
     simulate!(g, model, steps=100, dt=0.5, trace=tr)
@@ -181,14 +181,14 @@ nothing
 #| echo: false
 g_s = LevelSetGrid(100, 100, dx=30.0)
 ignite!(g_s, 1500.0, 1500.0, 50.0)
-model_s = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+model_s = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
 tr_s = Trace(g_s, 3)
 simulate!(g_s, model_s, steps=120, dt=0.5, trace=tr_s)
 
 g_d = LevelSetGrid(100, 100, dx=30.0)
 ignite!(g_d, 1500.0, 1500.0, 50.0)
 dm = DynamicMoisture(g_d, M, dry_rate=0.1, recovery_rate=0.001)
-model_d = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), dm, FlatTerrain())
+model_d = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), dm, FlatTerrain())
 tr_d = Trace(g_d, 3)
 simulate!(g_d, model_d, steps=120, dt=0.5, trace=tr_d)
 
@@ -230,7 +230,7 @@ The `t_ignite` field records when each cell ignited. White contour lines show fi
 #| echo: false
 g = LevelSetGrid(150, 150, dx=30.0)
 ignite!(g, 2250.0, 2250.0, 50.0)
-model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M),
+model = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M),
     FlatTerrain(), EllipticalBlending())
 simulate!(g, model, steps=200, dt=0.5)
 
@@ -255,7 +255,7 @@ Three fires ignited at staggered times merge into a single perimeter. Arrival ti
 #| echo: false
 g = LevelSetGrid(200, 200, dx=30.0)
 ignite!(g, 2000.0, 3000.0, 50.0)
-model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=5.0), UniformMoisture(M),
+model = RothermelModel(SHORT_GRASS, UniformWind(speed=5.0), UniformMoisture(M),
     FlatTerrain(), EllipticalBlending())
 simulate!(g, model, steps=30, dt=0.5)
 ignite!(g, 3500.0, 2000.0, 50.0)
@@ -291,7 +291,7 @@ for (idx, (fuel, label)) in enumerate(zip(fuels, fuel_labels))
     col = (idx - 1) % 2 + 1
     g = LevelSetGrid(100, 100, dx=30.0)
     ignite!(g, 1500.0, 1500.0, 50.0)
-    model = FireSpreadModel(fuel, UniformWind(speed=8.0), UniformMoisture(M),
+    model = RothermelModel(fuel, UniformWind(speed=8.0), UniformMoisture(M),
         FlatTerrain(), EllipticalBlending())
     simulate!(g, model, steps=100, dt=0.5)
     ax = Axis(fig[row, col], title=label, aspect=DataAspect())

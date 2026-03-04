@@ -4,14 +4,9 @@ include("Rothermel.jl")
 include("LevelSet.jl")
 include("Components.jl")
 include("CellularAutomata.jl")
-include("SpreadModel.jl")
-include("ArrivalTime.jl")
+include("SpreadModels.jl")
 include("PINNTypes.jl")
 
-using .ArrivalTime: estimate_arrival_times, isochrones, perimeter_to_grid,
-    hausdorff_distance, jaccard_index, sorensen_dice, area_error
-export estimate_arrival_times, isochrones, perimeter_to_grid
-export hausdorff_distance, jaccard_index, sorensen_dice, area_error
 
 using .PINNTypes: AbstractPINNConfig, PINNConfig, NeuralPDEConfig, PINNSolution
 export AbstractPINNConfig, PINNConfig, NeuralPDEConfig, PINNSolution
@@ -88,7 +83,7 @@ The PINN learns a function `phi_theta(x, y, t)` satisfying:
 
     dphi/dt + F(x,y,t)|nabla phi| = 0
 
-where `F` is the spread rate from the `FireSpreadModel`.
+where `F` is the spread rate from the `RothermelModel`.
 
 The solver backend is selected by the `config` type:
 - `PINNConfig` — custom Lux solver with hard IC constraint (requires `Lux`)
@@ -96,7 +91,7 @@ The solver backend is selected by the `config` type:
 
 # Arguments
 - `grid` - `LevelSetGrid` providing domain geometry and initial condition
-- `model` - Callable `model(t, x, y) -> spread_rate` (e.g. `FireSpreadModel`)
+- `model` - Callable `model(t, x, y) -> spread_rate` (e.g. `RothermelModel`)
 - `tspan` - Time interval `(t_start, t_end)`
 - `config` - `PINNConfig` or `NeuralPDEConfig` with training hyperparameters
 - `observations` - Optional `(t, x, y, phi)` tuple of observation data (Lux backend only)

@@ -10,7 +10,7 @@
     end
 end
 
-function SpreadModel.update!(m::SpreadModel.DynamicMoisture{T, <:AbstractGPUArray}, grid::LevelSetGrid, dt) where {T}
+function SpreadModels.update!(m::SpreadModels.DynamicMoisture{T, <:AbstractGPUArray}, grid::LevelSetGrid, dt) where {T}
     ny, nx = size(m.d1)
     backend = get_backend(m.d1)
     _moisture_update_kernel!(backend)(

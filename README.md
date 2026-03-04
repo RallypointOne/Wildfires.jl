@@ -9,7 +9,7 @@ A Julia package for wildfire modeling and simulation, built around three core mo
 
 - **Rothermel** — The Rothermel (1972) surface fire spread model with the 13 standard NFFL fuel models from Anderson (1982).
 - **Level Set** — A level set method for simulating 2D fire front propagation driven by spatially varying spread rates.
-- **Spread Model** — Composable, differentiable components (wind, moisture, terrain) that drive level set simulations via `FireSpreadModel`.
+- **Spread Models** — Composable, differentiable components (wind, moisture, terrain) that drive level set simulations via `RothermelModel`.
 
 Additional capabilities are available through package extensions:
 
@@ -29,11 +29,11 @@ Pkg.add("Wildfires")
 using Wildfires
 using Wildfires.Rothermel
 using Wildfires.LevelSet
-using Wildfires.SpreadModel
+using Wildfires.SpreadModels
 
 # Build a fire spread model from components
 moisture = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
-model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(moisture), FlatTerrain())
+model = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(moisture), FlatTerrain())
 
 # Create a grid, ignite, and simulate
 grid = LevelSetGrid(200, 200, dx=30.0)

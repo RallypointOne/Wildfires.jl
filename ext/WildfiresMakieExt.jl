@@ -2,7 +2,7 @@ module WildfiresMakieExt
 
 using Wildfires
 using Wildfires.LevelSet: LevelSetGrid, xcoords, ycoords
-using Wildfires.SpreadModel: Trace
+using Wildfires.SpreadModels: Trace
 
 using Makie
 

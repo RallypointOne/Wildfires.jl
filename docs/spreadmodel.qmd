@@ -9,17 +9,17 @@ engine: julia
 using Wildfires
 using Wildfires.Rothermel
 using Wildfires.LevelSet
-using Wildfires.SpreadModel
+using Wildfires.SpreadModels
 using CairoMakie
 using Printf
 ```
 
-The `SpreadModel` module provides composable, differentiable components for driving level set fire simulations.  Instead of manually constructing a spread rate matrix `F`, you build a `FireSpreadModel` from pluggable wind, moisture, and terrain components — each a callable `(t, x, y)` struct.
+The `SpreadModels` module provides composable, differentiable components for driving level set fire simulations.  Instead of manually constructing a spread rate matrix `F`, you build a `RothermelModel` from pluggable wind, moisture, and terrain components — each a callable `(t, x, y)` struct.
 
 ## Architecture
 
 ```
-FireSpreadModel(fuel, wind, moisture, terrain)
+RothermelModel(fuel, wind, moisture, terrain)
        │
        ▼
 model(t, x, y) → rate_of_spread(fuel; moisture, wind, slope)
@@ -41,7 +41,7 @@ Each component is a callable struct with signature `(t, x, y)`:
 ```{julia}
 M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
 
-model = FireSpreadModel(
+model = RothermelModel(
     SHORT_GRASS,
     UniformWind(speed=8.0),
     UniformMoisture(M),
@@ -67,9 +67,9 @@ fig
 
 ## Directional Spread Models
 
-By default, `FireSpreadModel` uses cosine blending to distribute the head-fire rate across angles.  This produces fires that are wider than typically observed.  The **elliptical model** (Anderson, 1983) produces more realistic elongated fire shapes by computing a length-to-breadth ratio from wind speed.
+By default, `RothermelModel` uses cosine blending to distribute the head-fire rate across angles.  This produces fires that are wider than typically observed.  The **elliptical model** (Anderson, 1983) produces more realistic elongated fire shapes by computing a length-to-breadth ratio from wind speed.
 
-Pass a directional model as the 5th argument to `FireSpreadModel`:
+Pass a directional model as the 5th argument to `RothermelModel`:
 
 - `CosineBlending()` (default) — `R(θ) = R_base + (R_head - R_base) · max(0, cos θ)`
 - `EllipticalBlending()` — `R(θ) = R_head · (1 - ε) / (1 - ε · cos θ)` where `ε` is fire eccentricity
@@ -84,7 +84,7 @@ for (col, (label, dir)) in enumerate([
 ])
     g = LevelSetGrid(200, 200, dx=30.0)
     ignite!(g, 3000.0, 3000.0, 50.0)
-    m = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain(), dir)
+    m = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain(), dir)
     simulate!(g, m, steps=100, dt=0.5)
     ax = Axis(fig[1, col], title=label, aspect=DataAspect())
     fireplot!(ax, g)
@@ -173,13 +173,13 @@ M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
 # Static
 grid_s = LevelSetGrid(150, 150, dx=20.0)
 ignite!(grid_s, 1500.0, 1500.0, 50.0)
-model_s = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+model_s = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
 simulate!(grid_s, model_s, steps=150, dt=0.5)
 
 # Dynamic
 grid_d = LevelSetGrid(150, 150, dx=20.0)
 ignite!(grid_d, 1500.0, 1500.0, 50.0)
-model_d = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), DynamicMoisture(grid_d, M), FlatTerrain())
+model_d = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), DynamicMoisture(grid_d, M), FlatTerrain())
 simulate!(grid_d, model_d, steps=150, dt=0.5)
 
 fig = Figure(size=(700, 300))
@@ -223,7 +223,7 @@ fig = Figure(size=(800, 250))
 for (col, s) in enumerate([0.0, 0.3, 0.6])
     g = LevelSetGrid(150, 150, dx=20.0)
     ignite!(g, 1500.0, 1500.0, 50.0)
-    m = FireSpreadModel(SHORT_GRASS, UniformWind(speed=5.0), UniformMoisture(M), UniformSlope(slope=s))
+    m = RothermelModel(SHORT_GRASS, UniformWind(speed=5.0), UniformMoisture(M), UniformSlope(slope=s))
     simulate!(g, m, steps=150, dt=0.5)
     ax = Axis(fig[1, col], title="slope = $s", aspect=DataAspect())
     fireplot!(ax, g)
@@ -244,7 +244,7 @@ This is useful for representing water bodies, roads, fuel breaks, and pre-existi
 
 ```{julia}
 M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
-model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+model = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
 
 fig = Figure(size=(700, 300))
 
@@ -296,7 +296,7 @@ set_unburnable!(grid, cx, cy, r)
 ignite!(grid, 4000.0, 3000.0, 50.0)
 
 M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
-model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+model = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
 simulate!(grid, model, steps=100, dt=0.5)
 
 fig = Figure()
@@ -347,7 +347,7 @@ fig = Figure(size=(700, 300))
 # Without burnout
 g1 = LevelSetGrid(200, 200, dx=30.0)
 ignite!(g1, 3000.0, 3000.0, 50.0)
-m1 = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+m1 = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
 simulate!(g1, m1, steps=200, dt=0.5)
 ax1 = Axis(fig[1, 1], title="No burnout\n$(count(<(0), g1.φ)) cells burned", aspect=DataAspect())
 fireplot!(ax1, g1)
@@ -389,7 +389,7 @@ end
 M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
 g = LevelSetGrid(150, 150, dx=20.0)
 ignite!(g, 1500.0, 1500.0, 50.0)
-m = FireSpreadModel(SHORT_GRASS, GradientWind(5.0, 0.003), UniformMoisture(M), FlatTerrain())
+m = RothermelModel(SHORT_GRASS, GradientWind(5.0, 0.003), UniformMoisture(M), FlatTerrain())
 simulate!(g, m, steps=150, dt=0.5)
 
 fig = Figure()
@@ -401,7 +401,7 @@ fig
 For dynamic components that respond to fire state, also implement `update!`:
 
 ```julia
-SpreadModel.update!(w::MyDynamicWind, grid::LevelSetGrid, dt) = ...
+SpreadModels.update!(w::MyDynamicWind, grid::LevelSetGrid, dt) = ...
 ```
 
 ## Simulation Parameters
@@ -443,7 +443,7 @@ M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
 
 grid = LevelSetGrid(200, 200, dx=30.0)
 ignite!(grid, 3000.0, 3000.0, 50.0)
-model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain(),
+model = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain(),
     EllipticalBlending())
 
 trace = Trace(grid, 5)

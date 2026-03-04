@@ -11,7 +11,7 @@ using Wildfires.Rothermel
 using Wildfires.Rothermel: residence_time
 using Wildfires.LevelSet
 using Wildfires.LevelSet: xcoords, ycoords
-using Wildfires.SpreadModel
+using Wildfires.SpreadModels
 using CairoMakie
 
 #-----------------------------------------------------------------------------# Thomas Fire elevation data (20x20 from Open-Meteo API)
@@ -80,7 +80,7 @@ wind_hero = UniformWind(speed=12.0, direction=π/6)
 grid_hero = LevelSetGrid(200, 200, dx=30.0)
 ignite!(grid_hero, 3000.0, 3000.0, 50.0)
 t_r_hero = residence_time(CHAPARRAL)
-model_hero = FireSpreadModel(CHAPARRAL, wind_hero, UniformMoisture(M_hero),
+model_hero = RothermelModel(CHAPARRAL, wind_hero, UniformMoisture(M_hero),
     terrain_hero, EllipticalBlending())
 trace_hero = Trace(grid_hero, 3)
 simulate!(grid_hero, model_hero, steps=200, dt=0.5, trace=trace_hero, burnout=ExponentialBurnout(t_r_hero))
@@ -159,7 +159,7 @@ Wildfires.jl is a Julia package for wildfire modeling and simulation, built arou
 
 - **[Rothermel](rothermel.qmd)** — The Rothermel (1972) surface fire spread model with the 13 standard NFFL fuel models from Anderson (1982).
 - **[Level Set](levelset.qmd)** — A level set method for simulating 2D fire front propagation driven by spatially varying spread rates.
-- **[Spread Model](spreadmodel.qmd)** — Composable, differentiable components (wind, moisture, terrain) that drive level set simulations via `FireSpreadModel`.
+- **[Spread Model](spreadmodel.qmd)** — Composable, differentiable components (wind, moisture, terrain) that drive level set simulations via `RothermelModel`
 - **[GPU Acceleration](gpu.qmd)** — Backend-agnostic GPU support (CUDA, Metal, ROCm) via KernelAbstractions.jl for large-grid simulations.
 
 ## Installation
@@ -175,11 +175,11 @@ Pkg.add("Wildfires")
 using Wildfires
 using Wildfires.Rothermel
 using Wildfires.LevelSet
-using Wildfires.SpreadModel
+using Wildfires.SpreadModels
 
 # Build a fire spread model from components
 moisture = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
-model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(moisture), FlatTerrain())
+model = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(moisture), FlatTerrain())
 
 # Evaluate spread rate at a point
 ros = model(0.0, 100.0, 100.0)

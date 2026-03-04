@@ -1,18 +1,18 @@
-module SpreadModel
+module SpreadModels
 
 export AbstractWind, AbstractMoisture, AbstractTerrain
 export AbstractSpotting, AbstractSuppression, AbstractBurnout, AbstractBurnin
 export NoBurnout, ExponentialBurnout, LinearBurnout
 export NoBurnin, ExponentialBurnin, LinearBurnin
 export UniformWind, UniformMoisture, UniformSlope, FlatTerrain, DynamicMoisture
-export FireSpreadModel, spread_rate_field!, simulate!, fire_loss, update!, directional_speed
-export AbstractDirectionalModel, CosineBlending, EllipticalBlending
+export RothermelModel, spread_rate_field!, simulate!, fire_loss, update!, directional_speed
+export AbstractBlendingMode, CosineBlending, EllipticalBlending
 export length_to_breadth, fire_eccentricity
 export AbstractSolver, Godunov, Superbee, WENO5
 export AbstractReinitMethod, IterativeReinit, NewtonReinit
 export Trace
 
-using ..Rothermel: Rothermel as RothermelModel, FuelClasses, rate_of_spread
+using ..Rothermel: FuelClasses, rate_of_spread
 using ..LevelSet: LevelSetGrid, xcoords, ycoords, ignite!, advance!, reinitialize!, cfl_dt,
     AbstractSolver, Godunov, Superbee, WENO5,
     AbstractReinitMethod, IterativeReinit, NewtonReinit,
@@ -22,13 +22,13 @@ using ..Components: AbstractWind, AbstractMoisture, AbstractTerrain,
     NoBurnout, ExponentialBurnout, LinearBurnout,
     NoBurnin, ExponentialBurnin, LinearBurnin,
     UniformWind, UniformMoisture, FlatTerrain, UniformSlope, DynamicMoisture,
-    AbstractDirectionalModel, CosineBlending, EllipticalBlending,
+    AbstractBlendingMode, CosineBlending, EllipticalBlending,
     length_to_breadth, fire_eccentricity
 import ..Components: update!
 
-#--------------------------------------------------------------------------------# FireSpreadModel
+#--------------------------------------------------------------------------------# RothermelModel
 """
-    FireSpreadModel(fuel, wind, moisture, terrain, [directional])
+    RothermelModel(fuel, wind, moisture, terrain, [directional])
 
 Composable fire spread model that combines a fuel model with spatially varying
 environmental inputs. Callable as `model(t, x, y)` → spread rate [m/min].
@@ -37,7 +37,7 @@ Each component is a callable with signature `(t, x, y)`:
 - `wind::AbstractWind` → `(speed, direction)`
 - `moisture::AbstractMoisture` → `FuelClasses`
 - `terrain::AbstractTerrain` → `(slope, aspect)`
-- `directional::AbstractDirectionalModel` → how spread varies with angle (default: `CosineBlending()`)
+- `directional::AbstractBlendingMode` → how spread varies with angle (default: `CosineBlending()`)
 
 Dynamic components (e.g. `DynamicMoisture`) are updated between time steps
 via `update!(component, grid, dt)` during `simulate!`.
@@ -45,10 +45,10 @@ via `update!(component, grid, dt)` during `simulate!`.
 ### Examples
 ```julia
 using Wildfires.Rothermel
-using Wildfires.SpreadModel
+using Wildfires.SpreadModels
 
 # Cosine blending (default)
-model = FireSpreadModel(
+model = RothermelModel(
     SHORT_GRASS,
     UniformWind(speed=8.0),
     UniformMoisture(FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)),
@@ -56,7 +56,7 @@ model = FireSpreadModel(
 )
 
 # Elliptical blending (more realistic fire shapes)
-model = FireSpreadModel(
+model = RothermelModel(
     SHORT_GRASS,
     UniformWind(speed=8.0),
     UniformMoisture(FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)),
@@ -67,23 +67,23 @@ model = FireSpreadModel(
 model(0.0, 100.0, 100.0)  # spread rate at (t=0, x=100, y=100)
 ```
 """
-struct FireSpreadModel{F,W<:AbstractWind,M<:AbstractMoisture,T<:AbstractTerrain,D<:AbstractDirectionalModel}
+struct RothermelModel{F,W<:AbstractWind,M<:AbstractMoisture,T<:AbstractTerrain,D<:AbstractBlendingMode}
     fuel::F
     wind::W
     moisture::M
     terrain::T
     directional::D
 end
-FireSpreadModel(fuel, wind, moisture, terrain) = FireSpreadModel(fuel, wind, moisture, terrain, CosineBlending())
+RothermelModel(fuel, wind, moisture, terrain) = RothermelModel(fuel, wind, moisture, terrain, CosineBlending())
 
-function (s::FireSpreadModel)(t, x, y)
+function (s::RothermelModel)(t, x, y)
     speed, _ = s.wind(t, x, y)
     moist = s.moisture(t, x, y)
     slope, _ = s.terrain(t, x, y)
     rate_of_spread(s.fuel, moisture=moist, wind=speed, slope=slope)
 end
 
-function update!(model::FireSpreadModel, grid::LevelSetGrid, dt)
+function update!(model::RothermelModel, grid::LevelSetGrid, dt)
     update!(model.wind, grid, dt)
     update!(model.moisture, grid, dt)
     update!(model.terrain, grid, dt)
@@ -91,7 +91,7 @@ end
 
 #-----------------------------------------------------------------------------# directional_speed
 """
-    directional_speed(model::FireSpreadModel, t, x, y, nx, ny)
+    directional_speed(model::RothermelModel, t, x, y, nx, ny)
 
 Compute the direction-dependent spread rate [m/min] for the given fire propagation
 direction `(nx, ny)`.
@@ -103,11 +103,11 @@ propagation direction and the combined wind/slope push direction, using the mode
 
 ### Examples
 ```julia
-model = FireSpreadModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+model = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
 directional_speed(model, 0.0, 100.0, 100.0, 1.0, 0.0)  # speed in +x direction
 ```
 """
-function directional_speed(model::FireSpreadModel, t, x, y, nx, ny)
+function directional_speed(model::RothermelModel, t, x, y, nx, ny)
     _directional_rate(model, model.directional, t, x, y, nx, ny)
 end
 
@@ -117,7 +117,7 @@ end
 
 Fill matrix `F` by evaluating `model(t, x, y)` at each cell center of `grid`.
 
-For a `FireSpreadModel`, the spread rate is direction-dependent: the Rothermel
+For a `RothermelModel`, the spread rate is direction-dependent: the Rothermel
 head-fire rate applies in the wind/slope push direction, while the base rate
 (no wind, no slope) applies for flanking and backing fire.  The effective rate
 at each cell is:
@@ -138,7 +138,7 @@ function spread_rate_field!(F::AbstractMatrix, model, grid::LevelSetGrid)
     F
 end
 
-function spread_rate_field!(F::AbstractMatrix, model::FireSpreadModel, grid::LevelSetGrid)
+function spread_rate_field!(F::AbstractMatrix, model::RothermelModel, grid::LevelSetGrid)
     xs = xcoords(grid)
     ys = ycoords(grid)
     t = grid.t
@@ -178,7 +178,7 @@ function spread_rate_field!(F::AbstractMatrix, model::FireSpreadModel, grid::Lev
 end
 
 # Shared helper: compute push direction and cos(theta) with front normal
-function _push_direction(model::FireSpreadModel, t, x, y, nx, ny)
+function _push_direction(model::RothermelModel, t, x, y, nx, ny)
     speed, wind_dir = model.wind(t, x, y)
     moist = model.moisture(t, x, y)
     slope_val, aspect = model.terrain(t, x, y)
@@ -209,7 +209,7 @@ function _push_direction(model::FireSpreadModel, t, x, y, nx, ny)
 end
 
 # Cosine blending: R = R_base + (R_head - R_base) * max(0, cos θ)
-function _directional_rate(model::FireSpreadModel, ::CosineBlending,
+function _directional_rate(model::RothermelModel, ::CosineBlending,
         t, x, y, nx, ny)
     (; R_head, R_base, cos_theta) = _push_direction(model, t, x, y, nx, ny)
     R_head == 0 && return 0.0
@@ -250,7 +250,7 @@ end
 #
 # This gives R_head at the head (θ=0) and R_head·(1-ε)/(1+ε) at the
 # backing (θ=π), with smooth elliptical flanks.
-function _directional_rate(model::FireSpreadModel, dir::EllipticalBlending,
+function _directional_rate(model::RothermelModel, dir::EllipticalBlending,
         t, x, y, nx, ny)
     (; R_head, R_base, cos_theta) = _push_direction(model, t, x, y, nx, ny)
     R_head == 0 && return 0.0
@@ -313,7 +313,7 @@ end
 """
     simulate!(grid::LevelSetGrid, model; steps=100, dt=nothing, cfl=0.5, reinit_every=10, burnout=nothing, burnin=nothing, trace=nothing, progress=false, solver=Godunov(), curvature=0.0, reinit=IterativeReinit())
 
-Run the level set simulation using a `FireSpreadModel` to compute spread rates.
+Run the level set simulation using a `RothermelModel` to compute spread rates.
 
 When `dt` is `nothing` (the default), the time step is computed automatically each
 step via the CFL condition: `dt = cfl * min(dx, dy) / max(F)`.  Pass an explicit

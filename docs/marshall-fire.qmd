@@ -9,7 +9,7 @@ engine: julia
 using Wildfires
 using Wildfires.Rothermel
 using Wildfires.LevelSet
-using Wildfires.SpreadModel
+using Wildfires.SpreadModels
 using CairoMakie
 using Dates
 using Rasters, ArchGDAL, GeoSurrogates
@@ -163,7 +163,7 @@ wind = MarshallWind(wind_field, DateTime(2021, 12, 30, 17), IGNITION_POINT.lon, 
 terrain = MarshallTerrain(slope_wrap, aspect_wrap, IGNITION_POINT.lon, IGNITION_POINT.lat)
 moisture = UniformMoisture(FuelClasses(d1=0.03, d10=0.04, d100=0.05, herb=0.30, wood=0.50))
 
-model = FireSpreadModel(SHORT_GRASS, wind, moisture, terrain, EllipticalBlending())
+model = RothermelModel(SHORT_GRASS, wind, moisture, terrain, EllipticalBlending())
 
 # Run simulation with trace for animation (auto CFL time stepping)
 trace = Trace(g, 5)
@@ -189,30 +189,8 @@ for polygon in perim_coords
     push!(perim_rings, (px, py))
 end
 
-# Build grid from observed perimeter for arrival time estimation
-function _pip(qx, qy, px, py)
-    n, inside, j = length(px), false, length(px)
-    for i in 1:n
-        if ((py[i] > qy) != (py[j] > qy)) &&
-           (qx < (px[j] - px[i]) * (qy - py[i]) / (py[j] - py[i]) + px[i])
-            inside = !inside
-        end
-        j = i
-    end
-    return inside
-end
-
-obs_grid = LevelSetGrid(nx, ny, dx=dx, x0=x0, y0=y0)
-xs_grid = collect(xcoords(obs_grid))
-ys_grid = collect(ycoords(obs_grid))
-for j in axes(obs_grid.φ, 2), i in axes(obs_grid.φ, 1)
-    for (px, py) in perim_rings
-        if _pip(xs_grid[j], ys_grid[i], px, py)
-            obs_grid.φ[i, j] = -1.0
-            break
-        end
-    end
-end
+xs_grid = collect(xcoords(g))
+ys_grid = collect(ycoords(g))
 
 # Compute colorrange (filter non-finite values)
 v = maximum(trace.stack) do (t, phi)
@@ -267,92 +245,7 @@ axislegend(ax, position=:lt)
 fig
 ```
 
-## Arrival Time Estimation
-
-Using the observed fire perimeter as the burn scar, we reconstruct when the fire arrived at each cell using `estimate_arrival_times`. With a `FireSpreadModel`, the Dijkstra shortest-path solver uses **direction-dependent spread rates** — edges aligned with the wind/slope push direction get lower travel costs than crosswind or backing edges, producing physically realistic arrival times.
-
-```{julia}
-using Wildfires.ArrivalTime: estimate_arrival_times
-
-T = estimate_arrival_times(obs_grid, 0.0, 0.0, g.t; model=model)
-max_arrival = maximum(filter(isfinite, T))
-println("Max arrival time: $(round(max_arrival, digits=1)) min")
-```
-
-```{julia}
-#| echo: false
-# Static arrival time heatmap with isochrone contours
-T_plot = copy(T')
-T_plot[isinf.(T_plot)] .= NaN
-
-fig = Figure(size=(700, 500))
-ax = Axis(fig[1, 1], title="Estimated Fire Arrival Times",
-    aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)")
-
-hm = heatmap!(ax, xs_grid, ys_grid, T_plot; colormap=:inferno, nan_color=:gray90)
-Colorbar(fig[1, 2], hm, label="Arrival Time (min)")
-
-# Isochrone contours every 15 minutes
-iso_levels = collect(15.0:15.0:floor(max_arrival))
-if !isempty(iso_levels)
-    contour!(ax, xs_grid, ys_grid, T'; levels=iso_levels, color=(:white, 0.6), linewidth=1.0)
-end
-
-# Observed perimeter
-for (i, (px, py)) in enumerate(perim_rings)
-    lines!(ax, px, py; color=:cyan, linewidth=2.0, linestyle=:dash,
-        label=(i == 1 ? "Observed" : nothing))
-end
-
-axislegend(ax, position=:lt)
-fig
-```
-
-The arrival time field shows the asymmetric fire spread driven by the Chinook winds — the fire reaches the downwind edge much earlier than crosswind areas at the same distance from ignition.
-
-```{julia}
-#| echo: false
-# Animated arrival time reconstruction
-frame_times = range(0, max_arrival, length=60)
-iso_interval = 15.0
-
-fig = Figure(size=(700, 500))
-ax = Axis(fig[1, 1], aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)")
-
-record(fig, joinpath(@__DIR__, "marshall_arrival.gif"), 1:length(frame_times); framerate=15) do idx
-    empty!(ax)
-    t = frame_times[idx]
-    ax.title = "Arrival Time Reconstruction — t = $(round(t, digits=1)) min"
-
-    # Show cells arrived by time t, colored by arrival time
-    masked = copy(T')
-    for i in eachindex(masked)
-        if masked[i] > t || !isfinite(masked[i])
-            masked[i] = NaN
-        end
-    end
-
-    heatmap!(ax, xs_grid, ys_grid, masked;
-        colormap=:inferno, colorrange=(0, max_arrival), nan_color=(:gray90, 0.3))
-
-    # Past isochrone contours
-    past_levels = collect(iso_interval:iso_interval:t)
-    if !isempty(past_levels)
-        contour!(ax, xs_grid, ys_grid, T'; levels=past_levels, color=(:white, 0.5), linewidth=1.0)
-    end
-
-    # Observed perimeter
-    for (px, py) in perim_rings
-        lines!(ax, px, py; color=:cyan, linewidth=2.0, linestyle=:dash)
-    end
-end
-nothing
-```
-
-Arrival time reconstruction showing the fire front propagating through the burn scar:
-
-![](marshall_arrival.gif){fig-align="center"}
-
 ::: {.callout-note}
 This simulation uses simplified assumptions (uniform short grass fuel, constant moisture, 10m-to-midflame wind adjustment of 0.36) and covers only the first ~2 hours of a fire that burned for over 24 hours. The real Marshall Fire's rapid spread was intensified by extremely dry conditions (record low humidity), decades of grass accumulation in the wildland-urban interface, and structure-to-structure ignition in neighborhoods — factors not captured in this basic Rothermel surface fire model.
 :::
+
