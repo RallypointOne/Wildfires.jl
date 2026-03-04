@@ -362,12 +362,12 @@ Simulate fire spread with a spatially varying spread rate and visualize snapshot
 g = LevelSetGrid(200, 200, dx=15.0)
 ignite!(g, 1500.0, 1500.0, 50.0)
 
-# Spread rate: faster on the right side
-F = [5.0 + 10.0 * (j / 200)
+# Spread rate: faster on the right side (x increases with column j)
+F = [2.0 + 18.0 * (j / 200)
     for i in 1:200, j in 1:200]
 
 fig = Figure(size=(700, 250))
-times = [0, 50, 100]
+times = [0, 30, 60]
 for (col, target_t) in enumerate(times)
     while g.t < target_t
         advance!(g, F, 0.25)

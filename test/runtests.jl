@@ -2,7 +2,8 @@ using Wildfires
 using Wildfires.Rothermel: FuelClasses, Rothermel, rate_of_spread, residence_time,
     SHORT_GRASS, TIMBER_GRASS, TALL_GRASS, CHAPARRAL, BRUSH, DORMANT_BRUSH,
     SOUTHERN_ROUGH, CLOSED_TIMBER_LITTER, HARDWOOD_LITTER, TIMBER_UNDERSTORY,
-    LIGHT_SLASH, MEDIUM_SLASH, HEAVY_SLASH
+    LIGHT_SLASH, MEDIUM_SLASH, HEAVY_SLASH,
+    NFFL_MODELS, nffl_model
 using Wildfires.LevelSet: LevelSetGrid, xcoords, ycoords, ignite!, advance!, reinitialize!, burned, burn_area,
     cfl_dt, AbstractBoundaryCondition, ZeroNeumann, Dirichlet, Periodic, set_unburnable!, burnable,
     AbstractSolver, Godunov, Superbee, WENO5,
@@ -12,7 +13,7 @@ using Wildfires.SpreadModels: RothermelModel, UniformWind, UniformMoisture, Flat
     CosineBlending, EllipticalBlending, length_to_breadth, fire_eccentricity,
     NoBurnout, ExponentialBurnout, LinearBurnout,
     NoBurnin, ExponentialBurnin, LinearBurnin,
-    directional_speed
+    directional_speed, AbstractFuel
 using Adapt
 using KernelAbstractions, GPUArraysCore
 using Test

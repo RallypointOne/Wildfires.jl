@@ -4,6 +4,7 @@ export FuelClasses, Rothermel, rate_of_spread, residence_time
 export SHORT_GRASS, TIMBER_GRASS, TALL_GRASS, CHAPARRAL, BRUSH, DORMANT_BRUSH,
     SOUTHERN_ROUGH, CLOSED_TIMBER_LITTER, HARDWOOD_LITTER, TIMBER_UNDERSTORY,
     LIGHT_SLASH, MEDIUM_SLASH, HEAVY_SLASH
+export NFFL_MODELS, nffl_model
 export GR1, GR2, GR3, GR4, GR5, GR6, GR7, GR8, GR9
 export GS1, GS2, GS3, GS4
 export SH1, SH2, SH3, SH4, SH5, SH6, SH7, SH8, SH9
@@ -314,6 +315,41 @@ const MEDIUM_SLASH = Rothermel("NFFL 12: Medium logging slash",
 """NFFL 13: Heavy logging slash"""
 const HEAVY_SLASH = Rothermel("NFFL 13: Heavy logging slash",
     FuelClasses(7.01, 23.04, 28.05, 0.0, 0.0), FuelClasses(1500.0, _σ_STD...), _H8, 3.0, 0.25)
+
+#-----------------------------------------------------------------------------# NFFL Lookup
+"""
+    NFFL_MODELS::Dict{Int, Rothermel}
+
+Mapping from NFFL fuel model code (1–13) to the corresponding `Rothermel` fuel model.
+"""
+const NFFL_MODELS = Dict{Int, Rothermel{Float64}}(
+    1  => SHORT_GRASS,
+    2  => TIMBER_GRASS,
+    3  => TALL_GRASS,
+    4  => CHAPARRAL,
+    5  => BRUSH,
+    6  => DORMANT_BRUSH,
+    7  => SOUTHERN_ROUGH,
+    8  => CLOSED_TIMBER_LITTER,
+    9  => HARDWOOD_LITTER,
+    10 => TIMBER_UNDERSTORY,
+    11 => LIGHT_SLASH,
+    12 => MEDIUM_SLASH,
+    13 => HEAVY_SLASH,
+)
+
+"""
+    nffl_model(code::Integer) -> Union{Rothermel, Nothing}
+
+Look up an NFFL fuel model by code (1–13). Returns `nothing` for unknown codes.
+
+### Examples
+```julia
+nffl_model(1)   # SHORT_GRASS
+nffl_model(99)  # nothing (non-fuel)
+```
+"""
+nffl_model(code::Integer) = get(NFFL_MODELS, Int(code), nothing)
 
 # ============================================================================ #
 #      40 Scott & Burgan (2005) Fire Behavior Fuel Models — GTR-153/371

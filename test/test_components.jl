@@ -1,3 +1,34 @@
+@testset "AbstractFuel and NFFL lookup" begin
+    @testset "NFFL_MODELS has 13 entries" begin
+        @test length(NFFL_MODELS) == 13
+        @test NFFL_MODELS[1] === SHORT_GRASS
+        @test NFFL_MODELS[13] === HEAVY_SLASH
+    end
+
+    @testset "nffl_model lookup" begin
+        @test nffl_model(1) === SHORT_GRASS
+        @test nffl_model(4) === CHAPARRAL
+        @test nffl_model(13) === HEAVY_SLASH
+        @test nffl_model(0) === nothing
+        @test nffl_model(14) === nothing
+        @test nffl_model(99) === nothing
+    end
+
+    @testset "AbstractFuel with RothermelModel" begin
+        M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+
+        # Define a simple spatially varying fuel
+        struct TestFuel <: AbstractFuel end
+        (::TestFuel)(t, x, y) = x < 750.0 ? SHORT_GRASS : CHAPARRAL
+
+        grid = LevelSetGrid(50, 50, dx=30.0)
+        ignite!(grid, 750.0, 750.0, 50.0)
+        model = RothermelModel(TestFuel(), UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+        simulate!(grid, model, steps=30, dt=0.5)
+        @test burn_area(grid) > 0
+    end
+end
+
 @testset "Elliptical Fire Spread" begin
     M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
 

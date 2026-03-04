@@ -1,6 +1,6 @@
 module SpreadModels
 
-export AbstractWind, AbstractMoisture, AbstractTerrain
+export AbstractWind, AbstractMoisture, AbstractTerrain, AbstractFuel
 export AbstractSpotting, AbstractSuppression, AbstractBurnout, AbstractBurnin
 export NoBurnout, ExponentialBurnout, LinearBurnout
 export NoBurnin, ExponentialBurnin, LinearBurnin
@@ -17,7 +17,7 @@ using ..LevelSet: LevelSetGrid, xcoords, ycoords, ignite!, advance!, reinitializ
     AbstractSolver, Godunov, Superbee, WENO5,
     AbstractReinitMethod, IterativeReinit, NewtonReinit,
     _curvature, _phi_safe
-using ..Components: AbstractWind, AbstractMoisture, AbstractTerrain,
+using ..Components: AbstractWind, AbstractMoisture, AbstractTerrain, AbstractFuel,
     AbstractSpotting, AbstractSuppression, AbstractBurnout, AbstractBurnin,
     NoBurnout, ExponentialBurnout, LinearBurnout,
     NoBurnin, ExponentialBurnin, LinearBurnin,
@@ -25,6 +25,10 @@ using ..Components: AbstractWind, AbstractMoisture, AbstractTerrain,
     AbstractBlendingMode, CosineBlending, EllipticalBlending,
     length_to_breadth, fire_eccentricity
 import ..Components: update!
+
+#--------------------------------------------------------------------------------# Fuel Resolution
+_resolve_fuel(fuel, t, x, y) = fuel
+_resolve_fuel(fuel::AbstractFuel, t, x, y) = fuel(t, x, y)
 
 #--------------------------------------------------------------------------------# RothermelModel
 """
@@ -77,13 +81,15 @@ end
 RothermelModel(fuel, wind, moisture, terrain) = RothermelModel(fuel, wind, moisture, terrain, CosineBlending())
 
 function (s::RothermelModel)(t, x, y)
+    fuel = _resolve_fuel(s.fuel, t, x, y)
     speed, _ = s.wind(t, x, y)
     moist = s.moisture(t, x, y)
     slope, _ = s.terrain(t, x, y)
-    rate_of_spread(s.fuel, moisture=moist, wind=speed, slope=slope)
+    rate_of_spread(fuel, moisture=moist, wind=speed, slope=slope)
 end
 
 function update!(model::RothermelModel, grid::LevelSetGrid, dt)
+    model.fuel isa AbstractFuel && update!(model.fuel, grid, dt)
     update!(model.wind, grid, dt)
     update!(model.moisture, grid, dt)
     update!(model.terrain, grid, dt)
@@ -179,19 +185,20 @@ end
 
 # Shared helper: compute push direction and cos(theta) with front normal
 function _push_direction(model::RothermelModel, t, x, y, nx, ny)
+    fuel = _resolve_fuel(model.fuel, t, x, y)
     speed, wind_dir = model.wind(t, x, y)
     moist = model.moisture(t, x, y)
     slope_val, aspect = model.terrain(t, x, y)
 
-    R_head = rate_of_spread(model.fuel,
+    R_head = rate_of_spread(fuel,
         moisture=moist, wind=speed, slope=slope_val)
-    R_base = rate_of_spread(model.fuel,
+    R_base = rate_of_spread(fuel,
         moisture=moist, wind=0.0, slope=0.0)
 
     # Push direction weighted by each component's contribution to spread rate
-    R_w = rate_of_spread(model.fuel,
+    R_w = rate_of_spread(fuel,
         moisture=moist, wind=speed, slope=0.0)
-    R_s = rate_of_spread(model.fuel,
+    R_s = rate_of_spread(fuel,
         moisture=moist, wind=0.0, slope=slope_val)
     w_wind = R_w - R_base
     w_slope = R_s - R_base
@@ -257,8 +264,9 @@ function _directional_rate(model::RothermelModel, dir::EllipticalBlending,
     R_head ≈ R_base && return R_head
 
     # Effective wind speed accounts for both wind and slope
+    fuel = _resolve_fuel(model.fuel, t, x, y)
     moist = model.moisture(t, x, y)
-    U_eff_kmh = _effective_wind_speed(model.fuel, moist, R_head, R_base)
+    U_eff_kmh = _effective_wind_speed(fuel, moist, R_head, R_base)
     U_eff_ms = U_eff_kmh / 3.6
     LB = length_to_breadth(U_eff_ms; formula=dir.formula)
     ε = fire_eccentricity(LB)

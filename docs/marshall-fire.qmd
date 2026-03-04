@@ -33,11 +33,13 @@ Pre-processed [LANDFIRE](https://landfire.gov) terrain rasters and [HRRR](https:
 slope_raster     = Raster(joinpath(DATADIR, "slope.tif"))
 aspect_raster    = Raster(joinpath(DATADIR, "aspect.tif"))
 elevation_raster = Raster(joinpath(DATADIR, "elevation.tif"))
+fuel_raster      = Raster(joinpath(DATADIR, "fuel.tif"))
 
 # Wrap with bilinear interpolation for smooth spatial lookups
 slope_wrap = RasterWrap(slope_raster)
 aspect_wrap = RasterWrap(aspect_raster)
 elevation_wrap = RasterWrap(elevation_raster)
+fuel_wrap = RasterWrap(fuel_raster)
 nothing
 ```
 
@@ -63,47 +65,81 @@ fig
 
 ## HRRR Wind Field
 
-HRRR provides hourly u/v wind components at ~3 km resolution. We load three snapshots (17:00–19:00 UTC) and build a `WindField` that interpolates in both space and time.
+HRRR provides 10m u/v wind components and surface gusts at ~3 km resolution. We load nine snapshots at 15-minute intervals (17:00–19:00 UTC) from the [NOAA HRRR archive on AWS](https://registry.opendata.aws/noaa-hrrr-pds/) — three hourly analyses plus sub-hourly forecasts — and build a `WindField` that interpolates in both space and time.
 
 ```{julia}
 struct WindField
     times::Vector{DateTime}
     u_wraps::Vector{<:RasterWrap}
     v_wraps::Vector{<:RasterWrap}
+    gust_wraps::Vector{<:RasterWrap}
 end
 
-function load_wind_field(datadir, hours, times)
-    u_wraps = [RasterWrap(Raster(joinpath(datadir, "wind_u_$(lpad(h, 2, '0')).tif"))) for h in hours]
-    v_wraps = [RasterWrap(Raster(joinpath(datadir, "wind_v_$(lpad(h, 2, '0')).tif"))) for h in hours]
-    WindField(times, u_wraps, v_wraps)
+function load_wind_field(datadir, suffixes, times)
+    u_wraps    = [RasterWrap(Raster(joinpath(datadir, "wind_u_$s.tif"))) for s in suffixes]
+    v_wraps    = [RasterWrap(Raster(joinpath(datadir, "wind_v_$s.tif"))) for s in suffixes]
+    gust_wraps = [RasterWrap(Raster(joinpath(datadir, "wind_gust_$s.tif"))) for s in suffixes]
+    WindField(times, u_wraps, v_wraps, gust_wraps)
 end
 
-function wind_uv(wf::WindField, lon, lat, dt::DateTime)
+function wind_at(wf::WindField, lon, lat, dt::DateTime)
     times = wf.times
     if dt <= first(times)
-        u = predict(wf.u_wraps[1], (lon, lat))
-        v = predict(wf.v_wraps[1], (lon, lat))
-        return (u=u, v=v)
+        return _wind_snapshot(wf, 1, lon, lat)
     elseif dt >= last(times)
-        u = predict(wf.u_wraps[end], (lon, lat))
-        v = predict(wf.v_wraps[end], (lon, lat))
-        return (u=u, v=v)
+        return _wind_snapshot(wf, length(times), lon, lat)
     end
     i = searchsortedlast(times, dt)
     t1, t2 = times[i], times[i + 1]
     alpha = Dates.value(dt - t1) / Dates.value(t2 - t1)
-    u = (1 - alpha) * predict(wf.u_wraps[i], (lon, lat)) + alpha * predict(wf.u_wraps[i + 1], (lon, lat))
-    v = (1 - alpha) * predict(wf.v_wraps[i], (lon, lat)) + alpha * predict(wf.v_wraps[i + 1], (lon, lat))
-    return (u=u, v=v)
+    w1 = _wind_snapshot(wf, i, lon, lat)
+    w2 = _wind_snapshot(wf, i + 1, lon, lat)
+    return (u    = (1 - alpha) * w1.u    + alpha * w2.u,
+            v    = (1 - alpha) * w1.v    + alpha * w2.v,
+            gust = (1 - alpha) * w1.gust + alpha * w2.gust)
 end
 
-wind_field = load_wind_field(DATADIR, [17, 18, 19], WIND_TIMES)
+function _wind_snapshot(wf::WindField, i, lon, lat)
+    (u    = predict(wf.u_wraps[i], (lon, lat)),
+     v    = predict(wf.v_wraps[i], (lon, lat)),
+     gust = predict(wf.gust_wraps[i], (lon, lat)))
+end
+
+wind_field = load_wind_field(DATADIR, WIND_SUFFIXES, WIND_TIMES)
 nothing
 ```
 
 ## Custom Components
 
-To plug real data into the simulation, we define custom `AbstractWind` and `AbstractTerrain` subtypes. These convert from the simulation's local meter-based grid to geographic (lon/lat) coordinates for spatial lookups.
+To plug real data into the simulation, we define custom `AbstractFuel`, `AbstractWind`, and `AbstractTerrain` subtypes. These convert from the simulation's local meter-based grid to geographic (lon/lat) coordinates for spatial lookups.
+
+```{julia}
+using Wildfires.Rothermel: NFFL_MODELS, nffl_model
+
+struct MarshallFuel <: AbstractFuel
+    fuel_wrap::RasterWrap
+    lon0::Float64
+    lat0::Float64
+end
+
+const NON_FUEL_CODES = Set([91, 92, 93, 98, 99])  # urban, snow/ice, ag, water, barren
+
+function (f::MarshallFuel)(t, x, y)
+    lon = f.lon0 + x / M_PER_DEG_LON
+    lat = f.lat0 + y / M_PER_DEG_LAT
+    code = round(Int, predict(f.fuel_wrap, (lon, lat)))
+    model = nffl_model(code)
+    return model !== nothing ? model : SHORT_GRASS
+end
+
+function is_non_fuel(f::MarshallFuel, x, y)
+    lon = f.lon0 + x / M_PER_DEG_LON
+    lat = f.lat0 + y / M_PER_DEG_LAT
+    code = round(Int, predict(f.fuel_wrap, (lon, lat)))
+    return code ∈ NON_FUEL_CODES
+end
+nothing
+```
 
 ```{julia}
 struct MarshallWind <: AbstractWind
@@ -118,9 +154,12 @@ function (w::MarshallWind)(t, x, y)
     lon = w.lon0 + x / M_PER_DEG_LON
     lat = w.lat0 + y / M_PER_DEG_LAT
     dt = w.start_time + Second(round(Int, t * 60))
-    uv = wind_uv(w.field, lon, lat, dt)
-    speed_kmh = hypot(uv.u, uv.v) * 3.6 * w.adjustment
-    direction = atan(uv.u, uv.v)  # FROM direction (meteorological convention)
+    wnd = wind_at(w.field, lon, lat, dt)
+    # 10m mean wind speed (Rothermel is calibrated for sustained wind)
+    speed_kmh = hypot(wnd.u, wnd.v) * 3.6 * w.adjustment
+    # FROM direction in math convention (CCW from +x/east):
+    # HRRR u = eastward, v = northward; negate to get FROM direction
+    direction = atan(-wnd.v, -wnd.u)
     return (speed_kmh, direction)
 end
 
@@ -136,7 +175,8 @@ function (t::MarshallTerrain)(_, x, y)
     lat = t.lat0 + y / M_PER_DEG_LAT
     slp_deg = predict(t.slp_wrap, (lon, lat))
     slope = tan(deg2rad(clamp(slp_deg, 0.0, 80.0)))
-    aspect = deg2rad(predict(t.asp_wrap, (lon, lat)))
+    # LANDFIRE aspect is azimuth (°CW from north) — convert to math convention (rad CCW from east)
+    aspect = π/2 - deg2rad(predict(t.asp_wrap, (lon, lat)))
     return (slope, aspect)
 end
 nothing
@@ -144,7 +184,7 @@ nothing
 
 ## Simulation
 
-We set up a level set grid covering the Marshall Fire extent (~8.7 km x 6.3 km at 30 m resolution) and run a 2-hour simulation using short grass fuel with the Chinook wind field.
+We set up a level set grid covering the Marshall Fire extent (~8.7 km x 6.3 km at 30 m resolution) and run a 2-hour simulation with spatially varying LANDFIRE fuel data and the Chinook wind field.
 
 ```{julia}
 # Grid setup: 290 x 210 cells at 30m
@@ -159,15 +199,25 @@ g = LevelSetGrid(nx, ny, dx=dx, x0=x0, y0=y0)
 ignite!(g, 0.0, 0.0, 60.0)
 
 # Components
-wind = MarshallWind(wind_field, DateTime(2021, 12, 30, 17), IGNITION_POINT.lon, IGNITION_POINT.lat, 0.36)
+fuel = MarshallFuel(fuel_wrap, IGNITION_POINT.lon, IGNITION_POINT.lat)
+wind = MarshallWind(wind_field, DateTime(2021, 12, 30, 17), IGNITION_POINT.lon, IGNITION_POINT.lat, 0.31)
 terrain = MarshallTerrain(slope_wrap, aspect_wrap, IGNITION_POINT.lon, IGNITION_POINT.lat)
 moisture = UniformMoisture(FuelClasses(d1=0.03, d10=0.04, d100=0.05, herb=0.30, wood=0.50))
 
-model = RothermelModel(SHORT_GRASS, wind, moisture, terrain, EllipticalBlending())
+# Mark non-fuel cells (urban, water, agriculture, barren) as unburnable
+xs = collect(xcoords(g))
+ys = collect(ycoords(g))
+for j in eachindex(xs), i in eachindex(ys)
+    if is_non_fuel(fuel, xs[j], ys[i])
+        g.t_ignite[i, j] = NaN
+    end
+end
+
+model = RothermelModel(fuel, wind, moisture, terrain, EllipticalBlending())
 
 # Run simulation with trace for animation (auto CFL time stepping)
 trace = Trace(g, 5)
-simulate!(g, model, steps=600, trace=trace)
+simulate!(g, model, steps=1000, trace=trace)
 println("Simulation complete: t = $(round(g.t, digits=1)) min, burned = $(count(<(0), g.φ)) cells")
 ```
 
@@ -202,21 +252,37 @@ v = isfinite(v) ? v : 1.0
 fig = Figure(size=(700, 500))
 ax = Axis(fig[1, 1], aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)")
 
+# Wind arrow sample points (grid of ~10x8 points)
+arrow_nx, arrow_ny = 10, 8
+arrow_xs = range(first(xs_grid), last(xs_grid), length=arrow_nx)
+arrow_ys = range(first(ys_grid), last(ys_grid), length=arrow_ny)
+arrow_positions = [(x, y) for y in arrow_ys for x in arrow_xs]
+arrow_scale = 15.0  # scale factor for arrow length
+
 nframes = length(trace.stack)
 record(fig, joinpath(@__DIR__, "marshall_fire.gif"), 1:nframes; framerate=15) do idx
     empty!(ax)
     t, phi = trace.stack[idx]
     ax.title = "Marshall Fire Simulation — t = $(round(t, digits=1)) min"
     heatmap!(ax, xs_grid, ys_grid, phi'; colormap=:RdYlGn, colorrange=(-v, v))
-    contour!(ax, xs_grid, ys_grid, phi'; levels=[0.0], color=:yellow, linewidth=2.0)
+    contourf!(ax, xs_grid, ys_grid, phi'; levels=[-Inf, 0.0], colormap=[(:red, 0.25)])
+    contour!(ax, xs_grid, ys_grid, phi'; levels=[0.0], color=:red, linewidth=2.0)
     for (px, py) in perim_rings
-        lines!(ax, px, py; color=:white, linewidth=2.0, linestyle=:dash)
+        lines!(ax, px, py; color=:red, linewidth=2.0)
     end
+    # Wind arrows
+    ax_pts = [Point2f(p[1], p[2]) for p in arrow_positions]
+    ax_dirs = map(arrow_positions) do (x, y)
+        spd, dir = wind(t, x, y)
+        # Wind blows FROM dir, arrows show wind TO direction
+        Point2f(-cos(dir) * spd * arrow_scale, -sin(dir) * spd * arrow_scale)
+    end
+    arrows2d!(ax, ax_pts, ax_dirs; color=(:white, 0.7), linewidth=1.5, arrowsize=8)
 end
 nothing
 ```
 
-Fire spread animation with the observed perimeter (dashed white) overlaid:
+Fire spread animation with the observed perimeter (solid red) overlaid:
 
 ![](marshall_fire.gif){fig-align="center"}
 
@@ -232,12 +298,13 @@ ax = Axis(fig[1, 1], title="Simulated vs. Observed Perimeter",
 t_final, phi_final = trace.stack[end]
 heatmap!(ax, xs_grid, ys_grid, phi_final'; colormap=:RdYlGn, colorrange=(-v, v))
 
-# Simulated fire front
-contour!(ax, xs_grid, ys_grid, phi_final'; levels=[0.0], color=:yellow, linewidth=2.5, label="Simulated (t=$(round(t_final, digits=0)) min)")
+# Simulated fire front (light red fill + red outline)
+contourf!(ax, xs_grid, ys_grid, phi_final'; levels=[-Inf, 0.0], colormap=[(:red, 0.25)])
+contour!(ax, xs_grid, ys_grid, phi_final'; levels=[0.0], color=:red, linewidth=2.5, label="Simulated (t=$(round(t_final, digits=0)) min)")
 
 # Observed perimeter (all rings)
 for (i, (px, py)) in enumerate(perim_rings)
-    lines!(ax, px, py; color=:white, linewidth=2.5, linestyle=:dash,
+    lines!(ax, px, py; color=:red, linewidth=2.5,
         label=(i == 1 ? "Observed" : nothing))
 end
 
@@ -246,6 +313,6 @@ fig
 ```
 
 ::: {.callout-note}
-This simulation uses simplified assumptions (uniform short grass fuel, constant moisture, 10m-to-midflame wind adjustment of 0.36) and covers only the first ~2 hours of a fire that burned for over 24 hours. The real Marshall Fire's rapid spread was intensified by extremely dry conditions (record low humidity), decades of grass accumulation in the wildland-urban interface, and structure-to-structure ignition in neighborhoods — factors not captured in this basic Rothermel surface fire model.
+This simulation uses spatially varying LANDFIRE fuel data (NFFL 1–13 fuel models) with constant moisture and covers only the first ~2 hours of a fire that burned for over 24 hours. Wind data comes from HRRR 10m mean wind at 15-minute resolution, scaled to midflame height (adjustment factor 0.31). Non-fuel LANDFIRE cells (urban, water, agriculture, barren) are marked as unburnable. The real Marshall Fire's rapid spread was intensified by extremely dry conditions (record low humidity), decades of grass accumulation in the wildland-urban interface, and structure-to-structure ignition in neighborhoods — factors not captured in this basic Rothermel surface fire model.
 :::
 

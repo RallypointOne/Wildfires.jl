@@ -3,7 +3,7 @@ module Components
 using ..Rothermel: FuelClasses
 using ..LevelSet: LevelSetGrid
 
-export AbstractWind, AbstractMoisture, AbstractTerrain
+export AbstractWind, AbstractMoisture, AbstractTerrain, AbstractFuel
 export AbstractSpotting, AbstractSuppression, AbstractBurnout, AbstractBurnin
 export NoBurnout, ExponentialBurnout, LinearBurnout
 export NoBurnin, ExponentialBurnin, LinearBurnin
@@ -61,6 +61,20 @@ Optionally implement [`update!`](@ref)`(terrain, grid, dt)` for dynamic terrain.
 Concrete types: [`FlatTerrain`](@ref), [`UniformSlope`](@ref).
 """
 abstract type AbstractTerrain end
+
+"""
+    AbstractFuel
+
+Supertype for spatially varying fuel components.
+
+## Interface
+
+Subtypes must be callable as `fuel(t, x, y) -> Rothermel` returning a `Rothermel`
+fuel model for the given location.
+
+Optionally implement [`update!`](@ref)`(fuel, grid, dt)` for time-varying fuel.
+"""
+abstract type AbstractFuel end
 
 """
     AbstractSpotting
@@ -286,6 +300,7 @@ function update! end
 update!(::AbstractWind, grid::LevelSetGrid, dt) = nothing
 update!(::AbstractMoisture, grid::LevelSetGrid, dt) = nothing
 update!(::AbstractTerrain, grid::LevelSetGrid, dt) = nothing
+update!(::AbstractFuel, grid::LevelSetGrid, dt) = nothing
 
 #-----------------------------------------------------------------------------# DynamicMoisture
 """
