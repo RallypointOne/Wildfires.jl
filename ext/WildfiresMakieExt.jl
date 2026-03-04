@@ -2,9 +2,13 @@ module WildfiresMakieExt
 
 using Wildfires
 using Wildfires.LevelSet: LevelSetGrid, xcoords, ycoords
-using Wildfires.SpreadModels: Trace
+using Wildfires.SpreadModels: Trace, RothermelModel, spread_rate_field!
 
 using Makie
+
+# Grid φ is (ny, nx); Makie wants z[i,j] at (x[i], y[j]) → (nx, ny).
+# Transpose at every Makie boundary.
+_makie(M::AbstractMatrix) = collect(M')
 
 #-----------------------------------------------------------------------------# convert_arguments for standard Makie plot types
 """
@@ -17,7 +21,7 @@ Standard Makie plot types work on `LevelSetGrid` with correct spatial coordinate
 The plotted values are the level set function `φ`.
 """
 function Makie.convert_arguments(P::Type{<:Union{Makie.Heatmap,Makie.Contour,Makie.Contourf,Makie.Surface}}, g::LevelSetGrid)
-    Makie.convert_arguments(P, collect(xcoords(g)), collect(ycoords(g)), collect(g.φ))
+    Makie.convert_arguments(P, collect(xcoords(g)), collect(ycoords(g)), _makie(g.φ))
 end
 
 #-----------------------------------------------------------------------------# Burnout colormap
@@ -47,10 +51,10 @@ function Wildfires.fireplot!(ax, grid::LevelSetGrid;
         colormap=nothing)
     xs = collect(xcoords(grid))
     ys = collect(ycoords(grid))
-    φ = collect(grid.φ)
+    φ = _makie(grid.φ)
 
     if residence_time !== nothing
-        vals = _fire_values(φ, collect(grid.t_ignite), grid.t, residence_time)
+        vals = _makie(_fire_values(collect(grid.φ), collect(grid.t_ignite), grid.t, residence_time))
         heatmap!(ax, xs, ys, vals; colormap=_FIRE_CMAP, colorrange=(-1, 1))
     else
         cmap = colormap === nothing ? :RdYlGn : colormap
@@ -85,9 +89,9 @@ function Wildfires.firegif(path, trace::Trace, grid::LevelSetGrid;
             empty!(ax)
             t, φ = trace.stack[idx]
             ax.title = "t = $(round(t, digits=1)) min"
-            vals = _fire_values(φ, collect(grid.t_ignite), t, residence_time)
+            vals = _makie(_fire_values(φ, collect(grid.t_ignite), t, residence_time))
             heatmap!(ax, xs, ys, vals; colormap=_FIRE_CMAP, colorrange=(-1, 1))
-            contour!(ax, xs, ys, φ; levels=[0.0], color=frontcolor, linewidth=frontlinewidth)
+            contour!(ax, xs, ys, _makie(φ); levels=[0.0], color=frontcolor, linewidth=frontlinewidth)
         end
     else
         cmap = colormap === nothing ? :RdYlGn : colormap
@@ -97,11 +101,179 @@ function Wildfires.firegif(path, trace::Trace, grid::LevelSetGrid;
             empty!(ax)
             t, φ = trace.stack[idx]
             ax.title = "t = $(round(t, digits=1)) min"
-            heatmap!(ax, xs, ys, φ; colormap=cmap, colorrange=(-v, v))
-            contour!(ax, xs, ys, φ; levels=[0.0], color=frontcolor, linewidth=frontlinewidth)
+            heatmap!(ax, xs, ys, _makie(φ); colormap=cmap, colorrange=(-v, v))
+            contour!(ax, xs, ys, _makie(φ); levels=[0.0], color=frontcolor, linewidth=frontlinewidth)
         end
     end
     path
+end
+
+#-----------------------------------------------------------------------------# fireplot with RothermelModel components
+"""
+    fireplot(grid::LevelSetGrid, model::RothermelModel; wind=true, moisture=true, terrain=true, spread_rate=false, subsample=nothing, kwargs...)
+
+Multi-panel fire visualization showing the fire state alongside environmental components
+from the `RothermelModel`.
+
+Toggle panels with keyword arguments:
+- `wind=true` — wind speed heatmap with push-direction arrows
+- `moisture=true` — 1-hr dead fuel moisture heatmap (%)
+- `terrain=true` — terrain slope heatmap (°) with upslope arrows
+- `spread_rate=false` — head-fire spread rate field (m/min)
+
+The fire front contour (`φ = 0`) is overlaid on every panel for spatial reference.
+
+Additional keyword arguments are forwarded to the fire state panel
+(see [`fireplot`](@ref) for `residence_time`, `frontcolor`, `frontlinewidth`, `colormap`).
+
+### Examples
+```julia
+using CairoMakie
+fireplot(grid, model)
+fireplot(grid, model; wind=false, spread_rate=true)
+fireplot(grid, model; residence_time=0.005, terrain=false)
+```
+"""
+function Wildfires.fireplot(grid::LevelSetGrid, model::RothermelModel;
+        residence_time=nothing, frontcolor=:black, frontlinewidth=2.0, colormap=nothing,
+        wind=true, moisture=true, terrain=true, spread_rate=false, subsample=nothing)
+    panels = Symbol[:fire]
+    wind && push!(panels, :wind)
+    moisture && push!(panels, :moisture)
+    terrain && push!(panels, :terrain)
+    spread_rate && push!(panels, :spread_rate)
+
+    npanels = length(panels)
+    if npanels == 1
+        return Wildfires.fireplot(grid; residence_time, frontcolor, frontlinewidth, colormap)
+    end
+
+    ncols = min(npanels, 2)
+    nrows = ceil(Int, npanels / ncols)
+    sub = something(subsample, max(1, min(size(grid)...) ÷ 15))
+
+    fig = Figure(size=(550 * ncols, 500 * nrows))
+
+    xs = collect(xcoords(grid))
+    ys = collect(ycoords(grid))
+    φ = _makie(grid.φ)
+
+    for (idx, panel) in enumerate(panels)
+        r = (idx - 1) ÷ ncols + 1
+        c = (idx - 1) % ncols + 1
+        gl = fig[r, c] = GridLayout()
+
+        if panel == :fire
+            ax = Axis(gl[1, 1], title="Fire State", aspect=DataAspect(),
+                xlabel="x (m)", ylabel="y (m)")
+            Wildfires.fireplot!(ax, grid; residence_time, frontcolor, frontlinewidth, colormap)
+        elseif panel == :wind
+            _plot_wind_panel!(gl, model.wind, grid, xs, ys, φ, sub)
+        elseif panel == :moisture
+            _plot_moisture_panel!(gl, model.moisture, grid, xs, ys, φ)
+        elseif panel == :terrain
+            _plot_terrain_panel!(gl, model.terrain, grid, xs, ys, φ, sub)
+        elseif panel == :spread_rate
+            _plot_spread_rate_panel!(gl, model, grid, xs, ys, φ)
+        end
+    end
+
+    fig
+end
+
+#-----------------------------------------------------------------------------# Component panel helpers
+function _plot_wind_panel!(gl, wind, grid, xs, ys, φ, sub)
+    t = grid.t
+    speed = Matrix{Float64}(undef, length(ys), length(xs))
+    for j in eachindex(xs), i in eachindex(ys)
+        s, _ = wind(t, xs[j], ys[i])
+        speed[i, j] = s
+    end
+
+    ax = Axis(gl[1, 1], title="Wind Speed (km/h)", aspect=DataAspect(),
+        xlabel="x (m)", ylabel="y (m)")
+    hm = heatmap!(ax, xs, ys, _makie(speed); colormap=:Blues)
+    Colorbar(gl[1, 2], hm)
+    contour!(ax, xs, ys, φ; levels=[0.0], color=:red, linewidth=1.5)
+
+    # Push-direction arrows (subsampled, unit length)
+    si = 1:sub:length(ys)
+    sj = 1:sub:length(xs)
+    arrowlen = grid.dx * sub * 0.4
+    ax_pts, ay_pts, au, av = Float64[], Float64[], Float64[], Float64[]
+    for j in sj, i in si
+        _, d = wind(t, xs[j], ys[i])
+        push!(ax_pts, xs[j])
+        push!(ay_pts, ys[i])
+        push!(au, -cos(d) * arrowlen)
+        push!(av, -sin(d) * arrowlen)
+    end
+    if !isempty(ax_pts)
+        arrows2d!(ax, ax_pts, ay_pts, au, av; tipwidth=8, color=(:black, 0.6))
+    end
+    ax
+end
+
+function _plot_moisture_panel!(gl, moisture, grid, xs, ys, φ)
+    t = grid.t
+    d1 = Matrix{Float64}(undef, length(ys), length(xs))
+    for j in eachindex(xs), i in eachindex(ys)
+        fc = moisture(t, xs[j], ys[i])
+        d1[i, j] = fc.d1 * 100
+    end
+
+    ax = Axis(gl[1, 1], title="1-hr Fuel Moisture (%)", aspect=DataAspect(),
+        xlabel="x (m)", ylabel="y (m)")
+    hm = heatmap!(ax, xs, ys, _makie(d1); colormap=:YlGnBu)
+    Colorbar(gl[1, 2], hm)
+    contour!(ax, xs, ys, φ; levels=[0.0], color=:red, linewidth=1.5)
+    ax
+end
+
+function _plot_terrain_panel!(gl, terrain, grid, xs, ys, φ, sub)
+    t = grid.t
+    slope = Matrix{Float64}(undef, length(ys), length(xs))
+    for j in eachindex(xs), i in eachindex(ys)
+        s, _ = terrain(t, xs[j], ys[i])
+        slope[i, j] = atand(s)
+    end
+
+    ax = Axis(gl[1, 1], title="Slope (°)", aspect=DataAspect(),
+        xlabel="x (m)", ylabel="y (m)")
+    hm = heatmap!(ax, xs, ys, _makie(slope); colormap=:YlOrBr)
+    Colorbar(gl[1, 2], hm)
+    contour!(ax, xs, ys, φ; levels=[0.0], color=:red, linewidth=1.5)
+
+    # Upslope arrows (fire push direction, only where slope > 0)
+    si = 1:sub:length(ys)
+    sj = 1:sub:length(xs)
+    arrowlen = grid.dx * sub * 0.4
+    ax_pts, ay_pts, au, av = Float64[], Float64[], Float64[], Float64[]
+    for j in sj, i in si
+        s, a = terrain(t, xs[j], ys[i])
+        if s > 0
+            push!(ax_pts, xs[j])
+            push!(ay_pts, ys[i])
+            push!(au, -cos(a) * arrowlen)
+            push!(av, -sin(a) * arrowlen)
+        end
+    end
+    if !isempty(ax_pts)
+        arrows2d!(ax, ax_pts, ay_pts, au, av; tipwidth=8, color=(:black, 0.6))
+    end
+    ax
+end
+
+function _plot_spread_rate_panel!(gl, model, grid, xs, ys, φ)
+    F = similar(grid.φ, Float64)
+    spread_rate_field!(F, model, grid)
+
+    ax = Axis(gl[1, 1], title="Spread Rate (m/min)", aspect=DataAspect(),
+        xlabel="x (m)", ylabel="y (m)")
+    hm = heatmap!(ax, xs, ys, _makie(F); colormap=:inferno)
+    Colorbar(gl[1, 2], hm)
+    contour!(ax, xs, ys, φ; levels=[0.0], color=:white, linewidth=1.5)
+    ax
 end
 
 end # module

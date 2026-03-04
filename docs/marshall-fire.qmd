@@ -221,6 +221,20 @@ simulate!(g, model, steps=1000, trace=trace)
 println("Simulation complete: t = $(round(g.t, digits=1)) min, burned = $(count(<(0), g.φ)) cells")
 ```
 
+## Component Overview
+
+After simulation, `fireplot(grid, model)` provides a multi-panel view of the fire state alongside all environmental inputs. The fire front (red contour) is overlaid on each panel for spatial reference.
+
+```{julia}
+fireplot(g, model)
+```
+
+Toggle individual panels or enable the spread rate field:
+
+```{julia}
+fireplot(g, model; terrain=false, spread_rate=true)
+```
+
 ## Animation
 
 ```{julia}
@@ -277,7 +291,7 @@ record(fig, joinpath(@__DIR__, "marshall_fire.gif"), 1:nframes; framerate=15) do
         # Wind blows FROM dir, arrows show wind TO direction
         Point2f(-cos(dir) * spd * arrow_scale, -sin(dir) * spd * arrow_scale)
     end
-    arrows2d!(ax, ax_pts, ax_dirs; color=(:white, 0.7), linewidth=1.5, arrowsize=8)
+    arrows!(ax, ax_pts, ax_dirs; color=(:white, 0.7), arrowsize=8)
 end
 nothing
 ```
