@@ -49,13 +49,13 @@ end
 
     @testset "CosineBlending default" begin
         model = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
-        @test model.directional isa CosineBlending
+        @test model.blending_mode isa CosineBlending
     end
 
     @testset "EllipticalBlending construction" begin
         model = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain(), EllipticalBlending())
-        @test model.directional isa EllipticalBlending
-        @test model.directional.formula == :anderson
+        @test model.blending_mode isa EllipticalBlending
+        @test model.blending_mode.formula == :anderson
     end
 
     @testset "elliptical simulate! runs" begin

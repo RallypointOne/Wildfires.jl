@@ -41,8 +41,8 @@ jobs:
       - uses: julia-actions/cache@v2
       - name: Install docs dependencies
         run: julia --project=docs -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
-      - name: Install lcov
-        run: sudo apt-get install -y lcov
+      - name: Install system dependencies
+        run: sudo apt-get install -y lcov xvfb
       - name: Fetch benchmark results
         run: git fetch origin benchmark-results || true
       - name: Add benchmarks page if results exist
@@ -58,9 +58,8 @@ jobs:
       - uses: quarto-dev/quarto-actions/setup@v2
       - name: Set build date
         run: sed -i "s/__BUILD_DATE__/$(date -u +'%Y-%m-%d')/" docs/_quarto.yml
-      - uses: quarto-dev/quarto-actions/render@v2
-        with:
-          path: docs
+      - name: Render docs (xvfb for GLMakie)
+        run: xvfb-run quarto render docs
 
       # Deploy to gh-pages branch
       - name: Deploy to gh-pages

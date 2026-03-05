@@ -36,7 +36,7 @@ _resolve_fuel(fuel::AbstractFuel, t, x, y) = fuel(t, x, y)
 
 #--------------------------------------------------------------------------------# RothermelModel
 """
-    RothermelModel(fuel, wind, moisture, terrain, [directional])
+    RothermelModel(fuel, wind, moisture, terrain, [blending_mode])
 
 Composable fire spread model that combines a fuel model with spatially varying
 environmental inputs. Callable as `model(t, x, y)` → spread rate [m/min].
@@ -45,7 +45,7 @@ Each component is a callable with signature `(t, x, y)`:
 - `wind::AbstractWind` → `(speed, direction)`
 - `moisture::AbstractMoisture` → `FuelClasses`
 - `terrain::AbstractTerrain` → `(slope, aspect)`
-- `directional::AbstractBlendingMode` → how spread varies with angle (default: `CosineBlending()`)
+- `blending_mode::AbstractBlendingMode` → how spread varies with angle (default: `CosineBlending()`)
 
 Dynamic components (e.g. `DynamicMoisture`) are updated between time steps
 via `update!(component, grid, dt)` during `simulate!`.
@@ -80,7 +80,7 @@ struct RothermelModel{F,W<:AbstractWind,M<:AbstractMoisture,T<:AbstractTerrain,D
     wind::W
     moisture::M
     terrain::T
-    directional::D
+    blending_mode::D
 end
 RothermelModel(fuel, wind, moisture, terrain) = RothermelModel(fuel, wind, moisture, terrain, CosineBlending())
 
@@ -109,7 +109,7 @@ direction `(nx, ny)`.
 `(nx, ny)` is the unit normal of the fire front (same convention as `∇φ/|∇φ|` in
 [`spread_rate_field!`](@ref)).  The spread rate varies with the angle between the
 propagation direction and the combined wind/slope push direction, using the model's
-`directional` blending strategy ([`CosineBlending`](@ref) or [`EllipticalBlending`](@ref)).
+`blending_mode` strategy ([`CosineBlending`](@ref) or [`EllipticalBlending`](@ref)).
 
 ### Examples
 ```julia
@@ -118,7 +118,7 @@ directional_speed(model, 0.0, 100.0, 100.0, 1.0, 0.0)  # speed in +x direction
 ```
 """
 function directional_speed(model::RothermelModel, t, x, y, nx, ny)
-    _directional_rate(model, model.directional, t, x, y, nx, ny)
+    _directional_rate(model, model.blending_mode, t, x, y, nx, ny)
 end
 
 #-----------------------------------------------------------------------------# spread_rate_field!
@@ -178,7 +178,7 @@ function spread_rate_field!(F::AbstractMatrix, model::RothermelModel, grid::Leve
             F[i, j] = zero(eltype(F))
         elseif grad > 0
             F[i, j] = _directional_rate(
-                model, model.directional, t, xs[j], ys[i],
+                model, model.blending_mode, t, xs[j], ys[i],
                 dφdx / grad, dφdy / grad)
         else
             F[i, j] = model(t, xs[j], ys[i])
@@ -320,13 +320,6 @@ end
 function Trace(grid::CAGrid{T, S}, every::Integer) where {T, S}
     Trace{T, Matrix{S}}(Tuple{T, Matrix{S}}[(grid.t, copy(grid.state))], every)
 end
-
-"""
-    CATrace
-
-Deprecated alias for [`Trace`](@ref). Use `Trace(grid::CAGrid, every)` instead.
-"""
-const CATrace = Trace
 
 function _record!(trace::Trace, grid::LevelSetGrid)
     push!(trace.stack, (grid.t, collect(grid.φ)))
