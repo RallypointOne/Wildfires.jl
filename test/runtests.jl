@@ -22,6 +22,7 @@ using Test
     include("test_rothermel.jl")
     include("test_levelset.jl")
     include("test_components.jl")
+    include("test_cellular_automata.jl")
 
     @testset "GPU Extension" begin
         @testset "extension loaded" begin

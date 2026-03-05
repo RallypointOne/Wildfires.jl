@@ -4,6 +4,7 @@ using Wildfires
 using Wildfires.LevelSet: LevelSetGrid, xcoords, ycoords
 using Wildfires.SpreadModels: Trace, RothermelModel, spread_rate_field!
 
+using Contour
 using Makie
 
 # Grid φ is (ny, nx); Makie wants z[i,j] at (x[i], y[j]) → (nx, ny).
@@ -274,6 +275,60 @@ function _plot_spread_rate_panel!(gl, model, grid, xs, ys, φ)
     Colorbar(gl[1, 2], hm)
     contour!(ax, xs, ys, φ; levels=[0.0], color=:white, linewidth=1.5)
     ax
+end
+
+#-----------------------------------------------------------------------------# fireplot3d
+function Wildfires.fireplot3d!(ax, grid::LevelSetGrid, elevation::AbstractMatrix;
+        residence_time=nothing, frontcolor=:black, frontlinewidth=2.0, colormap=nothing)
+    xs = collect(xcoords(grid))
+    ys = collect(ycoords(grid))
+    elev = _makie(elevation)
+    φ = _makie(grid.φ)
+
+    if residence_time !== nothing
+        color = _makie(_fire_values(collect(grid.φ), collect(grid.t_ignite), grid.t, residence_time))
+        surface!(ax, xs, ys, elev; color=color, colormap=_FIRE_CMAP, colorrange=(-1, 1))
+    else
+        cmap = colormap === nothing ? :RdYlGn : colormap
+        v = max(abs(minimum(φ)), abs(maximum(φ)))
+        surface!(ax, xs, ys, elev; color=φ, colormap=cmap, colorrange=(-v, v))
+    end
+
+    # 3D fire front: extract φ=0 contour and lift to terrain surface
+    _fire_front_3d!(ax, xs, ys, φ, elev, frontcolor, frontlinewidth)
+    ax
+end
+
+function Wildfires.fireplot3d(grid::LevelSetGrid, elevation::AbstractMatrix;
+        residence_time=nothing, frontcolor=:black, frontlinewidth=2.0, colormap=nothing)
+    fig = Figure(size=(800, 600))
+    ax = Axis3(fig[1, 1], xlabel="x (m)", ylabel="y (m)", zlabel="Elevation (m)")
+    Wildfires.fireplot3d!(ax, grid, elevation; residence_time, frontcolor, frontlinewidth, colormap)
+    fig
+end
+
+#-----------------------------------------------------------------------------# 3D fire front helpers
+function _fire_front_3d!(ax, xs, ys, φ, elev, frontcolor, frontlinewidth)
+    cl = Contour.contours(xs, ys, φ, [0.0])
+    for level in Contour.levels(cl)
+        for line in Contour.lines(level)
+            cx, cy = Contour.coordinates(line)
+            isempty(cx) && continue
+            cz = [_interp_elev(elev, xs, ys, x, y) for (x, y) in zip(cx, cy)]
+            lines!(ax, cx, cy, cz; color=frontcolor, linewidth=frontlinewidth)
+        end
+    end
+end
+
+function _interp_elev(elev, xs, ys, px, py)
+    ix = clamp(searchsortedlast(xs, px), 1, length(xs) - 1)
+    iy = clamp(searchsortedlast(ys, py), 1, length(ys) - 1)
+    tx = clamp((px - xs[ix]) / (xs[ix+1] - xs[ix]), 0.0, 1.0)
+    ty = clamp((py - ys[iy]) / (ys[iy+1] - ys[iy]), 0.0, 1.0)
+    (1 - tx) * (1 - ty) * elev[ix, iy] +
+        tx * (1 - ty) * elev[ix+1, iy] +
+        (1 - tx) * ty * elev[ix, iy+1] +
+        tx * ty * elev[ix+1, iy+1]
 end
 
 end # module

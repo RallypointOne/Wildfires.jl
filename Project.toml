@@ -13,6 +13,7 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 [weakdeps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 ComponentArrays = "b0b7db55-cfe3-40fc-9ded-d10e2dbeff66"
+Contour = "d38c429a-6771-53c6-b99e-75d170b6e991"
 DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 GPUArraysCore = "46192b85-c4d5-4398-a991-12ede77f4527"
@@ -28,13 +29,14 @@ Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [extensions]
 WildfiresGPUExt = ["Adapt", "KernelAbstractions", "GPUArraysCore"]
-WildfiresMakieExt = "Makie"
+WildfiresMakieExt = ["Contour", "Makie"]
 WildfiresNeuralPDEExt = ["Random", "NeuralPDE", "ModelingToolkit", "DomainSets", "Lux", "Optimization", "OptimizationOptimJL"]
 WildfiresPINNExt = ["Random", "Lux", "ComponentArrays", "ForwardDiff", "Zygote", "Optimization", "OptimizationOptimisers"]
 
 [compat]
 Adapt = "4.4.0"
 ComponentArrays = "0.15.32"
+Contour = "0.6"
 DomainSets = "0.7"
 ForwardDiff = "1.3.2"
 GPUArraysCore = "0.2"
@@ -56,6 +58,7 @@ julia = "1.12"
 
 [extras]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
+Contour = "d38c429a-6771-53c6-b99e-75d170b6e991"
 ComponentArrays = "b0b7db55-cfe3-40fc-9ded-d10e2dbeff66"
 DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
@@ -73,4 +76,4 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [targets]
-test = ["Test", "Adapt", "Random", "Makie", "Lux", "ComponentArrays", "ForwardDiff", "Zygote", "Optimization", "OptimizationOptimisers", "KernelAbstractions", "GPUArraysCore", "NeuralPDE", "ModelingToolkit", "OptimizationOptimJL", "DomainSets"]
+test = ["Test", "Adapt", "Random", "Contour", "Makie", "Lux", "ComponentArrays", "ForwardDiff", "Zygote", "Optimization", "OptimizationOptimisers", "KernelAbstractions", "GPUArraysCore", "NeuralPDE", "ModelingToolkit", "OptimizationOptimJL", "DomainSets"]

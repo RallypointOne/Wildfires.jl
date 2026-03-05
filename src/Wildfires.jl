@@ -11,7 +11,7 @@ include("PINNTypes.jl")
 using .PINNTypes: AbstractPINNConfig, PINNConfig, NeuralPDEConfig, PINNSolution
 export AbstractPINNConfig, PINNConfig, NeuralPDEConfig, PINNSolution
 export train_pinn, predict_on_grid, predict_on_grid!
-export fireplot, fireplot!, firegif
+export fireplot, fireplot!, firegif, fireplot3d, fireplot3d!
 
 #-----------------------------------------------------------------------------# Makie stubs (implemented in WildfiresMakieExt)
 """
@@ -71,6 +71,35 @@ firegif("fire.gif", trace, grid; residence_time=0.005)
 ```
 """
 function firegif end
+
+"""
+    fireplot3d(grid::LevelSetGrid, elevation::AbstractMatrix; residence_time=nothing, frontcolor=:black, frontlinewidth=2.0, colormap=nothing)
+
+Plot the fire state on a 3D terrain surface. The surface is colored by the level set
+field `φ` (or burnout values when `residence_time` is provided), with the fire front
+drawn as a 3D contour line.
+
+`elevation` must be an `(ny, nx)` matrix of terrain heights [m] matching `size(grid)`.
+
+Requires `Makie` (or a backend like `CairoMakie` / `GLMakie`) to be loaded.
+
+### Examples
+```julia
+using CairoMakie
+
+# Elevation from a DEM raster or synthetic slope
+elev = [1000.0 + 0.05x + 0.03y for y in ycoords(grid), x in xcoords(grid)]
+fireplot3d(grid, elev)
+```
+"""
+function fireplot3d end
+
+"""
+    fireplot3d!(ax, grid::LevelSetGrid, elevation::AbstractMatrix; residence_time=nothing, frontcolor=:black, frontlinewidth=2.0, colormap=nothing)
+
+In-place version of `fireplot3d`: draws into an existing `Axis3` or `LScene`.
+"""
+function fireplot3d! end
 
 #-----------------------------------------------------------------------------# PINN API stubs
 """

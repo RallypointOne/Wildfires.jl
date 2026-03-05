@@ -291,7 +291,7 @@ record(fig, joinpath(@__DIR__, "marshall_fire.gif"), 1:nframes; framerate=15) do
         # Wind blows FROM dir, arrows show wind TO direction
         Point2f(-cos(dir) * spd * arrow_scale, -sin(dir) * spd * arrow_scale)
     end
-    arrows!(ax, ax_pts, ax_dirs; color=(:white, 0.7), arrowsize=8)
+    arrows2d!(ax, ax_pts, ax_dirs; color=(:white, 0.7), tipwidth=8)
 end
 nothing
 ```

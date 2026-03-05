@@ -25,6 +25,10 @@ using ..Components: AbstractWind, AbstractMoisture, AbstractTerrain, AbstractFue
     AbstractBlendingMode, CosineBlending, EllipticalBlending,
     length_to_breadth, fire_eccentricity
 import ..Components: update!
+import ..CellularAutomata
+using ..CellularAutomata: CAGrid, CellState, UNBURNED, BURNING, BURNED, UNBURNABLE,
+    AbstractNeighborhood, Moore, VonNeumann, _offsets,
+    cellstate, on_ignite, on_burnout
 
 #--------------------------------------------------------------------------------# Fuel Resolution
 _resolve_fuel(fuel, t, x, y) = fuel
@@ -277,42 +281,59 @@ end
 
 #-----------------------------------------------------------------------------# Trace
 """
-    Trace{T}
+    Trace{T, M}
 
-Records snapshots of the level set field during [`simulate!`](@ref).
+Records snapshots of grid state during [`simulate!`](@ref).
+
+Works with both `LevelSetGrid` (snapshots of `φ`) and `CAGrid` (snapshots of cell states).
 
 # Fields
-- `stack::Vector{Tuple{T, Matrix{T}}}` - Collected `(time, φ)` snapshots
+- `stack::Vector{Tuple{T, M}}` - Collected `(time, snapshot)` pairs
 - `every::Int` - Record every N simulation steps
 
-# Constructor
+# Constructors
     Trace(grid::LevelSetGrid, every::Integer)
-
-Create a trace that records the initial grid state and will record every `every` steps
-during `simulate!`.
+    Trace(grid::CAGrid, every::Integer)
 
 ### Examples
 ```julia
+# With LevelSetGrid
 grid = LevelSetGrid(100, 100, dx=30.0)
-ignite!(grid, 1500.0, 1500.0, 50.0)
 trace = Trace(grid, 5)
 simulate!(grid, model, steps=100, trace=trace)
 
-length(trace.stack)  # 1 (initial) + 20 (every 5 of 100 steps) = 21
-trace.stack[1]       # (0.0, Matrix{Float64})
+# With CAGrid
+grid = CAGrid(100, 100, dx=30.0)
+trace = Trace(grid, 5)
+simulate!(grid, model, steps=100, trace=trace)
 ```
 """
-struct Trace{T}
-    stack::Vector{Tuple{T, Matrix{T}}}
+struct Trace{T, M}
+    stack::Vector{Tuple{T, M}}
     every::Int
 end
 
 function Trace(grid::LevelSetGrid{T}, every::Integer) where {T}
-    Trace{T}(Tuple{T, Matrix{T}}[(grid.t, collect(grid.φ))], every)
+    Trace{T, Matrix{T}}(Tuple{T, Matrix{T}}[(grid.t, collect(grid.φ))], every)
 end
+
+function Trace(grid::CAGrid{T, S}, every::Integer) where {T, S}
+    Trace{T, Matrix{S}}(Tuple{T, Matrix{S}}[(grid.t, copy(grid.state))], every)
+end
+
+"""
+    CATrace
+
+Deprecated alias for [`Trace`](@ref). Use `Trace(grid::CAGrid, every)` instead.
+"""
+const CATrace = Trace
 
 function _record!(trace::Trace, grid::LevelSetGrid)
     push!(trace.stack, (grid.t, collect(grid.φ)))
+end
+
+function _record!(trace::Trace, grid::CAGrid)
+    push!(trace.stack, (grid.t, copy(grid.state)))
 end
 
 #-----------------------------------------------------------------------------# simulate!
@@ -494,5 +515,206 @@ loss = fire_loss(grid, φ_observed)
 ```
 """
 fire_loss(grid::LevelSetGrid, φ_observed::AbstractMatrix) = sum(x -> x^2, grid.φ .- φ_observed)
+
+#==============================================================================#
+#                     Cellular Automata (Travel-Time)                          #
+#==============================================================================#
+
+#-----------------------------------------------------------------------------# update! for CAGrid
+function update!(model::RothermelModel, grid::CAGrid, dt)
+    model.fuel isa AbstractFuel && update!(model.fuel, grid, dt)
+    update!(model.wind, grid, dt)
+    update!(model.moisture, grid, dt)
+    update!(model.terrain, grid, dt)
+end
+
+update!(::AbstractWind, ::CAGrid, dt) = nothing
+update!(::AbstractMoisture, ::CAGrid, dt) = nothing
+update!(::AbstractTerrain, ::CAGrid, dt) = nothing
+update!(::AbstractFuel, ::CAGrid, dt) = nothing
+
+function update!(::DynamicMoisture, ::CAGrid, dt)
+    error("DynamicMoisture requires LevelSetGrid (phi field). Use UniformMoisture with CAGrid.")
+end
+
+
+#-----------------------------------------------------------------------------# CFL for CAGrid
+function _ca_cfl_dt(grid::CAGrid{T}, model; cfl=0.5) where {T}
+    xs = CellularAutomata.xcoords(grid)
+    ys = CellularAutomata.ycoords(grid)
+    R_max = zero(T)
+    for j in eachindex(xs), i in eachindex(ys)
+        cellstate(grid.state[i, j]) == BURNING || continue
+        R = model(grid.t, xs[j], ys[i])
+        R_max = max(R_max, R)
+    end
+    R_max > 0 || return T(Inf)
+    return T(cfl) * min(grid.dx, grid.dy) / R_max
+end
+
+#-----------------------------------------------------------------------------# advance! for CAGrid
+"""
+    advance!(grid::CAGrid, model::RothermelModel, dt; burnout=NoBurnout(), burnin=NoBurnin(), residence_time=Inf)
+
+Advance the CA fire simulation by one time step `dt` [min] using a deterministic
+travel-time approach.
+
+For each `BURNING` cell, the directional spread rate `R(θ)` is computed to each
+`UNBURNED` neighbor using [`directional_speed`](@ref).  The travel time is
+`distance / R(θ)`, and the neighbor ignites when its minimum arrival time is
+reached.  `BURNING` cells transition to `BURNED` after `residence_time` minutes.
+
+### Examples
+```julia
+grid = CAGrid(50, 50, dx=30.0)
+ignite!(grid, 750.0, 750.0, 60.0)
+model = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(M), FlatTerrain())
+advance!(grid, model, 0.5)
+```
+"""
+function CellularAutomata.advance!(g::CAGrid{T}, model::RothermelModel, dt;
+        burnout::AbstractBurnout=NoBurnout(),
+        burnin::AbstractBurnin=NoBurnin(),
+        residence_time=T(Inf)) where {T}
+    state = g.state
+    ny, nx = size(state)
+    dx, dy = g.dx, g.dy
+    offsets = _offsets(g.neighborhood)
+    xs = CellularAutomata.xcoords(g)
+    ys = CellularAutomata.ycoords(g)
+    t_now = g.t + dt
+
+    # Phase 1: Compute arrival times from BURNING -> UNBURNED neighbors
+    for j in 1:nx, i in 1:ny
+        cellstate(state[i, j]) == BURNING || continue
+
+        t_burn = g.t - g.t_ignite[i, j]
+        scale = burnout(t_burn) * burnin(t_burn)
+        scale > zero(T) || continue
+
+        x_src = xs[j]
+        y_src = ys[i]
+
+        for (di, dj) in offsets
+            ni, nj = i + di, j + dj
+            (1 <= ni <= ny && 1 <= nj <= nx) || continue
+            cellstate(state[ni, nj]) == UNBURNED || continue
+
+            delta_x = T(dj) * dx
+            delta_y = T(di) * dy
+            dist = hypot(delta_x, delta_y)
+            norm_x = delta_x / dist
+            norm_y = delta_y / dist
+
+            R = directional_speed(model, g.t, x_src, y_src, norm_x, norm_y) * scale
+            R > zero(T) || continue
+
+            t_arr = g.t_ignite[i, j] + dist / R
+            g.t_arrival[ni, nj] = min(g.t_arrival[ni, nj], t_arr)
+        end
+    end
+
+    # Phase 2: Ignite cells whose arrival time <= t_now
+    for j in 1:nx, i in 1:ny
+        if cellstate(state[i, j]) == UNBURNED && g.t_arrival[i, j] <= t_now
+            state[i, j] = on_ignite(state[i, j], g.t_arrival[i, j])
+            g.t_ignite[i, j] = g.t_arrival[i, j]
+            g.t_arrival[i, j] = T(Inf)
+        end
+    end
+
+    # Phase 3: Burnout (BURNING -> BURNED)
+    for j in 1:nx, i in 1:ny
+        if cellstate(state[i, j]) == BURNING
+            elapsed = t_now - g.t_ignite[i, j]
+            if elapsed >= residence_time
+                state[i, j] = on_burnout(state[i, j], t_now)
+            end
+        end
+    end
+
+    g.t = t_now
+    g
+end
+
+#-----------------------------------------------------------------------------# simulate! for CAGrid
+"""
+    simulate!(grid::CAGrid, model::RothermelModel; steps=100, dt=nothing, cfl=0.5, burnout=nothing, burnin=nothing, residence_time=Inf, trace=nothing, progress=false)
+
+Run a deterministic cellular automata fire simulation using a travel-time approach.
+
+The same `RothermelModel` used with `LevelSetGrid` works here. The CA uses
+[`directional_speed`](@ref) to compute direction-dependent spread rates to each
+neighbor, supporting both [`CosineBlending`](@ref) and [`EllipticalBlending`](@ref).
+
+When `dt` is `nothing` (the default), the time step is computed automatically each
+step via the CFL condition: `dt = cfl * min(dx, dy) / max(R)`.
+
+# Burnout
+
+Cells transition from `BURNING` to `BURNED` after `residence_time` minutes (default
+`Inf` = burn forever).  Additionally, pass `burnout` as an [`AbstractBurnout`](@ref)
+to scale outgoing spread rates based on burn duration.
+
+# Trace
+
+Pass a [`Trace`](@ref) to record state snapshots at regular intervals:
+
+    trace = Trace(grid, 5)
+    simulate!(grid, model, steps=100, trace=trace)
+
+### Examples
+```julia
+grid = CAGrid(100, 100, dx=30.0)
+ignite!(grid, 1500.0, 1500.0, 100.0)
+
+model = RothermelModel(
+    SHORT_GRASS,
+    UniformWind(speed=8.0),
+    UniformMoisture(FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)),
+    FlatTerrain(),
+    EllipticalBlending(),
+)
+
+# Automatic CFL-limited time stepping
+simulate!(grid, model, steps=200)
+
+# With residence time (cells burn out after 5 min)
+simulate!(grid, model, steps=200, residence_time=5.0)
+
+# With trace for animation
+trace = Trace(grid, 10)
+simulate!(grid, model, steps=200, trace=trace)
+```
+"""
+function simulate!(grid::CAGrid{T}, model::RothermelModel;
+        steps::Int=100, dt=nothing, cfl=0.5,
+        burnout=nothing, burnin=nothing,
+        residence_time=T(Inf),
+        trace=nothing, progress::Bool=false) where {T}
+    bo = _coerce_burnout(burnout)
+    bi = _coerce_burnin(burnin)
+    for step in 1:steps
+        step_dt = dt === nothing ? _ca_cfl_dt(grid, model; cfl=cfl) : dt
+        update!(model, grid, step_dt)
+        CellularAutomata.advance!(grid, model, step_dt;
+            burnout=bo, burnin=bi, residence_time=residence_time)
+        trace !== nothing && step % trace.every == 0 && _record!(trace, grid)
+        progress && step % max(1, steps ÷ 100) == 0 && _print_ca_progress(step, steps, grid)
+    end
+    progress && println()
+    grid
+end
+
+function _print_ca_progress(step, steps, grid)
+    pct = round(Int, 100 * step / steps)
+    n_burning = count(c -> cellstate(c) == BURNING, grid.state)
+    n_burned = count(grid.state) do c
+        s = cellstate(c)
+        s == BURNING || s == BURNED
+    end
+    n_total = length(grid.state)
+    print("\r  step $step/$steps ($pct%) | t = $(round(grid.t, digits=2)) min | burned = $n_burned/$n_total | burning = $n_burning")
+end
 
 end # module
