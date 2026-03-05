@@ -107,8 +107,8 @@ fig = Figure(size=(800, 300))
 for (col, t) in enumerate([0.0, 5.0, 10.0])
     φ = predict_on_grid(sol, grid, t)
     ax = Axis(fig[1, col], title="PINN t = $t min", aspect=DataAspect())
-    heatmap!(ax, collect(xcoords(grid)), collect(ycoords(grid)), φ, colormap=:RdYlGn)
-    contour!(ax, collect(xcoords(grid)), collect(ycoords(grid)), φ, levels=[0.0],
+    heatmap!(ax, collect(xcoords(grid)), collect(ycoords(grid)), collect(φ'), colormap=:RdYlGn)
+    contour!(ax, collect(xcoords(grid)), collect(ycoords(grid)), collect(φ'), levels=[0.0],
         color=:black, linewidth=2)
     hidedecorations!(ax)
 end
