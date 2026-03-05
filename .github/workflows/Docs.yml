@@ -54,7 +54,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: docs/hero.gif
-          key: hero-gif-${{ hashFiles('docs/generate_hero.jl', 'docs/data/marshall/**') }}
+          key: hero-gif-${{ hashFiles('docs/generate_hero.jl') }}
       - uses: quarto-dev/quarto-actions/setup@v2
       - name: Set build date
         run: sed -i "s/__BUILD_DATE__/$(date -u +'%Y-%m-%d')/" docs/_quarto.yml

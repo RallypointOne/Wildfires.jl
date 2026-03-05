@@ -14,9 +14,24 @@ using Wildfires.SpreadModels
 using GLMakie
 using Dates
 using Rasters, ArchGDAL, GeoSurrogates
+using Downloads
 
 const DOCSDIR = @__DIR__
 const DATADIR = joinpath(DOCSDIR, "data", "marshall")
+
+#-----------------------------------------------------------------------------# Download data if missing
+const DATA_URL = "https://github.com/RallypointOne/Wildfires.jl/releases/download/marshall-fire-data/marshall-fire-data.tar.gz"
+
+if !isfile(joinpath(DATADIR, "slope.tif"))
+    mkpath(DATADIR)
+    tarball = joinpath(DATADIR, "marshall-fire-data.tar.gz")
+    println("Downloading Marshall Fire data...")
+    Downloads.download(DATA_URL, tarball)
+    run(`tar xzf $tarball -C $DATADIR`)
+    rm(tarball)
+    println("  Extracted data to $DATADIR")
+end
+
 include(joinpath(DATADIR, "manifest.jl"))
 
 #-----------------------------------------------------------------------------# Load LANDFIRE + HRRR data
