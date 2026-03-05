@@ -16,31 +16,37 @@ export fireplot, fireplot!, firegif, fireplot3d, fireplot3d!
 #-----------------------------------------------------------------------------# Makie stubs (implemented in WildfiresMakieExt)
 """
     fireplot(grid::LevelSetGrid; residence_time=nothing, frontcolor=:black, frontlinewidth=2.0)
+    fireplot(grid::CAGrid; colormap=nothing)
 
-Plot a `LevelSetGrid` as a heatmap with the fire front (`φ = 0`) overlaid as a contour line.
-Returns a `Makie.Figure`.
+Plot a fire simulation grid. Returns a `Makie.Figure`.
 
+For `LevelSetGrid`: heatmap of `φ` with the fire front (`φ = 0`) overlaid as a contour line.
 When `residence_time` is provided, uses a burnout-aware colormap where burned cells
 transition from yellow (just ignited) → red → black (burnt out) and unburned cells
 transition from white (near front) → green (far away).
 
-Without `residence_time`, falls back to a symmetric `φ` heatmap with `:RdYlGn` colormap.
+For `CAGrid`: categorical heatmap of cell states (green=unburned, red=burning,
+gray=burned, blue=unburnable).
 
 Requires `Makie` (or a backend like `CairoMakie` / `GLMakie`) to be loaded.
 
 ### Examples
 ```julia
 using CairoMakie
-grid = LevelSetGrid(100, 100, dx=30.0)
-ignite!(grid, 1500.0, 1500.0, 100.0)
+
+# LevelSetGrid
 fireplot(grid)
 fireplot(grid; residence_time=0.005)
+
+# CAGrid
+fireplot(ca_grid)
 ```
 """
 function fireplot end
 
 """
     fireplot!(ax, grid::LevelSetGrid; residence_time=nothing, frontcolor=:black, frontlinewidth=2.0)
+    fireplot!(ax, grid::CAGrid; colormap=nothing)
 
 In-place version of `fireplot`: draws into an existing `Axis`.
 
@@ -50,6 +56,7 @@ function fireplot! end
 
 """
     firegif(path, trace::Trace, grid::LevelSetGrid; residence_time=nothing, framerate=15, frontcolor=:black, frontlinewidth=2.0)
+    firegif(path, trace::Trace, grid::CAGrid; framerate=15, colormap=nothing)
 
 Create an animated GIF of fire spread from a [`Trace`](@ref) recorded during [`simulate!`](@ref).
 
@@ -61,13 +68,15 @@ Requires `Makie` (or a backend like `CairoMakie` / `GLMakie`) to be loaded.
 ```julia
 using CairoMakie
 
-grid = LevelSetGrid(200, 200, dx=30.0)
-ignite!(grid, 3000.0, 3000.0, 50.0)
+# LevelSetGrid
 trace = Trace(grid, 5)
 simulate!(grid, model, steps=100, trace=trace)
-
 firegif("fire.gif", trace, grid)
-firegif("fire.gif", trace, grid; residence_time=0.005)
+
+# CAGrid
+trace = Trace(ca_grid, 5)
+simulate!(ca_grid, model, steps=100, trace=trace)
+firegif("fire.gif", trace, ca_grid)
 ```
 """
 function firegif end

@@ -3,6 +3,8 @@ module WildfiresMakieExt
 using Wildfires
 using Wildfires.LevelSet: LevelSetGrid, xcoords, ycoords
 using Wildfires.SpreadModels: Trace, RothermelModel, spread_rate_field!
+using Wildfires.CellularAutomata: CAGrid, CellState, UNBURNED, BURNING, BURNED, UNBURNABLE,
+    cellstate, xcoords as ca_xcoords, ycoords as ca_ycoords
 
 using Contour
 using Makie
@@ -329,6 +331,49 @@ function _interp_elev(elev, xs, ys, px, py)
         tx * (1 - ty) * elev[ix+1, iy] +
         (1 - tx) * ty * elev[ix, iy+1] +
         tx * ty * elev[ix+1, iy+1]
+end
+
+#-----------------------------------------------------------------------------# fireplot / fireplot! for CAGrid
+const _CA_CMAP = Makie.cgrad([:green, :red, :gray30, :steelblue], 4, categorical=true)
+
+function _ca_state_matrix(grid::CAGrid)
+    collect(Int.(cellstate.(grid.state))')
+end
+
+function Wildfires.fireplot!(ax, grid::CAGrid; colormap=nothing)
+    xs = collect(ca_xcoords(grid))
+    ys = collect(ca_ycoords(grid))
+    cmap = colormap === nothing ? _CA_CMAP : colormap
+    heatmap!(ax, xs, ys, _ca_state_matrix(grid); colormap=cmap, colorrange=(0, 3))
+    ax
+end
+
+function Wildfires.fireplot(grid::CAGrid; colormap=nothing)
+    fig = Figure()
+    ax = Axis(fig[1, 1], aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)",
+        title="t = $(round(grid.t, digits=1)) min")
+    Wildfires.fireplot!(ax, grid; colormap)
+    fig
+end
+
+#-----------------------------------------------------------------------------# firegif for CAGrid
+function Wildfires.firegif(path, trace::Trace, grid::CAGrid;
+        framerate=15, colormap=nothing)
+    xs = collect(ca_xcoords(grid))
+    ys = collect(ca_ycoords(grid))
+    cmap = colormap === nothing ? _CA_CMAP : colormap
+
+    fig = Figure(size=(500, 450))
+    ax = Axis(fig[1, 1], aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)")
+
+    record(fig, path, eachindex(trace.stack); framerate) do idx
+        empty!(ax)
+        t, state = trace.stack[idx]
+        ax.title = "t = $(round(t, digits=1)) min"
+        heatmap!(ax, xs, ys, collect(Int.(cellstate.(state))');
+            colormap=cmap, colorrange=(0, 3))
+    end
+    path
 end
 
 end # module
