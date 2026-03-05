@@ -1,6 +1,7 @@
 ---
 title: "Case Study: Marshall Fire"
 engine: julia
+code-fold: true
 ---
 
 ```{julia}
@@ -122,13 +123,14 @@ struct MarshallFuel <: AbstractFuel
     lat0::Float64
 end
 
-const NON_FUEL_CODES = Set([91, 92, 93, 98, 99])  # urban, snow/ice, ag, water, barren
+const NON_FUEL_CODES = Set([92, 93, 98, 99])  # snow/ice, ag, water, barren
 
 function (f::MarshallFuel)(t, x, y)
     lon = f.lon0 + x / M_PER_DEG_LON
     lat = f.lat0 + y / M_PER_DEG_LAT
     code = round(Int, predict(f.fuel_wrap, (lon, lat)))
     model = nffl_model(code)
+    # Unrecognized codes (including 91/urban) fall back to SHORT_GRASS
     return model !== nothing ? model : SHORT_GRASS
 end
 
@@ -204,7 +206,7 @@ wind = MarshallWind(wind_field, DateTime(2021, 12, 30, 17), IGNITION_POINT.lon, 
 terrain = MarshallTerrain(slope_wrap, aspect_wrap, IGNITION_POINT.lon, IGNITION_POINT.lat)
 moisture = UniformMoisture(FuelClasses(d1=0.03, d10=0.04, d100=0.05, herb=0.30, wood=0.50))
 
-# Mark non-fuel cells (urban, water, agriculture, barren) as unburnable
+# Mark non-fuel cells (water, agriculture, snow/ice, barren) as unburnable
 xs = collect(xcoords(g))
 ys = collect(ycoords(g))
 for j in eachindex(xs), i in eachindex(ys)
@@ -214,10 +216,41 @@ for j in eachindex(xs), i in eachindex(ys)
 end
 
 model = RothermelModel(fuel, wind, moisture, terrain, EllipticalBlending())
+trace = Trace(g, 20)
+nothing
+```
 
-# Run simulation with trace for animation (auto CFL time stepping)
-trace = Trace(g, 5)
-simulate!(g, model, steps=1000, trace=trace)
+```{julia}
+#| echo: false
+#| output: false
+simulate!(g, model, steps=200, trace=trace)
+```
+
+```{julia}
+#| echo: false
+#| output: false
+simulate!(g, model, steps=200, trace=trace)
+```
+
+```{julia}
+#| echo: false
+#| output: false
+simulate!(g, model, steps=200, trace=trace)
+```
+
+```{julia}
+#| echo: false
+#| output: false
+simulate!(g, model, steps=200, trace=trace)
+```
+
+```{julia}
+#| echo: false
+#| output: false
+simulate!(g, model, steps=200, trace=trace)
+```
+
+```{julia}
 println("Simulation complete: t = $(round(g.t, digits=1)) min, burned = $(count(<(0), g.φ)) cells")
 ```
 
@@ -256,47 +289,48 @@ end
 xs_grid = collect(xcoords(g))
 ys_grid = collect(ycoords(g))
 
-# Compute colorrange (filter non-finite values)
-v = maximum(trace.stack) do (t, phi)
-    vals = filter(isfinite, phi)
-    isempty(vals) ? 1.0 : max(abs(minimum(vals)), abs(maximum(vals)))
+# Build elevation matrix on simulation grid
+elev = [begin
+    lon = IGNITION_POINT.lon + xs_grid[j] / M_PER_DEG_LON
+    lat = IGNITION_POINT.lat + ys_grid[i] / M_PER_DEG_LAT
+    predict(elevation_wrap, (lon, lat))
+end for i in eachindex(ys_grid), j in eachindex(xs_grid)]
+
+# Build fire mask: 1.0 for burned cells, NaN elsewhere (NaN renders transparent in heatmap)
+function fire_mask!(mask, phi)
+    for i in eachindex(phi)
+        mask[i] = phi[i] < 0 ? 1.0 : NaN
+    end
+    mask
 end
-v = isfinite(v) ? v : 1.0
 
-fig = Figure(size=(700, 500))
+elev_t = collect(elev')
+phi_buf = Matrix{Float64}(undef, size(elev_t))
+mask_buf = fill(NaN, size(elev_t))
+
+fig = Figure(size=(750, 500))
 ax = Axis(fig[1, 1], aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)")
-
-# Wind arrow sample points (grid of ~10x8 points)
-arrow_nx, arrow_ny = 10, 8
-arrow_xs = range(first(xs_grid), last(xs_grid), length=arrow_nx)
-arrow_ys = range(first(ys_grid), last(ys_grid), length=arrow_ny)
-arrow_positions = [(x, y) for y in arrow_ys for x in arrow_xs]
-arrow_scale = 15.0  # scale factor for arrow length
+hm = heatmap!(ax, xs_grid, ys_grid, elev_t; colormap=:terrain)
+Colorbar(fig[1, 2], hm, label="Elevation (m)")
 
 nframes = length(trace.stack)
-record(fig, joinpath(@__DIR__, "marshall_fire.gif"), 1:nframes; framerate=15) do idx
+record(fig, joinpath(@__DIR__, "marshall_fire.gif"), 1:nframes; framerate=10) do idx
     empty!(ax)
     t, phi = trace.stack[idx]
     ax.title = "Marshall Fire Simulation — t = $(round(t, digits=1)) min"
-    heatmap!(ax, xs_grid, ys_grid, phi'; colormap=:RdYlGn, colorrange=(-v, v))
-    contourf!(ax, xs_grid, ys_grid, phi'; levels=[-Inf, 0.0], colormap=[(:red, 0.25)])
-    contour!(ax, xs_grid, ys_grid, phi'; levels=[0.0], color=:red, linewidth=2.0)
+    heatmap!(ax, xs_grid, ys_grid, elev_t; colormap=:terrain)
+    permutedims!(phi_buf, phi, (2, 1))
+    fire_mask!(mask_buf, phi_buf)
+    heatmap!(ax, xs_grid, ys_grid, copy(mask_buf); colormap=[RGBAf(1, 0, 0, 0.5)], colorrange=(0, 1), nan_color=:transparent)
+    contour!(ax, xs_grid, ys_grid, phi_buf; levels=[0.0], color=:black, linewidth=2.0)
     for (px, py) in perim_rings
         lines!(ax, px, py; color=:red, linewidth=2.0)
     end
-    # Wind arrows
-    ax_pts = [Point2f(p[1], p[2]) for p in arrow_positions]
-    ax_dirs = map(arrow_positions) do (x, y)
-        spd, dir = wind(t, x, y)
-        # Wind blows FROM dir, arrows show wind TO direction
-        Point2f(-cos(dir) * spd * arrow_scale, -sin(dir) * spd * arrow_scale)
-    end
-    arrows2d!(ax, ax_pts, ax_dirs; color=(:white, 0.7), tipwidth=8)
 end
 nothing
 ```
 
-Fire spread animation with the observed perimeter (solid red) overlaid:
+Fire spread animation with the observed perimeter (solid red) overlaid. The simulated perimeter is shown with a black outline and semi-transparent red fill over terrain elevation.
 
 ![](marshall_fire.gif){fig-align="center"}
 
@@ -304,17 +338,19 @@ Fire spread animation with the observed perimeter (solid red) overlaid:
 
 ```{julia}
 #| echo: false
-fig = Figure(size=(700, 500))
+fig = Figure(size=(750, 500))
 ax = Axis(fig[1, 1], title="Simulated vs. Observed Perimeter",
     aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)")
 
-# Final state heatmap
+# Terrain background
 t_final, phi_final = trace.stack[end]
-heatmap!(ax, xs_grid, ys_grid, phi_final'; colormap=:RdYlGn, colorrange=(-v, v))
+hm = heatmap!(ax, xs_grid, ys_grid, elev_t; colormap=:terrain)
+Colorbar(fig[1, 2], hm, label="Elevation (m)")
 
-# Simulated fire front (light red fill + red outline)
-contourf!(ax, xs_grid, ys_grid, phi_final'; levels=[-Inf, 0.0], colormap=[(:red, 0.25)])
-contour!(ax, xs_grid, ys_grid, phi_final'; levels=[0.0], color=:red, linewidth=2.5, label="Simulated (t=$(round(t_final, digits=0)) min)")
+# Simulated fire (red fill + black outline)
+phi_final_t = collect(phi_final')
+heatmap!(ax, xs_grid, ys_grid, fire_mask!(fill(NaN, size(phi_final_t)), phi_final_t); colormap=[RGBAf(1, 0, 0, 0.5)], colorrange=(0, 1), nan_color=:transparent)
+contour!(ax, xs_grid, ys_grid, phi_final_t; levels=[0.0], color=:black, linewidth=2.5, label="Simulated (t=$(round(t_final, digits=0)) min)")
 
 # Observed perimeter (all rings)
 for (i, (px, py)) in enumerate(perim_rings)
@@ -327,6 +363,6 @@ fig
 ```
 
 ::: {.callout-note}
-This simulation uses spatially varying LANDFIRE fuel data (NFFL 1–13 fuel models) with constant moisture and covers only the first ~2 hours of a fire that burned for over 24 hours. Wind data comes from HRRR 10m mean wind at 15-minute resolution, scaled to midflame height (adjustment factor 0.31). Non-fuel LANDFIRE cells (urban, water, agriculture, barren) are marked as unburnable. The real Marshall Fire's rapid spread was intensified by extremely dry conditions (record low humidity), decades of grass accumulation in the wildland-urban interface, and structure-to-structure ignition in neighborhoods — factors not captured in this basic Rothermel surface fire model.
+This simulation uses spatially varying LANDFIRE fuel data (NFFL 1–13 fuel models) with constant moisture and covers only the first ~2 hours of a fire that burned for over 24 hours. Wind data comes from HRRR 10m mean wind at 15-minute resolution, scaled to midflame height (adjustment factor 0.31). Non-fuel LANDFIRE cells (water, agriculture, snow/ice, barren) are marked as unburnable. LANDFIRE urban cells (code 91) are not in the NFFL fuel model table, so they fall back to `SHORT_GRASS` — a rough approximation that allows fire to spread through developed areas, consistent with the Marshall Fire's rapid structure-to-structure ignition. The real fire's spread was further intensified by extremely dry conditions (record low humidity), decades of grass accumulation in the wildland-urban interface, and ember transport — factors not captured in this basic Rothermel surface fire model.
 :::
 

@@ -76,7 +76,7 @@ end
 wind_field = load_wind_field(DATADIR, WIND_SUFFIXES, WIND_TIMES)
 
 #-----------------------------------------------------------------------------# Custom components
-const NON_FUEL_CODES = Set([91, 92, 93, 98, 99])
+const NON_FUEL_CODES = Set([92, 93, 98, 99])
 
 struct MarshallFuel <: AbstractFuel
     fuel_wrap::RasterWrap
