@@ -66,7 +66,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="site_libs/quarto-search/quarto-search.js"></script>
 <meta name="quarto:offset" content="./">
 <link href="./pinn.html" rel="next">
-<link href="./gallery.html" rel="prev">
+<link href="./marshall-fire.html" rel="prev">
 <script src="site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
 <script src="site_libs/quarto-html/axe/axe-check.js" type="module"></script>
@@ -214,7 +214,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./gallery.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Gallery</span></a>
+  <a href="./marshall-fire.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Case Study: Marshall Fire</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -329,7 +329,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Then load Wildfires as usual:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Wildfires</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Wildfires.LevelSet</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Wildfires.SpreadModel</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Wildfires.SpreadModels</span></span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Wildfires.Rothermel</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="usage" class="level2">
@@ -342,7 +342,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">ignite!</span>(grid, <span class="fl">7500.0</span>, <span class="fl">7500.0</span>, <span class="fl">200.0</span>)</span>
 <span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>M <span class="op">=</span> <span class="fu">FuelClasses</span>(d1<span class="op">=</span><span class="fl">0.06</span>, d10<span class="op">=</span><span class="fl">0.07</span>, d100<span class="op">=</span><span class="fl">0.08</span>, herb<span class="op">=</span><span class="fl">0.0</span>, wood<span class="op">=</span><span class="fl">0.0</span>)</span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> <span class="fu">FireSpreadModel</span>(SHORT_GRASS, <span class="fu">UniformWind</span>(speed<span class="op">=</span><span class="fl">8.0</span>), <span class="fu">UniformMoisture</span>(M), <span class="fu">FlatTerrain</span>())</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> <span class="fu">RothermelModel</span>(SHORT_GRASS, <span class="fu">UniformWind</span>(speed<span class="op">=</span><span class="fl">8.0</span>), <span class="fu">UniformMoisture</span>(M), <span class="fu">FlatTerrain</span>())</span>
 <span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Move grid to GPU</span></span>
 <span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>gpu_grid <span class="op">=</span> Adapt.<span class="fu">adapt</span>(CuArray, grid)   <span class="co"># CuArray for CUDA, MtlArray for Metal, etc.</span></span>
@@ -398,7 +398,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </tr>
 </tbody>
 </table>
-<p>The <code>spread_rate_field!</code> function evaluates the <code>FireSpreadModel</code> at each cell, which involves branching logic in the Rothermel model that isn’t GPU-friendly. The extension handles this transparently: it copies <code>φ</code> to the CPU, computes <code>F</code>, and uploads the result back to the GPU.</p>
+<p>The <code>spread_rate_field!</code> function evaluates the <code>RothermelModel</code> at each cell, which involves branching logic in the Rothermel model that isn’t GPU-friendly. The extension handles this transparently: it copies <code>φ</code> to the CPU, computes <code>F</code>, and uploads the result back to the GPU.</p>
 </section>
 <section id="type-parameterization" class="level2">
 <h2 class="anchored" data-anchor-id="type-parameterization">Type Parameterization</h2>
@@ -861,8 +861,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   </script>
 <nav class="page-navigation">
   <div class="nav-page nav-page-previous">
-      <a href="./gallery.html" class="pagination-link" aria-label="Gallery">
-        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-title">Gallery</span></span>
+      <a href="./marshall-fire.html" class="pagination-link" aria-label="Case Study: Marshall Fire">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-title">Case Study: Marshall Fire</span></span>
       </a>          
   </div>
   <div class="nav-page nav-page-next">
@@ -878,7 +878,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       &nbsp;
     </div>   
     <div class="nav-footer-center">
-<p>Built on 2026-03-03</p>
+<p>Built on 2026-03-05</p>
 </div>
     <div class="nav-footer-right">
       &nbsp;

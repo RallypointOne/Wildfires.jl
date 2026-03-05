@@ -179,7 +179,7 @@ ul.task-list li input[type="checkbox"] {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../gallery.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Gallery</span></a>
+  <a href="../marshall-fire.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Case Study: Marshall Fire</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -288,7 +288,7 @@ ul.task-list li input[type="checkbox"] {
 <ul>
 <li><strong>Rothermel model</strong>: Full implementation of the Rothermel (1972) surface fire spread model with all 13 NFFL fuel models from Anderson (1982)</li>
 <li><strong>Level set method</strong>: 2D fire front propagation using a level set approach with Godunov upwind scheme and reinitialization</li>
-<li><strong>Composable spread model</strong>: <code>FireSpreadModel</code> with pluggable components (<code>UniformWind</code>, <code>UniformMoisture</code>, <code>DynamicMoisture</code>, <code>FlatTerrain</code>, <code>GriddedTerrain</code>)</li>
+<li><strong>Composable spread model</strong>: <code>RothermelModel</code> with pluggable components (<code>UniformWind</code>, <code>UniformMoisture</code>, <code>DynamicMoisture</code>, <code>FlatTerrain</code>, <code>GriddedTerrain</code>)</li>
 <li><strong>GPU acceleration</strong>: Backend-agnostic GPU support (CUDA, Metal, ROCm) via KernelAbstractions.jl package extension for <code>advance!</code>, <code>reinitialize!</code>, and moisture update kernels</li>
 <li><strong>PINN solver</strong>: Physics-informed neural network extension for level set equation solving with hard IC constraints (via Lux.jl)</li>
 <li><strong>Makie integration</strong>: <code>fireplot</code> recipe and <code>convert_arguments</code> for direct plotting of <code>LevelSetGrid</code></li>
@@ -720,7 +720,7 @@ ul.task-list li input[type="checkbox"] {
       &nbsp;
     </div>   
     <div class="nav-footer-center">
-<p>Built on 2026-03-03</p>
+<p>Built on 2026-03-05</p>
 </div>
     <div class="nav-footer-right">
       &nbsp;

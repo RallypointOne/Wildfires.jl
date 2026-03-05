@@ -214,7 +214,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./gallery.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Gallery</span></a>
+  <a href="./marshall-fire.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Case Study: Marshall Fire</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -416,7 +416,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h4 class="anchored" data-anchor-id="firegif"><code>firegif</code></h4>
 </section>
 <div class="card-body">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">firegif</span>(path, trace<span class="op">::</span><span class="dt">Trace</span>, grid<span class="op">::</span><span class="dt">LevelSetGrid</span>; residence_time<span class="op">=</span><span class="cn">nothing</span>, framerate<span class="op">=</span><span class="fl">15</span>, frontcolor<span class="op">=:</span>black, frontlinewidth<span class="op">=</span><span class="fl">2.0</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">firegif</span>(path, trace<span class="op">::</span><span class="dt">Trace</span>, grid<span class="op">::</span><span class="dt">LevelSetGrid</span>; residence_time<span class="op">=</span><span class="cn">nothing</span>, framerate<span class="op">=</span><span class="fl">15</span>, frontcolor<span class="op">=:</span>black, frontlinewidth<span class="op">=</span><span class="fl">2.0</span>)</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">firegif</span>(path, trace<span class="op">::</span><span class="dt">Trace</span>, grid<span class="op">::</span><span class="dt">CAGrid</span>; framerate<span class="op">=</span><span class="fl">15</span>, colormap<span class="op">=</span><span class="cn">nothing</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Create an animated GIF of fire spread from a <a href="@ref"><code>Trace</code></a> recorded during <a href="@ref"><code>simulate!</code></a>.</p>
 <p>Uses the same visualization style as <a href="@ref"><code>fireplot!</code></a>.</p>
 <p>Requires <code>Makie</code> (or a backend like <code>CairoMakie</code> / <code>GLMakie</code>) to be loaded.</p>
@@ -424,13 +425,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h3 class="anchored" data-anchor-id="examples-3">Examples</h3>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">CairoMakie</span></span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>grid <span class="op">=</span> <span class="fu">LevelSetGrid</span>(<span class="fl">200</span>, <span class="fl">200</span>, dx<span class="op">=</span><span class="fl">30.0</span>)</span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="fu">ignite!</span>(grid, <span class="fl">3000.0</span>, <span class="fl">3000.0</span>, <span class="fl">50.0</span>)</span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>trace <span class="op">=</span> <span class="fu">Trace</span>(grid, <span class="fl">5</span>)</span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="fu">simulate!</span>(grid, model, steps<span class="op">=</span><span class="fl">100</span>, trace<span class="op">=</span>trace)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="co"># LevelSetGrid</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>trace <span class="op">=</span> <span class="fu">Trace</span>(grid, <span class="fl">5</span>)</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="fu">simulate!</span>(grid, model, steps<span class="op">=</span><span class="fl">100</span>, trace<span class="op">=</span>trace)</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="fu">firegif</span>(<span class="st">"fire.gif"</span>, trace, grid)</span>
 <span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="fu">firegif</span>(<span class="st">"fire.gif"</span>, trace, grid)</span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="fu">firegif</span>(<span class="st">"fire.gif"</span>, trace, grid; residence_time<span class="op">=</span><span class="fl">0.005</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="co"># CAGrid</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>trace <span class="op">=</span> <span class="fu">Trace</span>(ca_grid, <span class="fl">5</span>)</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="fu">simulate!</span>(ca_grid, model, steps<span class="op">=</span><span class="fl">100</span>, trace<span class="op">=</span>trace)</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="fu">firegif</span>(<span class="st">"fire.gif"</span>, trace, ca_grid)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 </div>
 </div>
@@ -439,18 +442,22 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h4 class="anchored" data-anchor-id="fireplot"><code>fireplot</code></h4>
 </section>
 <div class="card-body">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">fireplot</span>(grid<span class="op">::</span><span class="dt">LevelSetGrid</span>; residence_time<span class="op">=</span><span class="cn">nothing</span>, frontcolor<span class="op">=:</span>black, frontlinewidth<span class="op">=</span><span class="fl">2.0</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Plot a <code>LevelSetGrid</code> as a heatmap with the fire front (<code>φ = 0</code>) overlaid as a contour line. Returns a <code>Makie.Figure</code>.</p>
-<p>When <code>residence_time</code> is provided, uses a burnout-aware colormap where burned cells transition from yellow (just ignited) → red → black (burnt out) and unburned cells transition from white (near front) → green (far away).</p>
-<p>Without <code>residence_time</code>, falls back to a symmetric <code>φ</code> heatmap with <code>:RdYlGn</code> colormap.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">fireplot</span>(grid<span class="op">::</span><span class="dt">LevelSetGrid</span>; residence_time<span class="op">=</span><span class="cn">nothing</span>, frontcolor<span class="op">=:</span>black, frontlinewidth<span class="op">=</span><span class="fl">2.0</span>)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="fu">fireplot</span>(grid<span class="op">::</span><span class="dt">CAGrid</span>; colormap<span class="op">=</span><span class="cn">nothing</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Plot a fire simulation grid. Returns a <code>Makie.Figure</code>.</p>
+<p>For <code>LevelSetGrid</code>: heatmap of <code>φ</code> with the fire front (<code>φ = 0</code>) overlaid as a contour line. When <code>residence_time</code> is provided, uses a burnout-aware colormap where burned cells transition from yellow (just ignited) → red → black (burnt out) and unburned cells transition from white (near front) → green (far away).</p>
+<p>For <code>CAGrid</code>: categorical heatmap of cell states (green=unburned, red=burning, gray=burned, blue=unburnable).</p>
 <p>Requires <code>Makie</code> (or a backend like <code>CairoMakie</code> / <code>GLMakie</code>) to be loaded.</p>
 <section id="examples-4" class="level3">
 <h3 class="anchored" data-anchor-id="examples-4">Examples</h3>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">CairoMakie</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>grid <span class="op">=</span> <span class="fu">LevelSetGrid</span>(<span class="fl">100</span>, <span class="fl">100</span>, dx<span class="op">=</span><span class="fl">30.0</span>)</span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ignite!</span>(grid, <span class="fl">1500.0</span>, <span class="fl">1500.0</span>, <span class="fl">100.0</span>)</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="co"># LevelSetGrid</span></span>
 <span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="fu">fireplot</span>(grid)</span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="fu">fireplot</span>(grid; residence_time<span class="op">=</span><span class="fl">0.005</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="fu">fireplot</span>(grid; residence_time<span class="op">=</span><span class="fl">0.005</span>)</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="co"># CAGrid</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="fu">fireplot</span>(ca_grid)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 </div>
 </div>
@@ -459,9 +466,38 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h4 class="anchored" data-anchor-id="fireplot-fireplot"><code>fireplot!</code> {#fireplot!}</h4>
 </section>
 <div class="card-body">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">fireplot!</span>(ax, grid<span class="op">::</span><span class="dt">LevelSetGrid</span>; residence_time<span class="op">=</span><span class="cn">nothing</span>, frontcolor<span class="op">=:</span>black, frontlinewidth<span class="op">=</span><span class="fl">2.0</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">fireplot!</span>(ax, grid<span class="op">::</span><span class="dt">LevelSetGrid</span>; residence_time<span class="op">=</span><span class="cn">nothing</span>, frontcolor<span class="op">=:</span>black, frontlinewidth<span class="op">=</span><span class="fl">2.0</span>)</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="fu">fireplot!</span>(ax, grid<span class="op">::</span><span class="dt">CAGrid</span>; colormap<span class="op">=</span><span class="cn">nothing</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>In-place version of <code>fireplot</code>: draws into an existing <code>Axis</code>.</p>
 <p>Requires <code>Makie</code> (or a backend like <code>CairoMakie</code> / <code>GLMakie</code>) to be loaded.</p>
+</div>
+</div>
+<div class="card mb-3">
+<section id="fireplot3d" class="level4 card-header api-item-header">
+<h4 class="anchored" data-anchor-id="fireplot3d"><code>fireplot3d</code></h4>
+</section>
+<div class="card-body">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">fireplot3d</span>(grid<span class="op">::</span><span class="dt">LevelSetGrid</span>, elevation<span class="op">::</span><span class="dt">AbstractMatrix</span>; residence_time<span class="op">=</span><span class="cn">nothing</span>, frontcolor<span class="op">=:</span>black, frontlinewidth<span class="op">=</span><span class="fl">2.0</span>, colormap<span class="op">=</span><span class="cn">nothing</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Plot the fire state on a 3D terrain surface. The surface is colored by the level set field <code>φ</code> (or burnout values when <code>residence_time</code> is provided), with the fire front drawn as a 3D contour line.</p>
+<p><code>elevation</code> must be an <code>(ny, nx)</code> matrix of terrain heights [m] matching <code>size(grid)</code>.</p>
+<p>Requires <code>Makie</code> (or a backend like <code>CairoMakie</code> / <code>GLMakie</code>) to be loaded.</p>
+<section id="examples-5" class="level3">
+<h3 class="anchored" data-anchor-id="examples-5">Examples</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">CairoMakie</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Elevation from a DEM raster or synthetic slope</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>elev <span class="op">=</span> [<span class="fl">1000.0</span> <span class="op">+</span> <span class="fl">0.05</span>x <span class="op">+</span> <span class="fl">0.03</span>y for y <span class="kw">in</span> <span class="fu">ycoords</span>(grid), x <span class="kw">in</span> <span class="fu">xcoords</span>(grid)]</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="fu">fireplot3d</span>(grid, elev)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+</div>
+</div>
+<div class="card mb-3">
+<section id="fireplot3d-fireplot3d" class="level4 card-header api-item-header">
+<h4 class="anchored" data-anchor-id="fireplot3d-fireplot3d"><code>fireplot3d!</code> {#fireplot3d!}</h4>
+</section>
+<div class="card-body">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="fu">fireplot3d!</span>(ax, grid<span class="op">::</span><span class="dt">LevelSetGrid</span>, elevation<span class="op">::</span><span class="dt">AbstractMatrix</span>; residence_time<span class="op">=</span><span class="cn">nothing</span>, frontcolor<span class="op">=:</span>black, frontlinewidth<span class="op">=</span><span class="fl">2.0</span>, colormap<span class="op">=</span><span class="cn">nothing</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>In-place version of <code>fireplot3d</code>: draws into an existing <code>Axis3</code> or <code>LScene</code>.</p>
 </div>
 </div>
 <div class="card mb-3">
@@ -469,7 +505,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h4 class="anchored" data-anchor-id="predict_on_grid"><code>predict_on_grid</code></h4>
 </section>
 <div class="card-body">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">predict_on_grid</span>(sol<span class="op">::</span><span class="dt">PINNSolution</span>, grid<span class="op">::</span><span class="dt">LevelSet.LevelSetGrid</span>, t)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">predict_on_grid</span>(sol<span class="op">::</span><span class="dt">PINNSolution</span>, grid<span class="op">::</span><span class="dt">LevelSet.LevelSetGrid</span>, t)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Evaluate the trained PINN on every cell center of <code>grid</code> at time <code>t</code>. Returns a matrix of phi values with the same dimensions as <code>grid</code>.</p>
 </div>
 </div>
@@ -478,7 +514,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h4 class="anchored" data-anchor-id="predict_on_grid-predict_on_grid"><code>predict_on_grid!</code> {#predict_on_grid!}</h4>
 </section>
 <div class="card-body">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">predict_on_grid!</span>(grid<span class="op">::</span><span class="dt">LevelSet.LevelSetGrid</span>, sol<span class="op">::</span><span class="dt">PINNSolution</span>, t)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">predict_on_grid!</span>(grid<span class="op">::</span><span class="dt">LevelSet.LevelSetGrid</span>, sol<span class="op">::</span><span class="dt">PINNSolution</span>, t)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>In-place version of <code>predict_on_grid</code>: updates <code>grid.phi</code> and <code>grid.t</code>.</p>
 </div>
 </div>
@@ -487,12 +523,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h4 class="anchored" data-anchor-id="train_pinn"><code>train_pinn</code></h4>
 </section>
 <div class="card-body">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="fu">train_pinn</span>(grid, model, tspan; config<span class="op">=</span><span class="fu">PINNConfig</span>(), <span class="op">...</span>)</span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="fu">train_pinn</span>(grid, model, tspan, config; <span class="op">...</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">train_pinn</span>(grid, model, tspan; config<span class="op">=</span><span class="fu">PINNConfig</span>(), <span class="op">...</span>)</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="fu">train_pinn</span>(grid, model, tspan, config; <span class="op">...</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Train a Physics-Informed Neural Network to solve the fire spread level set PDE.</p>
 <p>The PINN learns a function <code>phi_theta(x, y, t)</code> satisfying:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>dphi<span class="op">/</span>dt <span class="op">+</span> <span class="fu">F</span>(x,y,t)<span class="op">|</span>nabla phi<span class="op">|</span> <span class="op">=</span> <span class="fl">0</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>where <code>F</code> is the spread rate from the <code>FireSpreadModel</code>.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb19"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>dphi<span class="op">/</span>dt <span class="op">+</span> <span class="fu">F</span>(x,y,t)<span class="op">|</span>nabla phi<span class="op">|</span> <span class="op">=</span> <span class="fl">0</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>where <code>F</code> is the spread rate from the <code>RothermelModel</code>.</p>
 <p>The solver backend is selected by the <code>config</code> type:</p>
 <ul>
 <li><code>PINNConfig</code> — custom Lux solver with hard IC constraint (requires <code>Lux</code>)</li>
@@ -502,7 +538,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h1>Arguments</h1>
 <ul>
 <li><code>grid</code> - <code>LevelSetGrid</code> providing domain geometry and initial condition</li>
-<li><code>model</code> - Callable <code>model(t, x, y) -&gt; spread_rate</code> (e.g.&nbsp;<code>FireSpreadModel</code>)</li>
+<li><code>model</code> - Callable <code>model(t, x, y) -&gt; spread_rate</code> (e.g.&nbsp;<code>RothermelModel</code>)</li>
 <li><code>tspan</code> - Time interval <code>(t_start, t_end)</code></li>
 <li><code>config</code> - <code>PINNConfig</code> or <code>NeuralPDEConfig</code> with training hyperparameters</li>
 <li><code>observations</code> - Optional <code>(t, x, y, phi)</code> tuple of observation data (Lux backend only)</li>
@@ -512,13 +548,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="returns" class="level1">
 <h1>Returns</h1>
 <p>A <code>PINNSolution</code> callable as <code>sol(t, x, y)</code>.</p>
-<section id="examples-5" class="level3">
-<h3 class="anchored" data-anchor-id="examples-5">Examples</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Custom Lux backend (default)</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>sol <span class="op">=</span> <span class="fu">train_pinn</span>(grid, model, (<span class="fl">0.0</span>, <span class="fl">50.0</span>))</span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="co"># NeuralPDE backend</span></span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>sol <span class="op">=</span> <span class="fu">train_pinn</span>(grid, model, (<span class="fl">0.0</span>, <span class="fl">50.0</span>); config<span class="op">=</span><span class="fu">NeuralPDEConfig</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<section id="examples-6" class="level3">
+<h3 class="anchored" data-anchor-id="examples-6">Examples</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Custom Lux backend (default)</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>sol <span class="op">=</span> <span class="fu">train_pinn</span>(grid, model, (<span class="fl">0.0</span>, <span class="fl">50.0</span>))</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="co"># NeuralPDE backend</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>sol <span class="op">=</span> <span class="fu">train_pinn</span>(grid, model, (<span class="fl">0.0</span>, <span class="fl">50.0</span>); config<span class="op">=</span><span class="fu">NeuralPDEConfig</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 </section>
 </div>
@@ -947,7 +983,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       &nbsp;
     </div>   
     <div class="nav-footer-center">
-<p>Built on 2026-03-03</p>
+<p>Built on 2026-03-05</p>
 </div>
     <div class="nav-footer-right">
       &nbsp;

@@ -217,7 +217,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./gallery.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Gallery</span></a>
+  <a href="./marshall-fire.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Case Study: Marshall Fire</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -293,7 +293,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#terrain" id="toc-terrain" class="nav-link" data-scroll-target="#terrain">Terrain</a></li>
   <li><a href="#burnout" id="toc-burnout" class="nav-link" data-scroll-target="#burnout">Burnout</a></li>
   <li><a href="#burn-in" id="toc-burn-in" class="nav-link" data-scroll-target="#burn-in">Burn-in</a></li>
-  <li><a href="#directional-spread" id="toc-directional-spread" class="nav-link" data-scroll-target="#directional-spread">Directional Spread</a>
+  <li><a href="#directional-spread-blending-modes" id="toc-directional-spread-blending-modes" class="nav-link" data-scroll-target="#directional-spread-blending-modes">Directional Spread (Blending Modes)</a>
   <ul class="collapse">
   <li><a href="#examples" id="toc-examples" class="nav-link" data-scroll-target="#examples">Examples</a></li>
   <li><a href="#comparison" id="toc-comparison" class="nav-link" data-scroll-target="#comparison">Comparison</a></li>
@@ -326,7 +326,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>The <code>Components</code> module defines the abstract interfaces and concrete types used by <code>SpreadModel</code> to represent wind, moisture, terrain, burnout, burn-in, and directional spread. Each component is a callable struct with signature <code>(t, x, y)</code> that returns the relevant physical quantity at a given time and location.</p>
+<p>The <code>Components</code> module defines the abstract interfaces and concrete types used by <code>SpreadModels</code> to represent wind, moisture, terrain, burnout, burn-in, and directional spread. Each component is a callable struct with signature <code>(t, x, y)</code> that returns the relevant physical quantity at a given time and location.</p>
 <section id="abstract-interfaces" class="level2">
 <h2 class="anchored" data-anchor-id="abstract-interfaces">Abstract Interfaces</h2>
 <p>Every component category has an abstract supertype. Custom components subtype these and implement the callable interface.</p>
@@ -362,16 +362,43 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tr class="even">
 <td><code>AbstractBurnout</code></td>
 <td><code>burnout(t_burning)</code></td>
-<td><code>Float64 ∈ [0, 1]</code> — spread intensity scale factor</td>
+<td><code>Float64 ∈ [0, 1]</code> — spread intensity decay</td>
 </tr>
 <tr class="odd">
 <td><code>AbstractBurnin</code></td>
 <td><code>burnin(t_burning)</code></td>
 <td><code>Float64 ∈ [0, 1]</code> — spread intensity ramp-up</td>
 </tr>
+<tr class="even">
+<td><code>AbstractBlendingMode</code></td>
+<td><em>(used internally by <code>RothermelModel</code>)</em></td>
+<td>Directional interpolation of spread rate</td>
+</tr>
+<tr class="odd">
+<td><code>AbstractSpotting</code></td>
+<td><code>spot!(grid, model, dt)</code></td>
+<td>Ignites new spot fires from lofted embers</td>
+</tr>
+<tr class="even">
+<td><code>AbstractSuppression</code></td>
+<td><code>suppress!(grid, model, dt)</code></td>
+<td>Modifies grid to reflect suppression actions</td>
+</tr>
 </tbody>
 </table>
-<p>Future interfaces include <code>AbstractSpotting</code> (ember transport) and <code>AbstractSuppression</code> (fireline construction).</p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><code>AbstractSpotting</code> and <code>AbstractSuppression</code> are defined but not yet connected to <code>simulate!</code>. They are reserved for future use.</p>
+</div>
+</div>
 </section>
 <section id="wind" class="level2">
 <h2 class="anchored" data-anchor-id="wind">Wind</h2>
@@ -572,9 +599,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 </section>
-<section id="directional-spread" class="level2">
-<h2 class="anchored" data-anchor-id="directional-spread">Directional Spread</h2>
-<p>Directional models control how the head-fire rate of spread varies with angle from the push direction (combined wind + slope vector).</p>
+<section id="directional-spread-blending-modes" class="level2">
+<h2 class="anchored" data-anchor-id="directional-spread-blending-modes">Directional Spread (Blending Modes)</h2>
+<p>Blending modes (<code>AbstractBlendingMode</code>) control how the spread rate is interpolated across angles relative to the push direction (combined wind + slope vector). Given the head-fire rate <code>R_head</code> (maximum, aligned with push) and a base rate <code>R_base</code> (no wind/slope), the blending mode computes the effective spread rate at any angle <code>θ</code> from the push direction.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">CosineBlending</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Cosine-based directional spread model (default).</p>
 <p>The spread rate at angle <code>θ</code> from the push direction is:</p>
@@ -593,7 +620,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="examples" class="level3">
 <h3 class="anchored" data-anchor-id="examples">Examples</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb24"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> <span class="fu">FireSpreadModel</span>(</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb24"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> <span class="fu">RothermelModel</span>(</span>
 <span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>    SHORT_GRASS,</span>
 <span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">UniformWind</span>(speed<span class="op">=</span><span class="fl">8.0</span>),</span>
 <span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">UniformMoisture</span>(<span class="fu">FuelClasses</span>(d1<span class="op">=</span><span class="fl">0.06</span>, d10<span class="op">=</span><span class="fl">0.07</span>, d100<span class="op">=</span><span class="fl">0.08</span>, herb<span class="op">=</span><span class="fl">0.0</span>, wood<span class="op">=</span><span class="fl">0.0</span>)),</span>
@@ -610,12 +637,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>g_cos <span class="op">=</span> <span class="fu">LevelSetGrid</span>(<span class="fl">150</span>, <span class="fl">150</span>, dx<span class="op">=</span><span class="fl">30.0</span>)</span>
 <span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a><span class="fu">ignite!</span>(g_cos, <span class="fl">2250.0</span>, <span class="fl">2250.0</span>, <span class="fl">200.0</span>)</span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>m_cos <span class="op">=</span> <span class="fu">FireSpreadModel</span>(SHORT_GRASS, <span class="fu">UniformWind</span>(speed<span class="op">=</span><span class="fl">10.0</span>), <span class="fu">UniformMoisture</span>(M), <span class="fu">FlatTerrain</span>())</span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>m_cos <span class="op">=</span> <span class="fu">RothermelModel</span>(SHORT_GRASS, <span class="fu">UniformWind</span>(speed<span class="op">=</span><span class="fl">10.0</span>), <span class="fu">UniformMoisture</span>(M), <span class="fu">FlatTerrain</span>())</span>
 <span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a><span class="fu">simulate!</span>(g_cos, m_cos, steps<span class="op">=</span><span class="fl">200</span>)</span>
 <span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>g_ell <span class="op">=</span> <span class="fu">LevelSetGrid</span>(<span class="fl">150</span>, <span class="fl">150</span>, dx<span class="op">=</span><span class="fl">30.0</span>)</span>
 <span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a><span class="fu">ignite!</span>(g_ell, <span class="fl">2250.0</span>, <span class="fl">2250.0</span>, <span class="fl">200.0</span>)</span>
-<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>m_ell <span class="op">=</span> <span class="fu">FireSpreadModel</span>(SHORT_GRASS, <span class="fu">UniformWind</span>(speed<span class="op">=</span><span class="fl">10.0</span>), <span class="fu">UniformMoisture</span>(M), <span class="fu">FlatTerrain</span>(), <span class="fu">EllipticalBlending</span>())</span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>m_ell <span class="op">=</span> <span class="fu">RothermelModel</span>(SHORT_GRASS, <span class="fu">UniformWind</span>(speed<span class="op">=</span><span class="fl">10.0</span>), <span class="fu">UniformMoisture</span>(M), <span class="fu">FlatTerrain</span>(), <span class="fu">EllipticalBlending</span>())</span>
 <span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a><span class="fu">simulate!</span>(g_ell, m_ell, steps<span class="op">=</span><span class="fl">200</span>)</span>
 <span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>fig <span class="op">=</span> <span class="fu">Figure</span>(size<span class="op">=</span>(<span class="fl">700</span>, <span class="fl">300</span>))</span>
@@ -687,7 +714,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <p>For dynamic components that evolve with the fire, implement <code>update!</code>:</p>
 <div id="42" class="cell" data-execution_count="0">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> SpreadModel.<span class="fu">update!</span>(w<span class="op">::</span><span class="dt">MyWindField</span>, grid<span class="op">::</span><span class="dt">LevelSetGrid</span>, dt)</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> SpreadModels.<span class="fu">update!</span>(w<span class="op">::</span><span class="dt">MyWindField</span>, grid<span class="op">::</span><span class="dt">LevelSetGrid</span>, dt)</span>
 <span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Update wind field based on fire state</span></span>
 <span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
@@ -1115,7 +1142,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       &nbsp;
     </div>   
     <div class="nav-footer-center">
-<p>Built on 2026-03-03</p>
+<p>Built on 2026-03-05</p>
 </div>
     <div class="nav-footer-right">
       &nbsp;

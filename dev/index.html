@@ -213,7 +213,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./gallery.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Gallery</span></a>
+  <a href="./marshall-fire.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Case Study: Marshall Fire</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -310,7 +310,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="hero.gif" class="img-fluid quarto-figure quarto-figure-center figure-img" width="500"></p>
+<p><img src="hero.gif" class="img-fluid quarto-figure quarto-figure-center figure-img" width="600"></p>
 </figure>
 </div>
 <p>Welcome to the documentation for <strong>Wildfires.jl</strong>.</p>
@@ -320,7 +320,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <ul>
 <li><strong><a href="./rothermel.html">Rothermel</a></strong> — The Rothermel (1972) surface fire spread model with the 13 standard NFFL fuel models from Anderson (1982).</li>
 <li><strong><a href="./levelset.html">Level Set</a></strong> — A level set method for simulating 2D fire front propagation driven by spatially varying spread rates.</li>
-<li><strong><a href="./spreadmodel.html">Spread Model</a></strong> — Composable, differentiable components (wind, moisture, terrain) that drive level set simulations via <code>FireSpreadModel</code>.</li>
+<li><strong><a href="./spreadmodel.html">Spread Model</a></strong> — Composable, differentiable components (wind, moisture, terrain) that drive level set simulations via <code>RothermelModel</code></li>
 <li><strong><a href="./gpu.html">GPU Acceleration</a></strong> — Backend-agnostic GPU support (CUDA, Metal, ROCm) via KernelAbstractions.jl for large-grid simulations.</li>
 </ul>
 </section>
@@ -335,11 +335,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Wildfires</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Wildfires.Rothermel</span></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Wildfires.LevelSet</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Wildfires.SpreadModel</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Wildfires.SpreadModels</span></span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Build a fire spread model from components</span></span>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>moisture <span class="op">=</span> <span class="fu">FuelClasses</span>(d1<span class="op">=</span><span class="fl">0.06</span>, d10<span class="op">=</span><span class="fl">0.07</span>, d100<span class="op">=</span><span class="fl">0.08</span>, herb<span class="op">=</span><span class="fl">0.0</span>, wood<span class="op">=</span><span class="fl">0.0</span>)</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> <span class="fu">FireSpreadModel</span>(SHORT_GRASS, <span class="fu">UniformWind</span>(speed<span class="op">=</span><span class="fl">8.0</span>), <span class="fu">UniformMoisture</span>(moisture), <span class="fu">FlatTerrain</span>())</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> <span class="fu">RothermelModel</span>(SHORT_GRASS, <span class="fu">UniformWind</span>(speed<span class="op">=</span><span class="fl">8.0</span>), <span class="fu">UniformMoisture</span>(moisture), <span class="fu">FlatTerrain</span>())</span>
 <span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Evaluate spread rate at a point</span></span>
 <span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>ros <span class="op">=</span> <span class="fu">model</span>(<span class="fl">0.0</span>, <span class="fl">100.0</span>, <span class="fl">100.0</span>)</span>
@@ -770,7 +770,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       &nbsp;
     </div>   
     <div class="nav-footer-center">
-<p>Built on 2026-03-03</p>
+<p>Built on 2026-03-05</p>
 </div>
     <div class="nav-footer-right">
       &nbsp;
