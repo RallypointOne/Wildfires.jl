@@ -268,7 +268,7 @@ Toggle individual panels or enable the spread rate field:
 fireplot(g, model; terrain=false, spread_rate=true)
 ```
 
-## Animation
+## Level Set Animation
 
 ```{julia}
 #| echo: false
@@ -334,12 +334,12 @@ Fire spread animation with the observed perimeter (solid red) overlaid. The simu
 
 ![](marshall_fire.gif){fig-align="center"}
 
-## Results
+## Level Set Results
 
 ```{julia}
 #| echo: false
 fig = Figure(size=(750, 500))
-ax = Axis(fig[1, 1], title="Simulated vs. Observed Perimeter",
+ax = Axis(fig[1, 1], title="Level Set: Simulated vs. Observed Perimeter",
     aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)")
 
 # Terrain background
@@ -353,6 +353,158 @@ heatmap!(ax, xs_grid, ys_grid, fire_mask!(fill(NaN, size(phi_final_t)), phi_fina
 contour!(ax, xs_grid, ys_grid, phi_final_t; levels=[0.0], color=:black, linewidth=2.5, label="Simulated (t=$(round(t_final, digits=0)) min)")
 
 # Observed perimeter (all rings)
+for (i, (px, py)) in enumerate(perim_rings)
+    lines!(ax, px, py; color=:red, linewidth=2.5,
+        label=(i == 1 ? "Observed" : nothing))
+end
+
+axislegend(ax, position=:lt)
+fig
+```
+
+## Cellular Automata Simulation
+
+The same `RothermelModel` components drive a [cellular automata](cellular-automata.qmd) simulation on an identical grid. The CA uses a travel-time approach: each cell computes directional spread rates to its neighbors, and cells ignite when the minimum travel time from a burning neighbor is reached.
+
+```{julia}
+using Wildfires.CellularAutomata
+
+ca = CAGrid(nx, ny, dx=dx, x0=x0, y0=y0)
+CellularAutomata.ignite!(ca, 0.0, 0.0, 60.0)
+
+# Mark non-fuel cells as unburnable
+ca_xs = collect(CellularAutomata.xcoords(ca))
+ca_ys = collect(CellularAutomata.ycoords(ca))
+for j in eachindex(ca_xs), i in eachindex(ca_ys)
+    if is_non_fuel(fuel, ca_xs[j], ca_ys[i])
+        CellularAutomata.set_unburnable!(ca, ca_xs[j], ca_ys[i], 1.0)
+    end
+end
+
+ca_trace = Trace(ca, 20)
+nothing
+```
+
+```{julia}
+#| echo: false
+#| output: false
+simulate!(ca, model, steps=100, trace=ca_trace)
+```
+
+```{julia}
+#| echo: false
+#| output: false
+simulate!(ca, model, steps=100, trace=ca_trace)
+```
+
+```{julia}
+#| echo: false
+#| output: false
+simulate!(ca, model, steps=100, trace=ca_trace)
+```
+
+```{julia}
+#| echo: false
+#| output: false
+simulate!(ca, model, steps=100, trace=ca_trace)
+```
+
+```{julia}
+#| echo: false
+#| output: false
+simulate!(ca, model, steps=100, trace=ca_trace)
+```
+
+```{julia}
+#| echo: false
+#| output: false
+simulate!(ca, model, steps=100, trace=ca_trace)
+```
+
+```{julia}
+#| echo: false
+#| output: false
+simulate!(ca, model, steps=100, trace=ca_trace)
+```
+
+```{julia}
+#| echo: false
+#| output: false
+simulate!(ca, model, steps=100, trace=ca_trace)
+```
+
+```{julia}
+#| echo: false
+#| output: false
+simulate!(ca, model, steps=100, trace=ca_trace)
+```
+
+```{julia}
+#| echo: false
+#| output: false
+simulate!(ca, model, steps=100, trace=ca_trace)
+```
+
+```{julia}
+println("CA simulation complete: t = $(round(ca.t, digits=1)) min, burning = $(count(CellularAutomata.burning(ca))) cells")
+```
+
+### CA Animation
+
+```{julia}
+#| echo: false
+# Build fire mask from CA state: 1.0 for burning/burned cells, NaN otherwise
+function ca_fire_mask!(mask, state_t)
+    for i in eachindex(state_t)
+        s = cellstate(state_t[i])
+        mask[i] = (s == BURNING || s == BURNED) ? 1.0 : NaN
+    end
+    mask
+end
+
+ca_state_buf = Matrix{CellState}(undef, size(elev_t))
+ca_mask_buf = fill(NaN, size(elev_t))
+
+fig = Figure(size=(750, 500))
+ax = Axis(fig[1, 1], aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)")
+hm = heatmap!(ax, xs_grid, ys_grid, elev_t; colormap=:terrain)
+Colorbar(fig[1, 2], hm, label="Elevation (m)")
+
+ca_nframes = length(ca_trace.stack)
+record(fig, joinpath(@__DIR__, "marshall_fire_ca.gif"), 1:ca_nframes; framerate=10) do idx
+    empty!(ax)
+    t, state = ca_trace.stack[idx]
+    ax.title = "Marshall Fire (CA) — t = $(round(t, digits=1)) min"
+    heatmap!(ax, xs_grid, ys_grid, elev_t; colormap=:terrain)
+    permutedims!(ca_state_buf, state, (2, 1))
+    ca_fire_mask!(ca_mask_buf, ca_state_buf)
+    heatmap!(ax, xs_grid, ys_grid, copy(ca_mask_buf); colormap=[RGBAf(1, 0, 0, 0.5)], colorrange=(0, 1), nan_color=:transparent)
+    for (px, py) in perim_rings
+        lines!(ax, px, py; color=:red, linewidth=2.0)
+    end
+end
+nothing
+```
+
+![](marshall_fire_ca.gif){fig-align="center"}
+
+### CA Results
+
+```{julia}
+#| echo: false
+fig = Figure(size=(750, 500))
+ax = Axis(fig[1, 1], title="CA: Simulated vs. Observed Perimeter",
+    aspect=DataAspect(), xlabel="x (m)", ylabel="y (m)")
+
+t_ca_final, state_final = ca_trace.stack[end]
+hm = heatmap!(ax, xs_grid, ys_grid, elev_t; colormap=:terrain)
+Colorbar(fig[1, 2], hm, label="Elevation (m)")
+
+state_final_t = permutedims(state_final, (2, 1))
+mask_final = ca_fire_mask!(fill(NaN, size(state_final_t)), state_final_t)
+heatmap!(ax, xs_grid, ys_grid, mask_final; colormap=[RGBAf(1, 0, 0, 0.5)], colorrange=(0, 1), nan_color=:transparent)
+
+# Observed perimeter
 for (i, (px, py)) in enumerate(perim_rings)
     lines!(ax, px, py; color=:red, linewidth=2.5,
         label=(i == 1 ? "Observed" : nothing))
