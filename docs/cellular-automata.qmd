@@ -198,12 +198,12 @@ ax1 = Axis(fig[1, 1], title="No fuel break", aspect=DataAspect())
 fireplot!(ax1, g1)
 hidedecorations!(ax1)
 
-# With fuel break (vertical strip)
+# With fuel break (vertical strip, downwind of ignition)
 g2 = CAGrid(100, 100, dx=30.0)
 ignite!(g2, 1500.0, 1500.0, 60.0)
 xs = collect(xcoords(g2))
 for j in eachindex(xs)
-    if 2000.0 <= xs[j] <= 2100.0
+    if 900.0 <= xs[j] <= 1000.0
         for i in 1:size(g2, 1)
             set_unburnable!(g2, xs[j], ycoords(g2)[i], 1.0)
         end
