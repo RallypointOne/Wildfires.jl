@@ -513,6 +513,50 @@ fire_loss(grid::LevelSetGrid, φ_observed::AbstractMatrix) = sum(x -> x^2, grid.
 #                     Cellular Automata (Travel-Time)                          #
 #==============================================================================#
 
+#-----------------------------------------------------------------------------# CA radial speed (Huygens wavelet)
+# The level set uses the NORMAL speed F_n(θ) (speed of the front perpendicular
+# to itself).  The CA travel-time approach needs the RADIAL speed v_r(α) — the
+# speed at which the Huygens wavelet extends from a source cell in a given
+# direction.  Using F_n as v_r over-estimates flanking/diagonal spread because
+# the wavelet shape is not a circle.
+#
+# CosineBlending wavelet: shifted circle + straight segment ("stadium").
+#   v_r(α) ≈ R_base / sin(α)  for most angles, clamped to R_head near push.
+#
+# EllipticalBlending wavelet: ellipse with source at rear focus (Anderson 1983).
+#   v_r(α) = R_head·(1-ε) / (1 - ε·cos α)   (Richards formula)
+
+function _ca_radial_speed(model::RothermelModel, ::CosineBlending, t, x, y, nx, ny)
+    (; R_head, R_base, cos_theta) = _push_direction(model, t, x, y, nx, ny)
+    R_head == 0 && return 0.0
+    R_head ≈ R_base && return R_head
+
+    # Backing half: radial speed = R_base
+    cos_theta <= 0 && return R_base
+
+    # Forward half: Huygens wavelet is a straight segment at y = R_base
+    # connecting the forward arc to the backing semicircle.
+    # Radial speed = R_base / sin(α), clamped to R_head near the push direction.
+    sin_alpha = sqrt(max(0.0, 1 - cos_theta^2))
+    return R_base / max(sin_alpha, R_base / R_head)
+end
+
+function _ca_radial_speed(model::RothermelModel, dir::EllipticalBlending, t, x, y, nx, ny)
+    (; R_head, R_base, cos_theta, fuel, moist) = _push_direction(model, t, x, y, nx, ny)
+    R_head == 0 && return 0.0
+    R_head ≈ R_base && return R_head
+
+    # Effective wind speed (combined wind + slope)
+    U_eff_kmh = _effective_wind_speed(fuel, moist, R_head, R_base)
+    U_eff_ms = U_eff_kmh / 3.6
+    LB = length_to_breadth(U_eff_ms; formula=dir.formula)
+    ε = fire_eccentricity(LB)
+
+    # Radial speed from rear focus (Richards/Anderson formula)
+    v_r = R_head * (1 - ε) / (1 - ε * cos_theta)
+    return max(v_r, R_base)
+end
+
 #-----------------------------------------------------------------------------# update! for CAGrid
 function update!(model::RothermelModel, grid::CAGrid, dt)
     model.fuel isa AbstractFuel && update!(model.fuel, grid, dt)
@@ -550,11 +594,11 @@ end
     advance!(grid::CAGrid, model::RothermelModel, dt; burnout=NoBurnout(), burnin=NoBurnin(), residence_time=Inf)
 
 Advance the CA fire simulation by one time step `dt` [min] using a deterministic
-travel-time approach.
+travel-time approach with Huygens-correct radial speeds.
 
-For each `BURNING` cell, the directional spread rate `R(θ)` is computed to each
-`UNBURNED` neighbor using [`directional_speed`](@ref).  The travel time is
-`distance / R(θ)`, and the neighbor ignites when its minimum arrival time is
+For each `BURNING` cell, the radial spread rate to each `UNBURNED` neighbor is
+computed from the Huygens wavelet of the fire ellipse.  The travel time is
+`distance / v_r(θ)`, and the neighbor ignites when its minimum arrival time is
 reached.  `BURNING` cells transition to `BURNED` after `residence_time` minutes.
 
 ### Examples
@@ -599,7 +643,7 @@ function CellularAutomata.advance!(g::CAGrid{T}, model::RothermelModel, dt;
             norm_x = delta_x / dist
             norm_y = delta_y / dist
 
-            R = directional_speed(model, g.t, x_src, y_src, norm_x, norm_y) * scale
+            R = _ca_radial_speed(model, model.blending_mode, g.t, x_src, y_src, norm_x, norm_y) * scale
             R > zero(T) || continue
 
             t_arr = g.t_ignite[i, j] + dist / R
@@ -636,9 +680,9 @@ end
 
 Run a deterministic cellular automata fire simulation using a travel-time approach.
 
-The same `RothermelModel` used with `LevelSetGrid` works here. The CA uses
-[`directional_speed`](@ref) to compute direction-dependent spread rates to each
-neighbor, supporting both [`CosineBlending`](@ref) and [`EllipticalBlending`](@ref).
+The same `RothermelModel` used with `LevelSetGrid` works here. The CA computes
+Huygens-correct radial speeds to each neighbor, supporting both
+[`CosineBlending`](@ref) and [`EllipticalBlending`](@ref).
 
 When `dt` is `nothing` (the default), the time step is computed automatically each
 step via the CFL condition: `dt = cfl * min(dx, dy) / max(R)`.
