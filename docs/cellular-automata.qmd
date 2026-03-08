@@ -10,8 +10,23 @@ using Wildfires
 using Wildfires.Rothermel
 using Wildfires.CellularAutomata
 using Wildfires.SpreadModels
+using Wildfires.SpreadModels: Trace
 using CairoMakie
 ```
+
+```{julia}
+#| echo: false
+M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
+g = CAGrid(100, 100, dx=30.0)
+ignite!(g, 1500.0, 1500.0, 100.0)
+model = RothermelModel(SHORT_GRASS, NoWind(), UniformMoisture(M), FlatTerrain())
+
+trace = Trace(g, 2)
+simulate!(g, model, steps=80, residence_time=8.0, trace=trace)
+firegif(joinpath(@__DIR__, "ca_hero.gif"), trace, g)
+```
+
+![](ca_hero.gif)
 
 ::: {.callout-tip}
 `fireplot` and `fireplot!` work with both `LevelSetGrid` and `CAGrid`.
@@ -143,8 +158,6 @@ fig
 ### Animation
 
 ```{julia}
-using Wildfires.SpreadModels: Trace
-
 M = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
 g = CAGrid(100, 100, dx=30.0)
 ignite!(g, 1500.0, 1500.0, 100.0)
