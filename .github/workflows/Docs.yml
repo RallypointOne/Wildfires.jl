@@ -38,7 +38,7 @@ jobs:
       - uses: julia-actions/setup-julia@v2
         with:
           version: '1'
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
       - name: Install docs dependencies
         run: julia --project=docs -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
       - name: Install system dependencies
@@ -51,7 +51,7 @@ jobs:
             sed -i '/- resources\/changelog.qmd/i\        - resources/benchmarks.qmd' docs/_quarto.yml
           fi
       - name: Cache hero.gif
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: docs/hero.gif
           key: hero-gif-${{ hashFiles('docs/generate_hero.jl') }}
