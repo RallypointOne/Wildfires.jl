@@ -19,7 +19,7 @@ jobs:
   docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Determine deploy target from ref
       - name: Set deploy version
@@ -51,7 +51,7 @@ jobs:
             sed -i '/- resources\/changelog.qmd/i\        - resources/benchmarks.qmd' docs/_quarto.yml
           fi
       - name: Cache hero.gif
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: docs/hero.gif
           key: hero-gif-${{ hashFiles('docs/generate_hero.jl') }}
