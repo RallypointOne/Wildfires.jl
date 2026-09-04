@@ -1,0 +1,169 @@
+---
+title: "Refactor Sketch"
+engine: julia
+---
+
+This page outlines the target architecture for Wildfires.jl's component-based modeling system.
+
+## Current Modules
+
+| Module | Role |
+|--------|------|
+| `Grids` | `Grid` struct (CRS, extent, dx, state, layers) |
+| `RateOfSpread` | Point-wise fire physics (Rothermel, McArthur, FBP) |
+| `PropagationModel` | Front tracking, environment types, simulation |
+
+### What works
+
+- **`Grid`** is generic over state type --- `Float64` for level set, `CellState` for CA.
+- **`AbstractRateOfSpread`** is a clean hierarchy --- Rothermel, McArthur, and FBP are independent.
+- **`LevelSetPropagation` vs `CAPropagation`** cleanly separates the front-tracking method.
+
+### What doesn't compose
+
+- **`SpreadModel` is Rothermel-only.** The callable, `_push_direction`, `_directional_rate`, and `_ca_radial_speed` all dispatch on `SpreadModel{<:RothermelROS}`. McArthur and FBP models can't be used at all.
+- **`PropagationModel.jl` is a monolith.** It mixes cell states, environment types, blending modes, solvers/BCs, fire shape computation, and simulation orchestration.
+- **Directional speed is entangled with ROS.** Computing `R_head`/`R_base` requires calling `rate_of_spread` 4 times with different wind/slope combinations --- a Rothermel-specific trick. But the *concept* of an elliptical fire shape applies to McArthur and FBP too.
+- **Environment has no generic interface.** McArthur needs `(temperature, humidity, curing)`, FBP needs `(ffmc, bui)`, Rothermel needs `(moisture, wind, slope)`.
+
+## Target Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│  Grid  (state + layers + geometry)          │
+├─────────────────────────────────────────────┤
+│  Environment  (spatial fields on the grid)  │
+│    wind, moisture, terrain, fuel map, ...   │
+├─────────────────────────────────────────────┤
+│  RateOfSpread  (point-wise physics)         │
+│    Rothermel, McArthur, FBP, custom         │
+├─────────────────────────────────────────────┤
+│  FireShape  (R_head + R_base → R(θ))        │
+│    cosine, elliptical, custom               │
+├─────────────────────────────────────────────┤
+│  Propagation  (advance the front)           │
+│    level set (Godunov/Superbee/WENO5)       │
+│    cellular automata (Moore/VonNeumann)     │
+└─────────────────────────────────────────────┘
+```
+
+### Layer interfaces
+
+| Interface | Input | Output |
+|-----------|-------|--------|
+| Environment → ROS | `(t, x, y)` + environment fields | `R_head`, `R_base`, `push_direction` |
+| ROS → FireShape | `R_head`, `R_base`, `cos_theta` | `R(θ)` at any angle |
+| FireShape → Propagation | speed field `F(x, y, θ)` | updated grid state |
+
+## FireShape Layer
+
+The key insight: **directional fire shape is not Rothermel-specific.**  Most fire spread models produce a head-fire rate and a backing rate, and the fire shape is determined by how the rate varies with angle.  McArthur and FBP also have wind-driven elliptical fire shapes.
+
+The `FireShape` layer takes `(R_head, R_base, cos_theta)` and returns a scalar speed.  This is what blending modes already do, but decoupled from the ROS model:
+
+```julia
+# Any ROS model that produces R_head and R_base can feed any fire shape
+abstract type AbstractFireShape end
+
+struct CosineShape <: AbstractFireShape end
+struct EllipticalShape <: AbstractFireShape
+    LB::Float64  # length-to-breadth ratio
+end
+
+# Generic interface — ROS-agnostic
+fire_shape_speed(::CosineShape, R_head, R_base, cos_theta)
+fire_shape_speed(s::EllipticalShape, R_head, R_base, cos_theta)
+```
+
+For the **level set**, the fire shape returns the *normal speed* $F_n(\theta)$.
+For the **CA**, it returns the *radial speed* $v_r(\alpha)$ (Huygens wavelet).
+These are different quantities for the same shape --- the fire shape type can provide both:
+
+```julia
+normal_speed(shape, R_head, R_base, cos_theta)  # level set
+radial_speed(shape, R_head, R_base, cos_theta)  # CA (Huygens)
+```
+
+## Environment Adapters
+
+Different ROS models need different inputs.  Rather than one rigid `SpreadModel`, use per-model adapters that extract the right fields from a generic environment:
+
+```julia
+# Generic environment: a collection of spatial fields
+struct Environment{W, M, T, F}
+    wind::W        # callable (t, x, y) -> wind info
+    moisture::M    # callable (t, x, y) -> moisture info
+    terrain::T     # callable (t, x, y) -> terrain info
+    fuel::F        # callable (t, x, y) -> fuel info (or nothing)
+end
+
+# Each ROS model defines how to extract R_head, R_base, push_direction
+# from an Environment.  This is the adapter pattern.
+function head_and_base(ros::RothermelROS, env::Environment, t, x, y)
+    speed, wind_dir = env.wind(t, x, y)
+    moist = env.moisture(t, x, y)
+    slope, aspect = env.terrain(t, x, y)
+    R_head = rate_of_spread(ros; moisture=moist, wind=speed, slope=slope)
+    R_base = rate_of_spread(ros; moisture=moist, wind=0.0, slope=0.0)
+    # ... compute push direction ...
+    return (; R_head, R_base, push_dir_x, push_dir_y)
+end
+
+function head_and_base(ros::McArthurGrasslandROS, env::Environment, t, x, y)
+    speed, _ = env.wind(t, x, y)
+    temp, rh, curing = env.moisture(t, x, y)  # different return type!
+    R_head = rate_of_spread(ros; wind=speed, temperature=temp, humidity=rh, curing=curing)
+    R_base = rate_of_spread(ros; wind=0.0, temperature=temp, humidity=rh, curing=curing)
+    # ... push direction from wind only (no slope effect in McArthur) ...
+    return (; R_head, R_base, push_dir_x, push_dir_y)
+end
+```
+
+The environment's `moisture` field returns different types depending on the ROS model.  This is fine --- Julia's type system handles it via dispatch on the `head_and_base` method.
+
+## Propagation Layer
+
+The propagation layer becomes truly generic.  It doesn't know about Rothermel or fire shape formulas --- it just consumes a speed field:
+
+```julia
+# Level set: fill F matrix, then advance φ
+function simulate_step!(grid, ros, env, shape, prop::LevelSetPropagation, dt)
+    for each cell (i, j):
+        hb = head_and_base(ros, env, t, x, y)
+        normal = ∇φ / |∇φ|
+        cos_theta = dot(normal, hb.push_dir)
+        F[i, j] = normal_speed(shape, hb.R_head, hb.R_base, cos_theta)
+    advance!(grid, F, dt, prop.solver, prop.bc)
+end
+
+# CA: compute radial speed to each neighbor
+function simulate_step!(grid, ros, env, shape, prop::CAPropagation, dt)
+    for each BURNING cell:
+        hb = head_and_base(ros, env, t, x, y)
+        for each neighbor:
+            cos_theta = dot(neighbor_dir, hb.push_dir)
+            v_r = radial_speed(shape, hb.R_head, hb.R_base, cos_theta)
+            t_arrival = dist / v_r
+            ...
+end
+```
+
+## File Organization
+
+| File | Contents |
+|------|----------|
+| `Grids.jl` | `Grid`, `xcoords`, `ycoords`, UTM utilities |
+| `RateOfSpread.jl` | `AbstractRateOfSpread`, all ROS models, fuel constants |
+| `Environment.jl` | `Environment`, wind/moisture/terrain types, `head_and_base` adapters |
+| `FireShape.jl` | `AbstractFireShape`, cosine/elliptical shapes, `normal_speed`, `radial_speed` |
+| `LevelSet.jl` | Solvers, BCs, reinitialization, `advance!` for level set grids |
+| `CellularAutomata.jl` | `CellState`, neighborhoods, `advance!` for CA grids |
+| `Simulation.jl` | `simulate!`, `Trace`, burnout/burnin, CFL, grid factories |
+
+## Migration Path
+
+1. Extract `FireShape.jl` from `PropagationModel.jl` (blending modes + directional speed)
+2. Extract `Environment.jl` (wind/moisture/terrain types + `head_and_base`)
+3. Split `PropagationModel.jl` into `LevelSet.jl` + `CellularAutomata.jl` + `Simulation.jl`
+4. Add `head_and_base` methods for McArthur and FBP
+5. Wire McArthur/FBP through `simulate!`

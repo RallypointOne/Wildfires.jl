@@ -26,21 +26,11 @@ book:
     - part: "Docs"
       chapters:
         - index.qmd
-        - getting-started.qmd
-        - rothermel.qmd
-        - levelset.qmd
-        - components.qmd
-        - spreadmodel.qmd
-        - cellular-automata.qmd
-        - marshall-fire.qmd
-        - gpu.qmd
-        - pinn.qmd
     - part: "API"
       chapters:
         - api.qmd
     - part: "Resources"
       chapters:
-        - resources/troubleshooting.qmd
         - resources/changelog.qmd
         - resources/coverage.qmd
 

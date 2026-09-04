@@ -3,47 +3,45 @@ title: "Wildfires.jl"
 engine: julia
 ---
 
-```{julia}
-#| echo: false
-#| output: false
-isfile(joinpath(@__DIR__, "hero.gif")) || include(joinpath(@__DIR__, "generate_hero.jl"))
-```
+Wildfires.jl is a fire spread model built on
+[Oceananigans.jl](https://github.com/CliMA/Oceananigans.jl) and
+[Breeze.jl](https://github.com/NumericalEarth/Breeze.jl), targeting a coupled
+fire–atmosphere model of the WRF-SFIRE kind. It is a ground-up rewrite; the
+previous package lives in `archive/` and is documented there.
 
-![](hero.gif){fig-align="center" width="600"}
+What exists today:
 
-Welcome to the documentation for **Wildfires.jl**.
+- **Georeferencing** — `ProjectedCRS` ties an Oceananigans grid in meters to a
+  projected CRS (UTM by default); `raster_topography` turns a DEM raster into
+  the terrain closure Breeze's `materialize_terrain!` takes.
+- **Fire grid** — `fire_grid` refines an atmospheric grid's horizontal
+  directions by an integer factor so fire cells nest exactly inside
+  atmospheric cells.
+- **Fire model** — `FireModel` holds the level set `φ` and ignition time
+  `t_ignition`; `ignite!` places circular ignitions; `advance!` propagates
+  the front with a prescribed rate of spread (Godunov upwind + Heun).
 
-## Overview
-
-Wildfires.jl is a Julia package for wildfire modeling and simulation, built around three core modules:
-
-- **[Rothermel](rothermel.qmd)** — The Rothermel (1972) surface fire spread model with the 13 standard NFFL fuel models from Anderson (1982).
-- **[Level Set](levelset.qmd)** — A level set method for simulating 2D fire front propagation driven by spatially varying spread rates.
-- **[Spread Model](spreadmodel.qmd)** — Composable, differentiable components (wind, moisture, terrain) that drive level set simulations via `RothermelModel`
-- **[GPU Acceleration](gpu.qmd)** — Backend-agnostic GPU support (CUDA, Metal, ROCm) via KernelAbstractions.jl for large-grid simulations.
+Every per-cell operation is a KernelAbstractions kernel launched through
+Oceananigans, so the fire model runs on the CPU or a GPU. Design notes and
+per-step progress are in `references/approach.md`.
 
 ## Installation
 
 ```julia
 using Pkg
-Pkg.add("Wildfires")
+Pkg.add(url = "https://github.com/RallypointOne/Wildfires.jl")
 ```
 
-## Quick Example
+## Example
 
-```{julia}
-using Wildfires
-using Wildfires.Rothermel
-using Wildfires.LevelSet
-using Wildfires.SpreadModels
+```julia
+using Wildfires, Oceananigans
 
-# Build a fire spread model from components
-moisture = FuelClasses(d1=0.06, d10=0.07, d100=0.08, herb=0.0, wood=0.0)
-model = RothermelModel(SHORT_GRASS, UniformWind(speed=8.0), UniformMoisture(moisture), FlatTerrain())
-
-# Evaluate spread rate at a point
-ros = model(0.0, 100.0, 100.0)
-println("Rate of spread: $(round(ros, digits=1)) m/min")
+atmosphere = RectilinearGrid(size = (8, 6, 4), x = (-960, 960), y = (-720, 720),
+                             z = (0, 400), topology = (Bounded, Bounded, Bounded))
+model = FireModel(fire_grid(atmosphere; refinement = 8))   # 64×48 cells at 30 m
+ignite!(model, 0.0, 0.0; radius = 100.0)
+for _ in 1:100
+    advance!(model, 1.0; speed = 2.0)                       # m/s
+end
 ```
-
-See [Getting Started](getting-started.qmd) for a full walkthrough.
