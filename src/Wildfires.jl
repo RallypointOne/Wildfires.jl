@@ -10,6 +10,7 @@ export ProjectedCRS, utm_zone, utm_epsg,
        spread_rate!, wind_adjustment, length_to_breadth, NormalProjection, HuygensEllipse, FuelMap,
        FuelClasses, FuelModel, FuelBed, spread_rate,
        polygon_coverage,
+       raster_column_series, lateral_sponge, relaxation_forcing,
        HamadaModel, hamada_rates, ellipse_speed,
        BuildingClass, Structures, update_structures!, heat_release, heat_release!
 
@@ -20,5 +21,6 @@ include("hamada.jl")
 include("polygons.jl")
 include("structures.jl")
 include("spread.jl")
+include("atmosphere.jl")
 
 end # module Wildfires

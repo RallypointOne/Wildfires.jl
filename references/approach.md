@@ -202,6 +202,7 @@ Each step was verified before moving on. Test counts are cumulative.
 | 9 | `raster_sampler` (nearest or bilinear); `spread_rate!` speed field along the front normal; `examples/marshall/marshall_fire.jl` | 364 |
 | 10 | WUI: `Structures` from footprints, Hamada urban spread in `spread_rate!`, `wind_adjustment`, structure ignition and heat release | 430 |
 | 11 | `HuygensEllipse` front shape, `FuelMap` device fuel table, `raster_time_series` wind, `polygon_coverage`, polygon `ignite!`; eight-hour Marshall run | 481 |
+| 12 | HRRR into Breeze: `raster_column_series`, `lateral_sponge`, `relaxation_forcing`; `examples/marshall/atmosphere.jl` | 509 |
 
 ```julia
 crs   = ProjectedCRS(-105.182, 39.9575)        # UTM 13N, origin at that point
@@ -513,14 +514,63 @@ candidate causes for the miss: the sustained HRRR wind at 3 km against gusts
 near 50 m/s (gust rasters are downloaded and unused), the wind direction over
 this terrain, no spotting, no fire-induced winds, and the moisture guess.
 
+**Step 12** (`src/atmosphere.jl`, `docs/data/marshall/download_hrrr_levels.jl`,
+`examples/marshall/atmosphere.jl`). The first of the three coupling steps:
+the analysis as initial state and lateral forcing of a Breeze atmosphere, the
+role WPS and `real.exe` play for WRF.
+
+- `download_hrrr_levels.jl` pulls the hourly `wrfprsf00` analyses from 17:00
+  to 02:00 UTC by byte range: HGT, TMP, SPFH, UGRD, VGRD on the 29 isobaric
+  levels from 1000 to 300 hPa, one multi-band GeoTIFF per variable and hour,
+  plus surface pressure and terrain height. GDAL's GRIB driver reports
+  temperature in °C, which cost one run.
+- `raster_column_series(values, heights, times, grid, crs)` samples every
+  band at every column and interpolates linearly in geopotential height onto
+  the column's cell centres of the terrain-following grid, holding the end
+  levels constant beyond their range. HRRR's below-ground levels supply the
+  values under the 1.7 km terrain. It returns a 3D `FieldTimeSeries`.
+- `lateral_sponge(grid; width, ramp)` is the Davies mask, `relaxation_forcing(name, target, rate; mask)`
+  an Oceananigans discrete forcing reading a `FieldTimeSeries` target at the
+  clock time inside the kernel (the `Val`-typed field name keeps it
+  type-stable); Breeze wraps it in `SpecificForcing` under the specific key.
+  Tested on a periodic anelastic box: uniform relaxation follows the
+  exponential, the sponge leaves the interior untouched, and the target is
+  read at the Runge–Kutta stage times, which the first test did not expect.
+- The example builds `CompressibleDynamics` (split-explicit, `UpperSponge`,
+  `SlopeInsideInterpolation`, the configuration Breeze documents on terrain)
+  with the analysis-mean θ profile and sea-level pressure from the surface
+  fields, `SmagorinskyLilly`, WENO5, and relaxation of `u`, `v`, `θ` over the
+  outer eight cells at 1/600 s; sets the initial state from the 18:00 UTC
+  analysis (velocities averaged onto faces) with `compute_reference_state`;
+  and runs one hour, seven minutes of wall time for 72k cells on the CPU.
+
+Finding: with Breeze's default impenetrable side walls the through-flow
+cannot enter, and the level-1 wind falls from 18 to 8 m/s within ten minutes
+while the analysis holds 19, with max |w| reaching 13 m/s as the flow diverts
+(`figures/atmosphere_wind.png`). Relaxation alone does not make a lateral
+boundary. Breeze 0.9's acoustic substepping does honour
+`NormalFlowBoundaryCondition` on `ρu`/`ρv`; one attempt with discrete-form
+values `ρᵈ × analysis` at the walls and `PerturbationAdvection(600, 60)`
+built and initialized but produced a negative thermodynamic state on the
+first step. Not pursued further in this session. Moisture is initialized
+but not relaxed (`qᵛ` is not among the forcing-visible fields; relax `ρqᵛ`
+instead), and there is no surface layer, so the lowest level feels no drag.
+
 ## Next
 
 Unblocked, in rough dependency order:
 
+- **Open lateral boundaries for the Breeze run** — see Step 12. Get
+  `NormalFlowBoundaryCondition` on `ρu`/`ρv` working with the compressible
+  core: check the face index and density used for the target momentum, try
+  the default `PerturbationAdvection()` (instant inflow, free outflow), and
+  compare with NumericalEarth 0.7's `parent_boundary_conditions`, which
+  wraps the series in `Interpolated`. Until then the atmosphere example
+  demonstrates ingestion, not a usable wind.
 - **Close the factor of three** — see the Step 11 table and figures. Try in
   order: drive with HRRR gusts (or a blend) instead of the sustained wind;
   check the wind direction against the observed east-southeast spread (a
-  finer wind product, or the coupled atmosphere over this terrain);
+  finer wind product, or the coupled atmosphere once its boundaries work);
   calibrate moisture and the Hamada coefficients against the perimeter with
   the overlap statistics; spotting.
 - **Structure ignition probability** — the front ignites every structure it

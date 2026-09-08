@@ -16,4 +16,5 @@ using Breeze.TerrainFollowingDiscretization
     include("test_polygons.jl")
     include("test_structures.jl")
     include("test_spread.jl")
+    include("test_atmosphere.jl")
 end
