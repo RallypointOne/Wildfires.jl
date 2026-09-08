@@ -19,6 +19,7 @@ benchmark/results.json
 benchmark/Manifest.toml
 .benchmark-worktree/
 *.jpg
+*.png
 
 # Project-specific
 /data/*
@@ -37,3 +38,6 @@ benchmark/Manifest.toml
 *.tif
 *.tif
 *.tif
+
+# Example outputs
+examples/*/figures/

@@ -1,5 +1,6 @@
 using Proj
 import GeoFormatTypes as GFT
+using Oceananigans.OutputReaders: Clamp
 
 #-----------------------------------------------------------------------------# UTM utilities
 """
@@ -171,3 +172,35 @@ materialize_terrain!(grid, h)
 """
 raster_topography(raster, crs::ProjectedCRS; fill_value = 0) =
     raster_sampler(raster, crs; method = :bilinear, fill_value)
+
+#-----------------------------------------------------------------------------# raster_time_series
+"""
+    raster_time_series(rasters, times, grid, crs::ProjectedCRS;
+                       method = :bilinear, fill_value = 0, time_indexing = Clamp()) -> FieldTimeSeries
+
+A `FieldTimeSeries` on the horizontal `grid` with one snapshot per raster,
+each sampled through [`raster_sampler`](@ref), at the given `times` [s].
+Indexing with `Time(t)` interpolates linearly between snapshots; outside the
+range `Clamp()` holds the nearest one. Accepted anywhere [`spread_rate!`](@ref)
+takes a field, where it is read at the model's clock time.
+
+Requires Rasters.jl and ArchGDAL.jl to be loaded.
+
+### Examples
+```julia
+stamps = ["1800", "1815", "1830"]
+u = raster_time_series([Raster("wind_u_\$s.tif") for s in stamps], 0:900:1800, grid, crs)
+u[Time(450)]                                   # a field halfway between snapshots
+spread_rate!(speed, model, bed, moisture; wind = (u, v))
+```
+"""
+function raster_time_series(rasters, times, grid, crs::ProjectedCRS;
+                            method = :bilinear, fill_value = 0, time_indexing = Clamp())
+    length(rasters) == length(times) ||
+        throw(ArgumentError("got $(length(rasters)) rasters for $(length(times)) times"))
+    series = FieldTimeSeries{Center, Center, Nothing}(grid, times; time_indexing)
+    for (n, raster) in enumerate(rasters)
+        set!(series[n], raster_sampler(raster, crs; method, fill_value))
+    end
+    return series
+end

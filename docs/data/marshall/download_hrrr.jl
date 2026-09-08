@@ -1,19 +1,21 @@
 #--------------------------------------------------------------------------------# HRRR Wind Data Download for Marshall Fire
 #
-# Downloads 10m u/v wind and surface gust at 15-minute resolution (17:00–19:00 UTC)
-# from the NOAA HRRR archive on AWS. Byte-range requests pull only the needed
+# Downloads 10m u/v wind and surface gust at 15-minute resolution from 17:00 UTC
+# on 30 December to 02:00 UTC on 31 December 2021 from the NOAA HRRR archive on
+# AWS. Byte-range requests pull only the needed
 # GRIB2 messages, which are then reprojected to WGS84 and cropped.
 #
 # Run from the docs environment:
 #   julia --project=docs docs/data/marshall/download_hrrr.jl
 #
 # Outputs:
-#   wind_u_HHMM.tif, wind_v_HHMM.tif, wind_gust_HHMM.tif  (9 timestamps × 3 vars)
+#   wind_u_HHMM.tif, wind_v_HHMM.tif, wind_gust_HHMM.tif  (37 timestamps × 3 vars;
+#   HHMM is UTC, 0000–0200 belong to the 31st)
 #--------------------------------------------------------------------------------
 
 using Downloads, ArchGDAL
 
-const BASE_URL = "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.20211230/conus"
+const BASE_URL = "https://noaa-hrrr-bdp-pds.s3.amazonaws.com"
 const OUTDIR = @__DIR__
 
 # Target grid: WGS84, ~3km resolution, covering Marshall Fire area with margin
@@ -27,18 +29,19 @@ const VARIABLES = [
     ("GUST", "surface",           "wind_gust"),
 ]
 
-# Time steps: (cycle_hour, source_file, fcst_label, output_suffix)
-const TIMESTEPS = [
-    (17, "wrfsfcf00",  "anl",         "1700"),
-    (17, "wrfsubhf01", "15 min fcst", "1715"),
-    (17, "wrfsubhf01", "30 min fcst", "1730"),
-    (17, "wrfsubhf01", "45 min fcst", "1745"),
-    (18, "wrfsfcf00",  "anl",         "1800"),
-    (18, "wrfsubhf01", "15 min fcst", "1815"),
-    (18, "wrfsubhf01", "30 min fcst", "1830"),
-    (18, "wrfsubhf01", "45 min fcst", "1845"),
-    (19, "wrfsfcf00",  "anl",         "1900"),
-]
+# Time steps: (date, cycle_hour, source_file, fcst_label, output_suffix). Each
+# hourly cycle supplies its analysis and the 15/30/45 min sub-hourly forecasts.
+const CYCLES = [("20211230", h) for h in 17:23]
+append!(CYCLES, [("20211231", h) for h in 0:2])
+const TIMESTEPS = Tuple{String, Int, String, String, String}[]
+for (date, hour) in CYCLES
+    hh = lpad(hour, 2, '0')
+    push!(TIMESTEPS, (date, hour, "wrfsfcf00", "anl", hh * "00"))
+    hour == 2 && continue
+    for minute in (15, 30, 45)
+        push!(TIMESTEPS, (date, hour, "wrfsubhf01", "$minute min fcst", hh * string(minute)))
+    end
+end
 
 #--------------------------------------------------------------------------------# Helpers
 
@@ -92,9 +95,9 @@ end
 function main()
     idx_cache = Dict{String, Vector}()
 
-    for (hour, source, fcst, suffix) in TIMESTEPS
+    for (date, hour, source, fcst, suffix) in TIMESTEPS
         hh = lpad(hour, 2, '0')
-        grib_url = "$BASE_URL/hrrr.t$(hh)z.$(source).grib2"
+        grib_url = "$BASE_URL/hrrr.$date/conus/hrrr.t$(hh)z.$(source).grib2"
         idx_url  = "$grib_url.idx"
 
         # Cache idx files (one per unique GRIB2 file)
@@ -107,6 +110,7 @@ function main()
 
         for (var, level, prefix) in VARIABLES
             outpath = joinpath(OUTDIR, "$(prefix)_$(suffix).tif")
+            isfile(outpath) && continue
             @info "Downloading" var level fcst output=basename(outpath)
 
             start_byte, end_byte = find_byte_range(entries, var, level, fcst)

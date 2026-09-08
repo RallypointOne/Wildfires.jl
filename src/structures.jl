@@ -1,6 +1,4 @@
-import GeoInterface as GI
 using Oceananigans.Architectures: on_architecture
-using Oceananigans.Grids: xspacings, yspacings
 
 #-----------------------------------------------------------------------------# BuildingClass
 """
@@ -113,52 +111,15 @@ end
 function Structures(geometries, crs::ProjectedCRS, grid;
                     source_crs = "EPSG:4326", classes = (BuildingClass(),),
                     class = Returns(1), radius = 60.0, subsamples::Integer = 4)
-    topology(grid)[3] === Flat ||
-        throw(ArgumentError("Structures requires a horizontal grid with Flat vertical topology"))
     FT = eltype(grid)
     classes = Tuple(BuildingClass{FT}(c) for c in classes)
-    transform = to_grid_transform(crs, source_crs)
-
-    Nx, Ny = size(grid, 1), size(grid, 2)
-    xf, yf = xnodes(grid, Face()), ynodes(grid, Face())
-    Δx, Δy = first(xspacings(grid, Center())), first(yspacings(grid, Center()))
+    (; Nx, Ny, xf, yf, Δx, Δy) = _grid_geometry(grid)
     x₀, y₀ = first(xf), first(yf)
 
-    xs, ys, areas = Float64[], Float64[], Float64[]
-    cls = Int32[]
-    cell_i, cell_j = Int32[], Int32[]
-    offsets = Int32[1]
-    coverage = zeros(Float64, Nx, Ny)
-
-    for (item, ring) in _rings(geometries)
-        pts = [transform(GI.x(p), GI.y(p)) for p in GI.getpoint(ring)]
-        first(pts) == last(pts) || push!(pts, first(pts))
-        A, cx, cy = _area_centroid(pts)
-        A < 1 && continue
-
-        xlo, xhi = extrema(first, pts)
-        ylo, yhi = extrema(last, pts)
-        ilo, ihi = _cell(xlo, x₀, Δx), _cell(xhi, x₀, Δx)
-        jlo, jhi = _cell(ylo, y₀, Δy), _cell(yhi, y₀, Δy)
-        (ihi < 1 || ilo > Nx || jhi < 1 || jlo > Ny) && continue
-
-        ncells = 0
-        for j in max(jlo, 1):min(jhi, Ny), i in max(ilo, 1):min(ihi, Nx)
-            f = _coverage(pts, xf[i], yf[j], Δx, Δy, subsamples)
-            f > 0 || continue
-            coverage[i, j] += f
-            push!(cell_i, i)
-            push!(cell_j, j)
-            ncells += 1
-        end
-        ncells > 0 || continue
-
-        push!(xs, cx); push!(ys, cy); push!(areas, A)
-        push!(cls, class(item))
-        push!(offsets, last(offsets) + ncells)
-    end
-
+    (; items, xs, ys, areas, cell_i, cell_j, offsets, coverage) =
+        _footprints(geometries, crs, grid; source_crs, subsamples)
     n = length(areas)
+    cls = Int32[class(item) for item in items]
     all(1 <= c <= length(classes) for c in cls) ||
         throw(ArgumentError("class index out of range for $(length(classes)) classes"))
     plan = sqrt.(areas)
@@ -180,74 +141,14 @@ function Structures(geometries, crs::ProjectedCRS, grid;
     end
     mean(Σ) = ifelse.(count .> 0, Σ ./ max.(count, 1), 0.0)
 
-    field(A) = (f = Field{Center, Center, Nothing}(grid); set!(f, reshape(FT.(A), Nx, Ny, 1)); f)
     arch = architecture(grid)
     dev(v) = on_architecture(arch, v)
+    field(A) = _horizontal_field(grid, A)
 
     return Structures(grid, classes,
                       dev(FT.(xs)), dev(FT.(ys)), dev(FT.(areas)), dev(cls),
                       dev(fill(FT(Inf), n)), dev(cell_i), dev(cell_j), dev(offsets),
                       field(min.(coverage, 1)), field(mean(Σplan)), field(mean(Σsep)), field(mean(Σres)))
-end
-
-#-----------------------------------------------------------------------------# Geometry helpers
-# Iterate `(item, exterior ring)` pairs over polygons, features, and feature
-# collections; multipolygons yield one pair per polygon.
-function _rings(geometries)
-    items = GI.trait(geometries) isa GI.FeatureCollectionTrait ? GI.getfeature(geometries) : geometries
-    return Iterators.flatten(_rings_of(item) for item in items)
-end
-
-function _rings_of(item)
-    geom = GI.trait(item) isa GI.FeatureTrait ? GI.geometry(item) : item
-    trait = GI.trait(geom)
-    if trait isa GI.PolygonTrait
-        return ((item, GI.getexterior(geom)),)
-    elseif trait isa GI.MultiPolygonTrait
-        return ((item, GI.getexterior(poly)) for poly in GI.getgeom(geom))
-    else
-        return ()
-    end
-end
-
-# Shoelace area (absolute) and centroid of a closed ring of (x, y) tuples.
-function _area_centroid(pts)
-    A2 = cx = cy = 0.0
-    for k in 1:length(pts)-1
-        (x₁, y₁), (x₂, y₂) = pts[k], pts[k+1]
-        w = x₁ * y₂ - x₂ * y₁
-        A2 += w
-        cx += (x₁ + x₂) * w
-        cy += (y₁ + y₂) * w
-    end
-    A2 == 0 && return (0.0, 0.0, 0.0)
-    return (abs(A2) / 2, cx / (3A2), cy / (3A2))
-end
-
-# Index of the cell containing coordinate `q`, given the first face and spacing.
-_cell(q, q₀, Δ) = floor(Int, (q - q₀) / Δ) + 1
-
-# Even-odd ray casting against a closed ring.
-function _inside(pts, x, y)
-    inside = false
-    for k in 1:length(pts)-1
-        (x₁, y₁), (x₂, y₂) = pts[k], pts[k+1]
-        if (y₁ > y) != (y₂ > y)
-            xcross = x₁ + (y - y₁) / (y₂ - y₁) * (x₂ - x₁)
-            inside ⊻= x < xcross
-        end
-    end
-    return inside
-end
-
-# Fraction of the cell with lower-left corner (x, y) covered by the ring, on
-# an n × n lattice of sample points.
-function _coverage(pts, x, y, Δx, Δy, n)
-    hits = 0
-    for q in 1:n, p in 1:n
-        hits += _inside(pts, x + (p - 0.5) * Δx / n, y + (q - 0.5) * Δy / n)
-    end
-    return hits / n^2
 end
 
 # Edge-to-edge distance from each structure to its nearest neighbour within

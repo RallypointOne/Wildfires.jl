@@ -1,6 +1,7 @@
 [deps]
 ArchGDAL = "c9ce4bd3-c3d5-55b8-8973-c0e20141b8c3"
 Breeze = "660aa2fb-d4c8-4359-a52c-9c057bc511da"
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 GeoJSON = "61d90e0f-e114-555e-ac52-39dfb47a3ef9"
 Oceananigans = "9e8cae18-63c1-5223-a75c-80ca9d6e9a09"
 Rasters = "a3a2b9e3-a471-40c9-b274-f788e487c689"

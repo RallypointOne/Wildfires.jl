@@ -199,8 +199,9 @@ Each step was verified before moving on. Test counts are cumulative.
 | 6 | `ignite!` as a kernel; `FT(Inf)` sentinels; Metal + Enzyme verified | 56 |
 | 7 | `advance!`: Godunov + Heun level-set step with prescribed speed | 70 |
 | 8 | Rothermel: `FuelClasses`, `FuelModel`, `FuelBed`, `spread_rate`, NFFL + SB40 tables | 330 |
-| 9 | `raster_sampler` (nearest or bilinear); `spread_rate!` speed field along the front normal; `examples/marshall_fire.jl` | 364 |
+| 9 | `raster_sampler` (nearest or bilinear); `spread_rate!` speed field along the front normal; `examples/marshall/marshall_fire.jl` | 364 |
 | 10 | WUI: `Structures` from footprints, Hamada urban spread in `spread_rate!`, `wind_adjustment`, structure ignition and heat release | 430 |
+| 11 | `HuygensEllipse` front shape, `FuelMap` device fuel table, `raster_time_series` wind, `polygon_coverage`, polygon `ignite!`; eight-hour Marshall run | 481 |
 
 ```julia
 crs   = ProjectedCRS(-105.182, 39.9575)        # UTM 13N, origin at that point
@@ -335,7 +336,7 @@ with Float32: number and field arguments both match CPU to 1e-6, and ten
 coupled `spread_rate!`/`advance!` steps match to 3e-5. (`set!(field, 5.0)` on
 a Metal field fails on the Float64 literal; pass `eltype(grid)(5)`.)
 
-`examples/marshall_fire.jl` is the driver: LANDFIRE fuel codes (nearest) mask
+`examples/marshall/marshall_fire.jl` is the driver: LANDFIRE fuel codes (nearest) mask
 non-burnable cells by multiplying `speed` by a 0/1 field, LANDFIRE slope and
 aspect (nearest, since aspect wraps) give `∇h` directly, HRRR 10 m wind is
 sampled bilinearly per 15 min snapshot with an inline Albini–Baughman
@@ -425,14 +426,107 @@ second, competing spread mechanism; it belongs either as a replacement for
 Hamada or as the ember/independent-ignition path, and its parameters need
 calibration data. The per-structure state and neighbour bins it needs exist.
 
+**Step 11** (`src/spread.jl`, `src/polygons.jl`, `src/georeference.jl`).
+The four items that stood between the example and a skill number.
+
+- **Front shape.** `spread_rate!` takes `shape = HuygensEllipse()` (default)
+  or `NormalProjection()` (the SFIRE formulation of Step 9). The ellipse
+  path converts the slope to the midflame wind giving the same Rothermel
+  slope factor, `(C_s tan²θ / C_w)^{1/B}`, adds it as a vector to the
+  adjusted wind, evaluates the head rate in that effective wind, takes the
+  length-to-breadth ratio from `length_to_breadth` (Anderson 1983 as in
+  FARSITE and ELMFIRE, capped at 8), and returns the ellipse's support
+  function via `ellipse_speed`. At 5 m/s open wind the flank is 21% of the
+  head; the normal projection gave the no-wind rate, 1–7% of the head
+  depending on fuel and moisture. Tested: head equals the Rothermel rate, flank and
+  back match the ellipse axes, the upslope head equals the Rothermel slope
+  rate exactly (the equivalent wind reproduces the factor), opposing wind
+  and slope slow the head.
+- **Fuel table.** `FuelMap(grid, code, table)` builds one `FuelBed` per
+  model in `NFFL`, `SB40`, or any `FuelModel` list, stores the beds as a
+  device vector (a tuple would exceed the CUDA kernel-argument limit at
+  40 × 320 B), and a per-cell index field. Codes not in the table map to the
+  new `NONBURNABLE` model, whose bed spreads at zero by construction, so the
+  example's mask multiply and second urban-only call are gone. The wind
+  adjustment factor is now evaluated per cell from the cell's bed.
+- **Wind time series.** `raster_time_series(rasters, times, grid, crs)`
+  returns an Oceananigans `FieldTimeSeries` (`Clamp` outside the range), and
+  `spread_rate!` reads any `FieldTimeSeries` component at
+  `model.clock.time` inside the kernel through `fts[i, j, 1, Time(t)]`,
+  which the GPU-adapted series supports since `times` survives adaptation.
+  `download_hrrr.jl` now covers 17:00 to 02:00 UTC (37 snapshots).
+- **Polygons.** `polygon_coverage` rasterizes any GeoInterface polygons to a
+  coverage field, and `ignite!(model, geometries, crs)` sets `φ` to the exact
+  signed distance to the exterior rings (CPU, cells × edges, threaded) by
+  pointwise minimum, so an observed perimeter both ignites and
+  re-initializes. The rasterization helpers moved from `structures.jl` to
+  `polygons.jl` and `Structures` uses the shared `_footprints`.
+
+Marshall, eight hours, 18:00 to 02:00 UTC, 2 min 47 s on the CPU:
+
+| | Model | Observed |
+|---|---|---|
+| Burned area | 7.6 km² | 24.3 km² |
+| Hit / miss / false alarm | 6.1 / 18.2 / 1.5 km² | |
+| Critical success index | 0.24 | |
+| Structures ignited | 208 of 10,892 | 1,084 destroyed |
+| Peak structure heat release | 0.59 GW | |
+
+`examples/marshall/figures.jl` (included by the example, CairoMakie) writes
+`inputs.png` (terrain, fuel, structures, wind), `arrival_time.png`,
+`timeseries.png`, and `propagation.gif`, the last built from the arrival-time
+field alone since burned-at-`t` is `t_ignition ≤ t`. The arrival-time map
+shows the fire running east as three narrow tongues along the 3 km HRRR wind,
+which is due west at the ignition, while the observed perimeter's southern
+lobe (the real spread was east-southeast) is missed entirely; the late
+yellow halo around the ignition is isotropic spread after the wind drops.
+Growth is close to 1 km² per hour throughout, including after the wind drops
+to 5 m/s at 00:00 UTC, whereas the real fire made most of its run in the
+first four hours and stopped under snow. Of what burns, 80% lies inside the
+observed perimeter, so the direction is right and the rate is a factor of
+three low.
+
+**Urban fuel imputation** (same day). LANDFIRE classes a third of the domain
+as 91, developed, which the FBFM13 table makes non-burnable, so the
+vegetation front stopped at every street and only Hamada (~0.3 m/s) carried
+it through the towns. `FuelMap(...; remap = (91 => 1,))` treats developed
+cells as short grass — cured lawns and plantings — as WRF-Fire WUI studies
+of the Camp and Marshall fires do. Effect over the same eight hours:
+
+| | Non-burnable 91 | 91 as short grass | Observed |
+|---|---|---|---|
+| Burned area | 7.6 km² | 16.5 km² | 24.3 km² |
+| Hit / miss / false alarm | 6.1 / 18.2 / 1.5 | 11.3 / 13.0 / 5.2 | |
+| Critical success index | 0.24 | 0.38 | |
+| Structures ignited | 208 | 1,662 | 1,084 destroyed |
+| Peak structure heat release | 0.6 GW | 12 GW | |
+
+The front now runs through Superior and Louisville, and the remaining miss
+is the southern lobe (the observed east-southeast spread) and the north edge.
+Structures ignited now exceed structures destroyed: every structure the front
+touches ignites, with no ignition probability or hardening in the
+level-set-to-structure exchange, so a per-class ignition probability (ELMFIRE's
+`P_IGNITION`, SWUIFT's building types) is the next structure-side item. The
+short-grass choice is a placeholder: fuel model 1 at 6% moisture is the
+fastest of the FBFM13 set, and the false-alarm area tripled. Remaining
+candidate causes for the miss: the sustained HRRR wind at 3 km against gusts
+near 50 m/s (gust rasters are downloaded and unused), the wind direction over
+this terrain, no spotting, no fire-induced winds, and the moisture guess.
+
 ## Next
 
 Unblocked, in rough dependency order:
 
-- **Flank spread formulation** — see the Step 9 findings. Options: keep
-  SFIRE's normal projection and wait for the coupled atmosphere; add the
-  elliptical normal speed (`ellipse_speed` already exists) with a
-  length-to-breadth ratio for Rothermel; or a minimum flanking fraction.
+- **Close the factor of three** — see the Step 11 table and figures. Try in
+  order: drive with HRRR gusts (or a blend) instead of the sustained wind;
+  check the wind direction against the observed east-southeast spread (a
+  finer wind product, or the coupled atmosphere over this terrain);
+  calibrate moisture and the Hamada coefficients against the perimeter with
+  the overlap statistics; spotting.
+- **Structure ignition probability** — the front ignites every structure it
+  touches (1,662 against 1,084 destroyed). A per-class probability or
+  hardening factor in `update_structures!`, calibrated on the county damage
+  inspection.
 - **Structure exposure model** — see Step 10. Decide whether ELMFIRE's
   UMD-UCB kernel or SWUIFT replaces Hamada or supplements it for embers.
 - **Structure flux into Breeze** — `heat_release` per structure onto the
@@ -445,26 +539,15 @@ Unblocked, in rough dependency order:
   `spread_rate` omits it. Reproducing FARSITE/ELMFIRE runs needs it as an
   option; WRF-SFIRE caps wind speed differently. Cheap to add as a `FuelBed`
   or `spread_rate` argument.
-- **Fuel-code table on the device** — `FuelBed{FT}` is isbits, so a tuple or
-  `SVector` of beds indexed by a per-cell fuel-code field inside
-  `_spread_rate!`. Non-burnable codes then give zero speed by construction
-  (empty bed) and the example's mask multiply, and its second urban-only
-  `spread_rate!` call, go away.
-- **Wind time series on the fire grid** — the example re-`set!`s two fields
-  per snapshot from rasters; a `FieldTimeSeries` or equivalent belongs in
-  the package. HRRR gusts are available and unused.
 - **Dynamic fuel models** — SB40 GR/GS/SH9/TU1/TU3 transfer cured herbaceous
   load from live to dead as a function of herb moisture; static loads for now.
-- **Polygon ignition** from an observed perimeter
-  (`docs/data/marshall/perimeter.geojson`), which is also the
-  reinitialize-from-observation path data assimilation will need, and the
-  overlap statistics against the final perimeter.
+- **Overlap statistics as a package function** — the example computes hit,
+  miss, false alarm, and the critical success index inline; worth a
+  function once a second case study exists.
 - **Higher-order level set** (WENO3/5 + SSP-RK3) if the first-order lag
   matters; `fire_grid`'s default halo of 3 already accommodates WENO5.
   Reinitialization is not needed while speed is uniform, and may not be
   needed at all if `t_ignition` rather than `φ` drives the physics.
-- **More HRRR hours** — `download_hrrr.jl` stops at 19:00 UTC; the fire ran
-  to about 02:00 UTC.
 
 Further out: heat and moisture flux injection into Breeze (via
 `forcing_interface.jl` or `BoundaryConditions/bulk_scalar_fluxes.jl`),

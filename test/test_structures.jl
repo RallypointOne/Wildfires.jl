@@ -1,9 +1,3 @@
-const GI = Wildfires.GI
-
-# Axis-aligned square footprint with lower-left corner (x, y) and side `s`,
-# in UTM 13N metres.
-square(x, y, s) = GI.Polygon([[(x, y), (x + s, y), (x + s, y + s), (x, y + s), (x, y)]])
-
 @testset "BuildingClass" begin
     c = BuildingClass()
     @test !c.fire_resistant && c.peak_hrr == 25e3

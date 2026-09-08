@@ -107,3 +107,23 @@ end
     @test Set(interior(field)) ⊆ codes
     @test length(Set(interior(field))) > 1
 end
+
+@testset "raster_time_series" begin
+    Lookups = Rasters.DimensionalData.Lookups
+    Δ = 30.0
+    xs = 500_000.0 .+ (0:9) .* Δ
+    ys = 4.4e6 .+ (0:7) .* Δ
+    make(v) = Raster(fill(v, 10, 8), (X(xs; sampling = Lookups.Intervals(Lookups.Start())),
+                                      Y(ys; sampling = Lookups.Intervals(Lookups.Start())));
+                     crs = Rasters.EPSG(32613))
+    crs = ProjectedCRS(32613, (first(xs) + Δ / 2, first(ys) + Δ / 2))
+    grid = RectilinearGrid(size = (8, 6), x = (0.0, 240.0), y = (0.0, 180.0),
+                           topology = (Bounded, Bounded, Flat))
+    series = raster_time_series([make(1.0), make(3.0)], [0.0, 10.0], grid, crs)
+    @test series.times == [0.0, 10.0]
+    @test all(interior(series[1]) .≈ 1) && all(interior(series[2]) .≈ 3)
+    @test all(interior(series[Time(5.0)]) .≈ 2)
+    @test series[3, 2, 1, Time(2.5)] ≈ 1.5
+    @test all(interior(series[Time(50.0)]) .≈ 3)            # Clamp
+    @test_throws ArgumentError raster_time_series([make(1.0)], [0.0, 10.0], grid, crs)
+end

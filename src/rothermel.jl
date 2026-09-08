@@ -237,6 +237,15 @@ const _H9 = FuelClasses(9000.0, 9000.0, 9000.0, 9000.0, 9000.0)
 const _σ_STD = (109.0, 30.0, 1500.0, 1500.0)                      # σ for (d10, d100, herb, wood) [1/ft]
 
 """
+    NONBURNABLE
+
+The empty fuel model (code 0): no load, no depth. Its [`FuelBed`](@ref)
+spreads at zero, and [`FuelMap`](@ref) assigns it to codes absent from the
+fuel table.
+"""
+const NONBURNABLE = FuelModel(0, FuelClasses(0.0, 0.0), FuelClasses(0.0, 0.0), _H8, 0.0, 0.0)
+
+"""
     NFFL
 
 The 13 Northern Forest Fire Laboratory fuel models (Anderson 1982) as a
