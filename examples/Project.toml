@@ -1,8 +1,7 @@
 [deps]
 ArchGDAL = "c9ce4bd3-c3d5-55b8-8973-c0e20141b8c3"
-JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
-LocalCoverage = "5f6e1e16-694c-5876-87ef-16b5274f298e"
+Breeze = "660aa2fb-d4c8-4359-a52c-9c057bc511da"
+GeoJSON = "61d90e0f-e114-555e-ac52-39dfb47a3ef9"
 Oceananigans = "9e8cae18-63c1-5223-a75c-80ca9d6e9a09"
-OverpassAPI = "78759bb8-e702-4122-98f4-c2c710342d47"
 Rasters = "a3a2b9e3-a471-40c9-b274-f788e487c689"
 Wildfires = "8a83dac0-8d4f-4b7e-b327-bade5b93bcdd"

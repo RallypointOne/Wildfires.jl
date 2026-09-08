@@ -134,17 +134,34 @@ to_lonlat(crs::ProjectedCRS, x, y) = from_grid_transform(crs, "EPSG:4326")(x, y)
 
 #-----------------------------------------------------------------------------# Raster ingest
 """
+    raster_sampler(raster, crs::ProjectedCRS; method = :bilinear, fill_value = 0) -> Function
+
+Return `(x, y) -> value`, sampling `raster` at grid-local meters `(x, y)`, for
+use with `set!` on a field or as the `topography` argument of Breeze's
+`materialize_terrain!`.
+
+`raster` is reprojected once into `crs` with `Rasters.resample` (GDAL warp), so
+it may be in any CRS GDAL understands; each query then looks up the
+reprojected raster. `method` is `:bilinear` for continuous data (elevation,
+wind) or `:near` for categorical data (fuel model codes, aspect), and applies
+to both the warp and the lookup. Points off the raster get `fill_value`.
+
+Requires Rasters.jl and ArchGDAL.jl to be loaded.
+
+### Examples
+```julia
+fuel_code = raster_sampler(Raster("fuel.tif"), crs; method = :near)
+set!(field, fuel_code)
+```
+"""
+function raster_sampler end
+
+"""
     raster_topography(raster, crs::ProjectedCRS; fill_value = 0) -> Function
 
 Return `(x, y) -> h`, the surface elevation at grid-local meters `(x, y)`, for
-use as the `topography` argument of Breeze's `materialize_terrain!`.
-
-`raster` is reprojected once into `crs` with `Rasters.resample` (GDAL warp,
-bilinear), so it may be in any CRS GDAL understands; each query then
-interpolates the reprojected raster bilinearly. Points off the raster get
-`fill_value`.
-
-Requires Rasters.jl and ArchGDAL.jl to be loaded.
+use as the `topography` argument of Breeze's `materialize_terrain!`. Equivalent
+to [`raster_sampler`](@ref) with `method = :bilinear`.
 
 ### Examples
 ```julia
@@ -152,4 +169,5 @@ h = raster_topography(Raster("elevation.tif"), crs)
 materialize_terrain!(grid, h)
 ```
 """
-function raster_topography end
+raster_topography(raster, crs::ProjectedCRS; fill_value = 0) =
+    raster_sampler(raster, crs; method = :bilinear, fill_value)

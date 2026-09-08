@@ -11,4 +11,7 @@ using Breeze.TerrainFollowingDiscretization
     include("test_georeference.jl")
     include("test_fire_model.jl")
     include("test_rothermel.jl")
+    include("test_hamada.jl")
+    include("test_structures.jl")
+    include("test_spread.jl")
 end

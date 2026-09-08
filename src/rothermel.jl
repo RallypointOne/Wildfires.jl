@@ -103,6 +103,8 @@ struct FuelBed{T}
     C_s::T                  # slope factor φ_s = C_s tan²θ
 end
 FuelBed{T}(m::FuelModel) where {T} = FuelBed(FuelModel{T}(m))
+FuelBed{T}(bed::FuelBed) where {T} = FuelBed(FuelModel{T}(bed.fuel))
+FuelBed{T}(bed::FuelBed{T}) where {T} = bed
 
 # Replace a non-positive divisor or power base by one, so absent classes and
 # empty fuel beds give finite intermediates instead of Inf/NaN that AD would

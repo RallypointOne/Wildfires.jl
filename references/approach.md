@@ -1,6 +1,6 @@
 # Approach
 
-Status as of 2026-09-04.
+Status as of 2026-09-08.
 
 ## Goal
 
@@ -45,7 +45,7 @@ weakdep on 2026-09-04; the empty `WildfiresBreezeExt` was deleted). The raster
 stack is an extension.
 
 ```
-[deps]        Oceananigans, Breeze, KernelAbstractions, Proj, GeoFormatTypes, Terse
+[deps]        Oceananigans, Breeze, KernelAbstractions, Proj, GeoFormatTypes, GeoInterface
 [weakdeps]    Rasters -> WildfiresRastersExt (also needs ArchGDAL loaded)
 [extras]      ArchGDAL (test only, for reading GeoTIFF through Rasters)
 ```
@@ -199,6 +199,8 @@ Each step was verified before moving on. Test counts are cumulative.
 | 6 | `ignite!` as a kernel; `FT(Inf)` sentinels; Metal + Enzyme verified | 56 |
 | 7 | `advance!`: Godunov + Heun level-set step with prescribed speed | 70 |
 | 8 | Rothermel: `FuelClasses`, `FuelModel`, `FuelBed`, `spread_rate`, NFFL + SB40 tables | 330 |
+| 9 | `raster_sampler` (nearest or bilinear); `spread_rate!` speed field along the front normal; `examples/marshall_fire.jl` | 364 |
+| 10 | WUI: `Structures` from footprints, Hamada urban spread in `spread_rate!`, `wind_adjustment`, structure ignition and heat release | 430 |
 
 ```julia
 crs   = ProjectedCRS(-105.182, 39.9575)        # UTM 13N, origin at that point
@@ -311,35 +313,158 @@ finite differences to 1e-9; the gradient at exactly zero wind is 0 by
 construction (the `max(U, 1e-10)` clamp). A Float32 Metal kernel calling
 `spread_rate` per element matches CPU Float64 to 6e-4 relative.
 
+**Step 9** (`ext/WildfiresRastersExt.jl`, `src/spread.jl`, `examples/`).
+`raster_sampler(raster, crs; method = :near | :bilinear, fill_value)` is the
+general form of `raster_topography`, which is now the bilinear special case;
+`method` applies to both the GDAL warp and the lookup. Two corrections to the
+sampler: GDAL lookups hold cell *starts* (`Intervals(Start())`), so values are
+now placed at cell centres (the old bilinear sampled half a pixel off), and the
+outer half-cell strip clamps to the edge instead of returning `fill_value`.
+Tested on a synthetic UTM raster, where the warp is the identity.
+
+`spread_rate!(speed, model, bed, moisture; wind = (u, v), slope = (∂x_h, ∂y_h))`
+is the SFIRE formulation: central-difference normal `n = ∇φ/|∇φ|` (`_pos`
+makes it zero, not NaN, where `∇φ = 0`), wind and slope resolved as `U·n` and
+`∇h·n`, negatives treated as calm/flat by `spread_rate`. Components are
+numbers or fields on the fire grid. One `FuelBed` for the whole domain until
+the fuel table lands. `FuelBed{T}(bed)` converts between float types so a
+Float64 table serves a Float32 grid. Verified: downwind cell at the head-fire
+rate, upwind cell at exactly the no-wind rate, field and number arguments give
+identical results, Float32 grid runs. Out of CI, on `GPU(Metal.MetalBackend())`
+with Float32: number and field arguments both match CPU to 1e-6, and ten
+coupled `spread_rate!`/`advance!` steps match to 3e-5. (`set!(field, 5.0)` on
+a Metal field fails on the Float64 literal; pass `eltype(grid)(5)`.)
+
+`examples/marshall_fire.jl` is the driver: LANDFIRE fuel codes (nearest) mask
+non-burnable cells by multiplying `speed` by a 0/1 field, LANDFIRE slope and
+aspect (nearest, since aspect wraps) give `∇h` directly, HRRR 10 m wind is
+sampled bilinearly per 15 min snapshot with an inline Albini–Baughman
+adjustment factor. Findings from the first runs:
+
+- **Flank spread is ~1% of head spread.** Fuel model 2 at 6% moisture gives
+  `R₀ = 0.016 m/s` against `R ≈ 1.5–2.2 m/s` downwind, so an hour produces a
+  strip one ignition-diameter wide. That is what the normal-projection
+  formulation does (SFIRE relies on fire-induced winds to widen it); FARSITE,
+  ELMFIRE, and the archived CA code use Huygens ellipses, whose flank rate is
+  head rate over the length-to-breadth ratio, roughly ten times larger here.
+  Which to use is an open design decision.
+- **Scattered non-burnable pixels stall a narrow head.** With the flanks that
+  slow, every urban pixel casts a shadow the front cannot fill, so the 34%
+  urban fraction east of the ignition halves the head's progress in the first
+  15 min and stops it soon after. The ignition pixel itself is urban (the
+  Twelve Tribes property); a 50 m ignition never leaves it, 100 m does.
+- Burned area after one hour: 0.2 km² against a 24.4 km² final perimeter.
+
+**Step 10** (`src/structures.jl`, `src/hamada.jl`, `src/spread.jl`). The
+wildland-urban interface follows the two-layer design: footprints are
+first-class objects with their own state, and ELMFIRE's per-cell rasters are
+derived from them so the level set remains the only front.
+
+`Structures(geometries, crs, grid; classes, class, radius, subsamples)` takes
+any GeoInterface polygon collection (GeoJSON feature collections included),
+reprojects the exterior rings with `to_grid_transform`, and keeps, per
+structure on the device, centroid, footprint area, class, `t_ignition`, and
+the footprint cells in compressed-row form. Coverage is sampled on a 4 × 4
+lattice per cell with even-odd ray casting; no Rasters dependency, so it
+lives in core with GeoInterface as a hard dependency (added 2026-09-08).
+Per-cell fields are `footprint_fraction` and neighbourhood means over the
+structures within `radius` (60 m) of the cell centre: `plan_dimension`
+(√area), `separation` (edge-to-edge estimate to the nearest other structure
+via bins of size `radius`, capped at `radius`), and `nonburnable_fraction`.
+These match ELMFIRE's `BLDG_AREA`, `BLDG_SEPARATION_DIST`,
+`BLDG_NONBURNABLE_FRAC`, `BLDG_FOOTPRINT_FRAC`; `BLDG_FUEL_MODEL` is the
+`BuildingClass` (fire-resistant flag plus ELMFIRE's heat-release curve:
+growth, plateau, decay, peak per m² of footprint, defaults from ELMFIRE's
+building fuel model 1).
+
+`hamada_rates` is a port of ELMFIRE's `HAMADA` subroutine (Hamada 1951 as
+used in HAZUS): downwind, crosswind, and upwind rates from open wind, plan
+dimension, separation, and fire-resistant fraction, with the HAZUS blend
+below 10 m/s and the small-extent fallback, written with `_pos`/`ifelse` so
+it runs in kernels. Checked against a hand calculation (0.27 m/s downwind at
+15 m/s for 15 m buildings 10 m apart). One property worth knowing: the front
+advances one block pitch per building burn time, so wider separation raises
+the rate; only the fire-resistant fraction lowers it. `ellipse_speed` is the
+support function of the Huygens ellipse with those three rates, which is the
+normal speed the level set needs, and is the same machinery a
+length-to-breadth ellipse for Rothermel would use.
+
+`spread_rate!` now takes the *open* wind and applies `wind_adjustment(bed)`
+(Albini and Baughman 1979, unsheltered, 0.36 for 1 ft beds) to the
+vegetation term, because Hamada needs the open wind and one call cannot take
+two conventions. With `structures` the kernel adds the urban term in cells
+whose `plan_dimension` is positive and keeps the larger of the two rates; a
+cell with a house and grass burns at whichever is faster.
+
+`update_structures!` reduces the level set's `t_ignition` over each
+structure's footprint cells (a data-dependent loop bounded by footprint
+size, the one such loop in the time-step path). `heat_release` evaluates
+area × class curve from `t_ignition`, masked by `isfinite` before any
+arithmetic, so structure flux to Breeze follows the same pattern as the
+planned vegetation burn-out. Out of CI on Metal (Float32): `Structures`
+builds device vectors and fields, twenty coupled steps with the urban term
+match CPU speed to 4e-5, and structure ignition times and heat release match
+exactly. The one Metal-only failure found was the derived fields being
+`set!` from Float64 arrays; they are converted to `eltype(grid)` first.
+
+Marshall: `download_buildings.jl` pulls 12,709 OSM footprints for the tile
+extent through OverpassAPI.jl (RP1's client; the docs env `dev`s
+`~/.julia/dev/OverpassAPI` because v0.1.0 has two uncommitted fixes there:
+Overpass rejects its multipart POST and its second settings statement with
+HTTP 400 — release v0.1.1 and switch back to the registry); 10,892 fall on
+the fire grid. With the urban term
+the one-hour burned area doubles to 0.4 km² and 46 structures ignite, heat
+release 0.19 GW at 19:00 UTC. Every building is the default class because
+no construction attributes are available; the county damage inspection
+(1,084 destroyed) is the calibration target once it is in `data/`.
+
+Not done from the design: the structure-to-structure exposure model
+(ELMFIRE's UMD-UCB direct-flame-plus-radiation kernel, or SWUIFT's
+probabilities). With Hamada spreading fire through urban cells it would be a
+second, competing spread mechanism; it belongs either as a replacement for
+Hamada or as the ember/independent-ignition path, and its parameters need
+calibration data. The per-structure state and neighbour bins it needs exist.
+
 ## Next
 
 Unblocked, in rough dependency order:
 
+- **Flank spread formulation** — see the Step 9 findings. Options: keep
+  SFIRE's normal projection and wait for the coupled atmosphere; add the
+  elliptical normal speed (`ellipse_speed` already exists) with a
+  length-to-breadth ratio for Rothermel; or a minimum flanking fraction.
+- **Structure exposure model** — see Step 10. Decide whether ELMFIRE's
+  UMD-UCB kernel or SWUIFT replaces Hamada or supplements it for embers.
+- **Structure flux into Breeze** — `heat_release` per structure onto the
+  atmosphere cell of its centroid, alongside the vegetation flux.
+- **Building classes from data** — map OSM `building` tags, FEMA USA
+  Structures, or assessor parcels to `BuildingClass`; Boulder County's
+  damage inspection for calibration.
 - **Decide the wind-speed limit.** BehavePlus/FARSITE/FlamMap impose
   Rothermel's `U ≤ 0.9 I_R`; Andrews et al. (2013) recommend against it and
   `spread_rate` omits it. Reproducing FARSITE/ELMFIRE runs needs it as an
   option; WRF-SFIRE caps wind speed differently. Cheap to add as a `FuelBed`
-  or `spread_rate` argument once the coupling decides which wind reaches it.
+  or `spread_rate` argument.
 - **Fuel-code table on the device** — `FuelBed{FT}` is isbits, so a tuple or
-  `SVector` of beds indexed by fuel code inside a kernel, or a per-cell field
-  of beds, are both possible; pick when the fuel raster lands.
-- **Speed field from `spread_rate`** — the kernel that evaluates
-  `spread_rate` per cell with wind and slope resolved along the front normal
-  (SFIRE: `max(0, U·n)`, `max(0, ∇h·n)`), producing the `speed` field
-  `advance!` already accepts.
+  `SVector` of beds indexed by a per-cell fuel-code field inside
+  `_spread_rate!`. Non-burnable codes then give zero speed by construction
+  (empty bed) and the example's mask multiply, and its second urban-only
+  `spread_rate!` call, go away.
+- **Wind time series on the fire grid** — the example re-`set!`s two fields
+  per snapshot from rasters; a `FieldTimeSeries` or equivalent belongs in
+  the package. HRRR gusts are available and unused.
 - **Dynamic fuel models** — SB40 GR/GS/SH9/TU1/TU3 transfer cured herbaceous
   load from live to dead as a function of herb moisture; static loads for now.
-- **Generalize `raster_topography` to other rasters** — fuel model, canopy,
-  slope, aspect. `docs/data/marshall/` already has `fuel.tif`, `slope.tif`,
-  `aspect.tif`. Categorical fuel codes need nearest-neighbour, not bilinear,
-  in both the warp (`method = :near`) and the lookup.
 - **Polygon ignition** from an observed perimeter
   (`docs/data/marshall/perimeter.geojson`), which is also the
-  reinitialize-from-observation path data assimilation will need.
+  reinitialize-from-observation path data assimilation will need, and the
+  overlap statistics against the final perimeter.
 - **Higher-order level set** (WENO3/5 + SSP-RK3) if the first-order lag
   matters; `fire_grid`'s default halo of 3 already accommodates WENO5.
   Reinitialization is not needed while speed is uniform, and may not be
   needed at all if `t_ignition` rather than `φ` drives the physics.
+- **More HRRR hours** — `download_hrrr.jl` stops at 19:00 UTC; the fire ran
+  to about 02:00 UTC.
 
 Further out: heat and moisture flux injection into Breeze (via
 `forcing_interface.jl` or `BoundaryConditions/bulk_scalar_fluxes.jl`),

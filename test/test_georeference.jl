@@ -60,3 +60,50 @@ end
     far = ProjectedCRS(0.0, 0.0)
     @test raster_topography(dem, far; fill_value = -1)(0.0, 0.0) == -1
 end
+
+@testset "raster_sampler" begin
+    # Synthetic raster already in UTM 13N, so the warp is the identity and
+    # sampled values can be checked against the array. GDAL-style lookups hold
+    # cell starts; the sampler must place values at cell centres.
+    Lookups = Rasters.DimensionalData.Lookups
+    Δ = 30.0
+    xs = 500_000.0 .+ (0:9) .* Δ
+    ys = 4.4e6 .+ (0:7) .* Δ
+    A = [10.0i + j for i in 1:10, j in 1:8]
+    raster = Raster(A, (X(xs; sampling = Lookups.Intervals(Lookups.Start())),
+                        Y(ys; sampling = Lookups.Intervals(Lookups.Start())));
+                    crs = Rasters.EPSG(32613))
+    crs = ProjectedCRS(32613, (first(xs) + Δ / 2, first(ys) + Δ / 2))   # (0, 0) at the centre of A[1, 1]
+
+    near = raster_sampler(raster, crs; method = :near, fill_value = -1)
+    @test near(0.0, 0.0) == A[1, 1]
+    @test near(Δ, 0.0) == A[2, 1]
+    @test near(0.0, Δ) == A[1, 2]
+    @test near(0.4Δ, 0.0) == A[1, 1]
+    @test near(0.6Δ, 0.0) == A[2, 1]
+    @test near(9Δ, 7Δ) == A[10, 8]
+    @test near(-0.6Δ, 0.0) == -1
+    @test near(9.6Δ, 0.0) == -1
+
+    lin = raster_sampler(raster, crs; method = :bilinear, fill_value = -1)
+    @test lin(0.0, 0.0) ≈ A[1, 1]
+    @test lin(Δ, Δ) ≈ A[2, 2]
+    @test lin(Δ / 2, 0.0) ≈ (A[1, 1] + A[2, 1]) / 2
+    @test lin(Δ / 2, Δ / 2) ≈ (A[1, 1] + A[2, 1] + A[1, 2] + A[2, 2]) / 4
+    @test lin(-0.4Δ, 0.0) ≈ A[1, 1]           # edge strip clamps
+    @test lin(-0.6Δ, 0.0) == -1
+    @test raster_topography(raster, crs)(Δ, 0.0) ≈ A[2, 1]
+
+    @test_throws ArgumentError raster_sampler(raster, crs; method = :cubic)
+
+    # Categorical LANDFIRE fuel codes survive the warp and the lookup.
+    fuel = Raster(joinpath(dirname(@__DIR__), "docs", "data", "marshall", "fuel.tif"))
+    codes = Set(filter(!isnan, vec(Float64.(parent(read(fuel))))))
+    code = raster_sampler(fuel, ProjectedCRS(-105.182, 39.9575); method = :near)
+    grid = RectilinearGrid(size = (64, 48), x = (-3200, 3200), y = (-2400, 2400),
+                           topology = (Bounded, Bounded, Flat))
+    field = Field{Center, Center, Nothing}(grid)
+    set!(field, code)
+    @test Set(interior(field)) ⊆ codes
+    @test length(Set(interior(field))) > 1
+end
